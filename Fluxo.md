@@ -40,7 +40,7 @@ A automação recebe o webhook de dados do formulário e processa o lead com bas
 
 ### 3.2. Fluxo de Tratamento de Dados
 
-```
+
 
 [Envio do Formulário]
 │
