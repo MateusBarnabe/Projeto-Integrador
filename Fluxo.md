@@ -1,5 +1,4 @@
 
-```markdown
 # Documentação Técnica Geral: Marketing, Landing Pages & Automação de Leads
 
 > **Contexto:** Este módulo documenta o ciclo de vida do lead, desde a origem de tráfego (UTMs) até o roteamento para a equipe de atendimento/vendas, cobrindo as integrações entre Landing Pages, Formulários e Automações.
