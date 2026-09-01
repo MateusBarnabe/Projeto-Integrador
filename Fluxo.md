@@ -40,22 +40,22 @@ A automação recebe o webhook de dados do formulário e processa o lead com bas
 
 ### 3.2. Fluxo de Tratamento de Dados
 
-
-
+```text
 [Envio do Formulário]
-│
-▼
+       │
+       ▼
 [Webhook / API de Entrada]
-│
-├── Validação de E-mail / Telefone
-├── Ingestão de Tags e UTMs
-└── Classificação de Perfil (Scoring / Triagem)
-│
-▼
+       │
+       ├── Validação de E-mail / Telefone
+       ├── Ingestão de Tags e UTMs
+       └── Classificação de Perfil (Scoring / Triagem)
+       │
+       ▼
 [Distribuição Comercial]
-│
-├── Notificação Interna (Slack / Teams / WhatsApp)
-└── Criação de Negócio no CRM / SDR
+       │
+       ├── Notificação Interna (Slack / Teams / WhatsApp)
+       └── Criação de Negócio no CRM / SDR
+```
 
 ---
 
