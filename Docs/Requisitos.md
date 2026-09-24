@@ -1,5 +1,7 @@
 ## 6. Levantamento de Requisitos
 
+> Classificação (RF04), deduplicação (RF07) e as métricas que saem daqui ficam no **módulo de marketing integrado na plataforma (Etapa 2)** e aparecem no painel. O desenho técnico está no [documento norteador](documento-norteador.md), seções 0 e 9. A notificação comercial (RF05) vai para o vendedor atribuído pelo rodízio, e o lead que enviou o formulário completo segue direto para o CRM pelo fluxo expresso (seção 9.6).
+
 ### 6.1. Requisitos Funcionais (RF)
 
 | ID | Nome | Descrição | Prioridade |

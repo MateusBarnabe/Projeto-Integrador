@@ -1,5 +1,7 @@
 ## 7. Regras de Negócio Detalhadas
 
+> Estas regras são executadas pelo **módulo de marketing integrado na plataforma (Etapa 2)**. A pontuação e o rodízio são configuráveis por tenant, e os valores abaixo são o ponto de partida. Tabelas, cálculo e o que ainda depende do CRM estão no [documento norteador](documento-norteador.md), seção 9.3.
+
 ### 7.1. Critérios de Pontuação (Lead Scoring)
 
 A matriz de pontuação define a maturidade do lead antes do roteamento, combinando **Perfil Demográfico/Empresarial** e **Engajamento/Intenção de Compra**.

@@ -2,6 +2,8 @@
 # Documentação Técnica Geral: Marketing, Landing Pages & Automação de Leads
 
 > **Contexto:** Este módulo documenta o ciclo de vida do lead, desde a origem de tráfego (UTMs) até o roteamento para a equipe de atendimento/vendas, cobrindo as integrações entre Landing Pages, Formulários e Automações.
+>
+> **Onde isso vira sistema:** a captação (seções 1 e 2) é a Etapa 1. A qualificação, a distribuição e as métricas (seções 3 a 5) ficam no **módulo de marketing integrado na plataforma (Etapa 2)**, que também define os campos do formulário e disponibiliza as informações para outros módulos. Detalhes no [documento norteador](documento-norteador.md), seções 0 e 9.
 
 ---
 

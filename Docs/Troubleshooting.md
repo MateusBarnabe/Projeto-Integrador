@@ -14,4 +14,4 @@
 1. Criar a nova campanha na plataforma de anúncios garantindo a nomenclatura padronizada de UTMs.
 2. Validar se a Landing Page de destino está com os *scripts* de captura de campos ocultos ativos.
 3. Realizar um teste de submissão (Lead Teste) antes da liberação de orçamento.
-4. Conferir se o Lead Teste entrou no CRM com a respectiva tag de campanha, pontuação correta de *score* e roteamento para o vendedor designado.
+4. Conferir se o Lead Teste apareceu no painel do Marketing com a campanha, a pontuação de *score* e o vendedor designado corretos e, se o formulário foi enviado completo, se virou oportunidade no CRM.
