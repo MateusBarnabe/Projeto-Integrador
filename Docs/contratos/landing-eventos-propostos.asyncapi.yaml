@@ -11,9 +11,10 @@ info:
     - quatro eventos para as etapas 0, 1 e 2 do lead;
     - `visitanteId`, `formularioVersao`, `contato`, `consentimento` e `origem` (UTM) no evento de envio.
 
-    O Marketing consome todos pela fila `marketing.landing-leads`. A etapa do lead é calculada
-    pelo Marketing: o Landing só informa o que o visitante fez. Explicação completa em
-    `landing-requisitos.md`, na mesma pasta.
+    O Marketing consome todos pela fila `marketing.landing-leads`. A etapa do lead (0 a 3) é
+    decidida pelo Landing e vem no campo `dados.etapa` de todo evento, inclusive o critério de
+    "grande parte do formulário" da etapa 2. O Marketing só impede que a etapa volte para trás.
+    Explicação completa em `landing-requisitos.md`, na mesma pasta.
 
     Regras do Contrato de Integração §9.7: publicar depois do commit, com a propriedade AMQP
     `user_id = mq_landing`, e sem dado pessoal além do necessário. As respostas do formulário
@@ -105,8 +106,9 @@ components:
               tipo: { const: landing.visita.registrada }
               dados:
                 type: object
-                required: [visitanteId, paginaId, origem]
+                required: [etapa, visitanteId, paginaId, origem]
                 properties:
+                  etapa: { type: integer, const: 0 }
                   visitanteId: { $ref: '#/components/schemas/VisitanteId' }
                   paginaId: { type: string, format: uuid }
                   origem: { $ref: '#/components/schemas/Origem' }
@@ -123,8 +125,9 @@ components:
               tipo: { const: landing.formulario.aberto }
               dados:
                 type: object
-                required: [visitanteId, formularioId, origem]
+                required: [etapa, visitanteId, formularioId, origem]
                 properties:
+                  etapa: { type: integer, const: 0 }
                   visitanteId: { $ref: '#/components/schemas/VisitanteId' }
                   formularioId: { type: string, format: uuid }
                   paginaId:
@@ -147,8 +150,9 @@ components:
               tipo: { const: landing.contato.informado }
               dados:
                 type: object
-                required: [visitanteId, envioId, formularioId, formularioVersao, contato, consentimento, origem]
+                required: [etapa, visitanteId, envioId, formularioId, formularioVersao, contato, consentimento, origem]
                 properties:
+                  etapa: { type: integer, const: 1 }
                   visitanteId: { $ref: '#/components/schemas/VisitanteId' }
                   envioId: { type: string, format: uuid }
                   formularioId: { type: string, format: uuid }
@@ -161,9 +165,10 @@ components:
       name: landing.formulario.atualizado
       title: Formulário atualizado
       summary: |
-        Visitante avançou no formulário depois do contato, sem enviar. Agrupado: no máximo um
-        evento a cada 30 s por envioId, mais um quando o visitante sai da página. O Marketing
-        decide a etapa a partir de `progresso`; as respostas ficam na API do Landing.
+        Visitante preencheu grande parte do formulário depois do contato, sem enviar. O critério
+        de "grande parte" é do Landing: só publicar quando ele for atingido. Depois do primeiro
+        evento, agrupar em no máximo um evento a cada 30 s por envioId, mais um quando o
+        visitante sai da página. As respostas ficam na API do Landing.
       payload:
         allOf:
           - $ref: '#/components/schemas/Envelope'
@@ -172,13 +177,13 @@ components:
               tipo: { const: landing.formulario.atualizado }
               dados:
                 type: object
-                required: [visitanteId, envioId, formularioId, formularioVersao, progresso, contato, consentimento, origem]
+                required: [etapa, visitanteId, envioId, formularioId, formularioVersao, contato, consentimento, origem]
                 properties:
+                  etapa: { type: integer, const: 2 }
                   visitanteId: { $ref: '#/components/schemas/VisitanteId' }
                   envioId: { type: string, format: uuid }
                   formularioId: { type: string, format: uuid }
                   formularioVersao: { type: integer, minimum: 1 }
-                  progresso: { $ref: '#/components/schemas/Progresso' }
                   contato: { $ref: '#/components/schemas/Contato' }
                   consentimento: { $ref: '#/components/schemas/Consentimento' }
                   origem: { $ref: '#/components/schemas/Origem' }
@@ -199,8 +204,9 @@ components:
               tipo: { const: landing.formulario.recebido }
               dados:
                 type: object
-                required: [envioId, formularioId, canal, visitanteId, formularioVersao, contato, consentimento, origem]
+                required: [etapa, envioId, formularioId, canal, visitanteId, formularioVersao, contato, consentimento, origem]
                 properties:
+                  etapa: { type: integer, const: 3 }
                   envioId: { type: string, format: uuid }
                   formularioId: { type: string, format: uuid }
                   empresaId:
@@ -292,12 +298,3 @@ components:
           type: boolean
           description: O visitante aceitou receber comunicação de marketing (LGPD)
         registradoEm: { type: string, format: date-time }
-
-    Progresso:
-      type: object
-      required: [camposPreenchidos, camposTotal, obrigatoriosPreenchidos, obrigatoriosTotal]
-      properties:
-        camposPreenchidos: { type: integer, minimum: 0 }
-        camposTotal: { type: integer, minimum: 1 }
-        obrigatoriosPreenchidos: { type: integer, minimum: 0 }
-        obrigatoriosTotal: { type: integer, minimum: 0 }

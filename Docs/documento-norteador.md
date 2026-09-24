@@ -73,7 +73,7 @@ O módulo roda dentro da plataforma do Grupo 2 e herda dela nomes, portas, crede
 > **Divisão com o Grupo 7 (Landing Pages), definida em 24/09.**
 >
 > 1. O **Landing** atende o visitante e avisa cada fato por **evento no RabbitMQ**, na exchange `landing.eventos`: visita por anúncio, clique em "fale conosco", contato preenchido, formulário em andamento e formulário enviado.
-> 2. O **Marketing** consome esses eventos e **calcula a etapa** do lead. O Landing não decide etapa.
+> 2. Cada evento traz a **etapa** (0 a 3), **decidida pelo Landing**, inclusive o critério de "grande parte do formulário" da etapa 2. O Marketing grava a etapa recebida e só impede que ela volte para trás.
 > 3. O evento traz contato, consentimento e UTM. As respostas do formulário o Marketing consulta na API do Landing, pelo `envioId`.
 > 4. Na etapa 3, o Landing cria ou reaproveita **empresa e contato** no CRM, como no PR #16. **A oportunidade é o Marketing que cria.**
 >
@@ -90,7 +90,7 @@ O módulo roda dentro da plataforma do Grupo 2 e herda dela nomes, portas, crede
 | 2 | Preencheu grande parte do formulário, não enviou | Médio | Tempo real | `landing.formulario.atualizado` |
 | 3 | Enviou o formulário completo; falta assinar contrato | Quente | Tempo real + handoff | `landing.formulario.recebido` |
 
-O Landing informa só o que o visitante fez; **a etapa é calculada pelo Marketing** e nunca volta para trás. A etapa 2 é decidida pelos números de progresso que vêm no evento (campos preenchidos sobre o total). O limiar de "grande parte" ainda está em aberto (seção 11).
+Nos leads da landing, **a etapa vem no evento, decidida pelo Landing** (campo `etapa`). O Marketing não recalcula: grava a etapa recebida e ignora uma etapa menor do que a que o lead já tem. O critério da etapa 2 ("grande parte do formulário") é do Landing, que só publica `landing.formulario.atualizado` quando ele é atingido. Precisamos conhecer esse critério (seção 11). Nos leads do Meta, a etapa é sempre 0.
 
 Fluxo de saída: `LEAD → CRM (oportunidade) → PROPOSTA → CONTRATO`. Na etapa 3, o Landing cria empresa e contato no CRM e o Marketing cria a oportunidade (seção 6). Propostas estão sem dono no Mapa de Fronteiras (seções 18–19), e o PR #13 do CRM declara que não são dele.
 
@@ -173,6 +173,7 @@ Timeline e auditoria da progressão do lead, exigidas pelo Prompt Mestre em todo
 |---|---|---|
 | id / tenant_id | uuid | isolamento por tenant mantido mesmo no buffer |
 | origem | varchar | `meta_ads`, `landing_page` |
+| etapa **[Novo]** | smallint | 0 ou 1: a etapa que veio no evento do Landing, ou 0 no webhook do Meta |
 | tipo_origem **[Novo]** | varchar | o que gerou a linha: `meta.webhook`, `landing.visita.registrada`, `landing.formulario.aberto`, `landing.contato.informado` |
 | payload_bruto | jsonb | corpo do webhook ou `dados` do evento. Contém dado pessoal (ver retenção na seção 11) |
 | meta_lead_id | varchar, nullable | |
@@ -312,7 +313,7 @@ Os dois prazos de retenção são configurados por tenant em `ciclo_vida_configu
 1. **Etapa 0 do Meta:** o webhook grava em `leads_entrada_buffer`, com o tenant resolvido pelo slug do caminho e a assinatura validada (seção 6)
 2. **Etapas 0 e 1 do Landing:** o consumidor da fila `marketing.landing-leads` recebe `landing.visita.registrada`, `landing.formulario.aberto` e `landing.contato.informado` e grava em `leads_entrada_buffer`, com o `tenantId` do envelope
 3. **Drenagem:** o job 4.1 esvazia o buffer, faz upsert em `leads` (dedupe por `meta_lead_id`, `visitante_id`, e-mail ou telefone) e grava `lead_eventos`
-4. **Etapa 2:** `landing.formulario.atualizado` é processado na chegada. O Marketing calcula a etapa pelo `progresso` e escreve direto em `leads` + `lead_eventos`, sem passar pelo buffer
+4. **Etapa 2:** `landing.formulario.atualizado` é processado na chegada. O evento já traz `etapa: 2`. O Marketing escreve direto em `leads` + `lead_eventos`, sem passar pelo buffer
 5. **Etapa 3:** `landing.formulario.recebido` é processado na chegada, em cinco passos:
    1. grava `crm_empresa_id` e `crm_contato_id`;
    2. consulta as respostas em `GET /api/landing/envios/{envioId}` e guarda em `dados_formulario`;
@@ -560,14 +561,14 @@ O contrato pede que só se publique o que algum módulo consome. Nenhum consumid
 
 ### Consumo: eventos do Landing
 
-Todos pela fila `marketing.landing-leads`, ligada a `landing.eventos`, com `marketing.landing-leads.dlq` para mensagens que falharam três vezes. Formato completo em [`contratos/landing-requisitos.md`](contratos/landing-requisitos.md). Os nomes dos quatro primeiros são proposta nossa; o dono é o Landing.
+Todos pela fila `marketing.landing-leads`, ligada a `landing.eventos`, com `marketing.landing-leads.dlq` para mensagens que falharam três vezes. Formato completo em [`contratos/landing-requisitos.md`](contratos/landing-requisitos.md). Os nomes dos quatro primeiros são proposta nossa; o dono é o Landing. Todos trazem o campo `etapa`, com o valor da coluna abaixo.
 
 | Evento | Etapa | O que traz | Processamento |
 |---|---|---|---|
 | `landing.visita.registrada` | 0 | `visitanteId`, página, `origem` (UTM) | buffer |
 | `landing.formulario.aberto` | 0 | `visitanteId`, `formularioId`, `origem` | buffer |
 | `landing.contato.informado` | 1 | + `envioId`, `formularioVersao`, contato, consentimento | buffer |
-| `landing.formulario.atualizado` | 2 | + `progresso` (campos preenchidos e total) | na chegada |
+| `landing.formulario.atualizado` | 2 | contato atualizado; publicado só quando o Landing considera o preenchimento "grande parte" | na chegada |
 | `landing.formulario.recebido` | 3 | já no PR #16; pedimos acrescentar `visitanteId`, `formularioVersao`, contato, consentimento e `origem` | na chegada, com handoff |
 
 Todo consumo é idempotente: grava o `id` em `eventos_processados` na mesma transação do efeito e ignora um `id` já visto. O evento `crm.oportunidade.criada`, citado no §12.7, não é necessário: quem cria a oportunidade é o próprio Marketing.
@@ -750,7 +751,7 @@ O `exemplo-modulo` já cobre os itens 2 a 6, 9, 10, 15 e 18 com testes automatiz
 |---|---|---|
 | Aceite da proposta ao Landing ([`contratos/landing-requisitos.md`](contratos/landing-requisitos.md)): cinco eventos, `visitanteId` e `envioId`, UTM, consentimento, `GET /api/landing/envios/{envioId}` e `servicos: [marketing]` em `landing.envio.ver` | Grupo 7 | **[Rascunho a enviar]** |
 | Dono da definição do formulário: manter a tabela `formularios` e a tela 9.3 ou usar só as referências do Landing | Grupo 7 | A definir |
-| Limiar de progresso que classifica a etapa 2 ("grande parte do formulário") | Grupo 4 | A definir |
+| Critério da etapa 2 ("grande parte do formulário"), definido e aplicado pelo Landing; precisamos conhecê-lo para documentar no painel | Grupo 7 | A combinar |
 | Consentimento de marketing dos leads do Meta Ads (etapa 0) antes do aquecimento | Grupo 4 | A definir |
 | Fronteira entre `leads` (dados de quem ainda não é contato) e Contato do CRM (§10, regra do dono único) | Grupo 6 | A confirmar |
 | `POST /api/crm/oportunidades` no contrato do CRM, com o formato da seção 6, e `servicos: [marketing]` em `crm.oportunidade.criar` | Grupo 6 | A pedir |
@@ -777,9 +778,9 @@ O `exemplo-modulo` já cobre os itens 2 a 6, 9, 10, 15 e 18 com testes automatiz
 
 - Etapas redefinidas: etapa 0 inclui o clique em "fale conosco" sem preenchimento; etapa 1 passa a ser o contato preenchido (nome, telefone e e-mail)
 - Leads da landing chegam por cinco eventos do Landing na fila `marketing.landing-leads`; a rota pública de intake foi removida
-- O Marketing calcula a etapa; o Landing só informa o que o visitante fez
+- O Landing decide a etapa e a envia no campo `etapa` de cada evento, inclusive o critério da etapa 2; o Marketing só impede que a etapa volte para trás
 - Etapa 3: o Landing cria empresa e contato no CRM, e o Marketing cria a oportunidade
-- Novas colunas em `leads`: `visitante_id`, `envio_id`, `formulario_id`, `consentimento_marketing`, `consentimento_em`, `crm_empresa_id` e `crm_contato_id`. Em `leads_entrada_buffer`: `tipo_origem` e `visitante_id`
+- Novas colunas em `leads`: `visitante_id`, `envio_id`, `formulario_id`, `consentimento_marketing`, `consentimento_em`, `crm_empresa_id` e `crm_contato_id`. Em `leads_entrada_buffer`: `etapa`, `tipo_origem` e `visitante_id`
 - O job de aquecimento só envia para quem tem consentimento de marketing
 - Pendências atualizadas; o que pedimos ao Landing foi para [`contratos/`](contratos/)
 

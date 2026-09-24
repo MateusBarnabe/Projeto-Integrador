@@ -318,7 +318,7 @@
         <strong>Divisão com o Grupo 7 (Landing Pages), definida em 24/09.</strong>
         <ol>
           <li>O <strong>Landing</strong> atende o visitante e avisa cada fato por <strong>evento no RabbitMQ</strong>, na exchange <code>landing.eventos</code>: visita por anúncio, clique em "fale conosco", contato preenchido, formulário em andamento e formulário enviado.</li>
-          <li>O <strong>Marketing</strong> consome esses eventos e <strong>calcula a etapa</strong> do lead. O Landing não decide etapa.</li>
+          <li>Cada evento traz a <strong>etapa</strong> (0 a 3), <strong>decidida pelo Landing</strong>, inclusive o critério de "grande parte do formulário" da etapa 2. O Marketing grava a etapa recebida e só impede que ela volte para trás.</li>
           <li>O evento traz contato, consentimento e UTM. As respostas do formulário o Marketing consulta na API do Landing, pelo <code>envioId</code>.</li>
           <li>Na etapa 3, o Landing cria ou reaproveita <strong>empresa e contato</strong> no CRM, como no PR #16. <strong>A oportunidade é o Marketing que cria.</strong></li>
         </ol>
@@ -339,7 +339,7 @@
           <tr><td>3</td><td>Enviou o formulário completo; falta assinar contrato</td><td>Quente</td><td>Tempo real + handoff</td><td><code>landing.formulario.recebido</code></td></tr>
         </tbody>
       </table>
-      <p>O Landing informa só o que o visitante fez; <strong>a etapa é calculada pelo Marketing</strong> e nunca volta para trás. A etapa 2 é decidida pelos números de progresso que vêm no evento (campos preenchidos sobre o total). O limiar de "grande parte" ainda está em aberto (seção 11).</p>
+      <p>Nos leads da landing, <strong>a etapa vem no evento, decidida pelo Landing</strong> (campo <code>etapa</code>). O Marketing não recalcula: grava a etapa recebida e ignora uma etapa menor do que a que o lead já tem. O critério da etapa 2 ("grande parte do formulário") é do Landing, que só publica <code>landing.formulario.atualizado</code> quando ele é atingido. Precisamos conhecer esse critério (seção 11). Nos leads do Meta, a etapa é sempre 0.</p>
       <p>Fluxo de saída: <code>LEAD → CRM (oportunidade) → PROPOSTA → CONTRATO</code>. Na etapa 3, o Landing cria empresa e contato no CRM e o Marketing cria a oportunidade (seção 6). Propostas estão sem dono no Mapa de Fronteiras (seções 18–19), e o PR #13 do CRM declara que não são dele.</p>
     </section>
 
@@ -422,6 +422,7 @@
         <tbody>
           <tr><td>id / tenant_id</td><td>uuid</td><td>isolamento por tenant mantido mesmo no buffer</td></tr>
           <tr><td>origem</td><td>varchar</td><td><code>meta_ads</code>, <code>landing_page</code></td></tr>
+          <tr><td>etapa <span class="tag tag-novo">Novo</span></td><td>smallint</td><td>0 ou 1: a etapa que veio no evento do Landing, ou 0 no webhook do Meta</td></tr>
           <tr><td>tipo_origem <span class="tag tag-novo">Novo</span></td><td>varchar</td><td>o que gerou a linha: <code>meta.webhook</code>, <code>landing.visita.registrada</code>, <code>landing.formulario.aberto</code>, <code>landing.contato.informado</code></td></tr>
           <tr><td>payload_bruto</td><td>jsonb</td><td>corpo do webhook ou <code>dados</code> do evento. Contém dado pessoal (ver retenção na seção 11)</td></tr>
           <tr><td>meta_lead_id</td><td>varchar, nullable</td><td></td></tr>
@@ -567,7 +568,7 @@
         <li><strong>Etapa 0 do Meta:</strong> o webhook grava em <code>leads_entrada_buffer</code>, com o tenant resolvido pelo slug do caminho e a assinatura validada (seção 6)</li>
         <li><strong>Etapas 0 e 1 do Landing:</strong> o consumidor da fila <code>marketing.landing-leads</code> recebe <code>landing.visita.registrada</code>, <code>landing.formulario.aberto</code> e <code>landing.contato.informado</code> e grava em <code>leads_entrada_buffer</code>, com o <code>tenantId</code> do envelope</li>
         <li><strong>Drenagem:</strong> o job 4.1 esvazia o buffer, faz upsert em <code>leads</code> (dedupe por <code>meta_lead_id</code>, <code>visitante_id</code>, e-mail ou telefone) e grava <code>lead_eventos</code></li>
-        <li><strong>Etapa 2:</strong> <code>landing.formulario.atualizado</code> é processado na chegada. O Marketing calcula a etapa pelo <code>progresso</code> e escreve direto em <code>leads</code> + <code>lead_eventos</code>, sem passar pelo buffer</li>
+        <li><strong>Etapa 2:</strong> <code>landing.formulario.atualizado</code> é processado na chegada. O evento já traz <code>etapa: 2</code>. O Marketing escreve direto em <code>leads</code> + <code>lead_eventos</code>, sem passar pelo buffer</li>
         <li><strong>Etapa 3:</strong> <code>landing.formulario.recebido</code> é processado na chegada, em cinco passos:
           <ol>
             <li>grava <code>crm_empresa_id</code> e <code>crm_contato_id</code>;</li>
@@ -813,14 +814,14 @@ permissoes:
       </table>
 
       <h3 class="table-heading">Consumo: eventos do Landing</h3>
-      <p class="muted">Todos pela fila <code>marketing.landing-leads</code>, ligada a <code>landing.eventos</code>, com <code>marketing.landing-leads.dlq</code> para mensagens que falharam três vezes. Formato completo em <code>docs/contratos/landing-requisitos.md</code>. Os nomes dos quatro primeiros são proposta nossa; o dono é o Landing.</p>
+      <p class="muted">Todos pela fila <code>marketing.landing-leads</code>, ligada a <code>landing.eventos</code>, com <code>marketing.landing-leads.dlq</code> para mensagens que falharam três vezes. Formato completo em <code>docs/contratos/landing-requisitos.md</code>. Os nomes dos quatro primeiros são proposta nossa; o dono é o Landing. Todos trazem o campo <code>etapa</code>, com o valor da coluna abaixo.</p>
       <table>
         <thead><tr><th>Evento</th><th>Etapa</th><th>O que traz</th><th>Processamento</th></tr></thead>
         <tbody>
           <tr><td><code>landing.visita.registrada</code></td><td>0</td><td><code>visitanteId</code>, página, <code>origem</code> (UTM)</td><td>buffer</td></tr>
           <tr><td><code>landing.formulario.aberto</code></td><td>0</td><td><code>visitanteId</code>, <code>formularioId</code>, <code>origem</code></td><td>buffer</td></tr>
           <tr><td><code>landing.contato.informado</code></td><td>1</td><td>+ <code>envioId</code>, <code>formularioVersao</code>, contato, consentimento</td><td>buffer</td></tr>
-          <tr><td><code>landing.formulario.atualizado</code></td><td>2</td><td>+ <code>progresso</code> (campos preenchidos e total)</td><td>na chegada</td></tr>
+          <tr><td><code>landing.formulario.atualizado</code></td><td>2</td><td>contato atualizado; publicado só quando o Landing considera o preenchimento "grande parte"</td><td>na chegada</td></tr>
           <tr><td><code>landing.formulario.recebido</code></td><td>3</td><td>já no PR #16; pedimos acrescentar <code>visitanteId</code>, <code>formularioVersao</code>, contato, consentimento e <code>origem</code></td><td>na chegada, com handoff</td></tr>
         </tbody>
       </table>
@@ -993,7 +994,7 @@ data: {"leadId": "...", "etapaAnterior": 1, "etapaNova": 2}</code></pre>
         <tbody>
           <tr><td>Aceite da proposta ao Landing (<code>docs/contratos/landing-requisitos.md</code>): cinco eventos, <code>visitanteId</code> e <code>envioId</code>, UTM, consentimento, <code>GET /api/landing/envios/{envioId}</code> e <code>servicos: [marketing]</code> em <code>landing.envio.ver</code></td><td>Grupo 7</td><td><span class="tag tag-pend">Rascunho a enviar</span></td></tr>
           <tr><td>Dono da definição do formulário: manter a tabela <code>formularios</code> e a tela 9.3 ou usar só as referências do Landing</td><td>Grupo 7</td><td>A definir</td></tr>
-          <tr><td>Limiar de progresso que classifica a etapa 2 ("grande parte do formulário")</td><td>Grupo 4</td><td>A definir</td></tr>
+          <tr><td>Critério da etapa 2 ("grande parte do formulário"), definido e aplicado pelo Landing; precisamos conhecê-lo para documentar no painel</td><td>Grupo 7</td><td>A combinar</td></tr>
           <tr><td>Consentimento de marketing dos leads do Meta Ads (etapa 0) antes do aquecimento</td><td>Grupo 4</td><td>A definir</td></tr>
           <tr><td>Fronteira entre <code>leads</code> (dados de quem ainda não é contato) e Contato do CRM (§10, regra do dono único)</td><td>Grupo 6</td><td>A confirmar</td></tr>
           <tr><td><code>POST /api/crm/oportunidades</code> no contrato do CRM, com o formato da seção 6, e <code>servicos: [marketing]</code> em <code>crm.oportunidade.criar</code></td><td>Grupo 6</td><td>A pedir</td></tr>
@@ -1023,9 +1024,9 @@ data: {"leadId": "...", "etapaAnterior": 1, "etapaNova": 2}</code></pre>
       <ul>
         <li>Etapas redefinidas: etapa 0 inclui o clique em "fale conosco" sem preenchimento; etapa 1 passa a ser o contato preenchido (nome, telefone e e-mail)</li>
         <li>Leads da landing chegam por cinco eventos do Landing na fila <code>marketing.landing-leads</code>; a rota pública de intake foi removida</li>
-        <li>O Marketing calcula a etapa; o Landing só informa o que o visitante fez</li>
+        <li>O Landing decide a etapa e a envia no campo <code>etapa</code> de cada evento, inclusive o critério da etapa 2; o Marketing só impede que a etapa volte para trás</li>
         <li>Etapa 3: o Landing cria empresa e contato no CRM, e o Marketing cria a oportunidade</li>
-        <li>Novas colunas em <code>leads</code>: <code>visitante_id</code>, <code>envio_id</code>, <code>formulario_id</code>, <code>consentimento_marketing</code>, <code>consentimento_em</code>, <code>crm_empresa_id</code> e <code>crm_contato_id</code>. Em <code>leads_entrada_buffer</code>: <code>tipo_origem</code> e <code>visitante_id</code></li>
+        <li>Novas colunas em <code>leads</code>: <code>visitante_id</code>, <code>envio_id</code>, <code>formulario_id</code>, <code>consentimento_marketing</code>, <code>consentimento_em</code>, <code>crm_empresa_id</code> e <code>crm_contato_id</code>. Em <code>leads_entrada_buffer</code>: <code>etapa</code>, <code>tipo_origem</code> e <code>visitante_id</code></li>
         <li>O job de aquecimento só envia para quem tem consentimento de marketing</li>
         <li>Pendências atualizadas; o que pedimos ao Landing foi para <code>docs/contratos/</code></li>
       </ul>

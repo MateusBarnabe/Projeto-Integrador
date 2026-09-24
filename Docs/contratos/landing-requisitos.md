@@ -9,15 +9,18 @@ O Marketing não captura o visitante na landing page. Quem vê a visita, o cliqu
 
 - O Landing avisa cada fato por **evento no RabbitMQ**, na própria exchange `landing.eventos`. O Marketing liga uma fila a ela. Nenhuma chamada síncrona ao Marketing é necessária.
 - São **cinco eventos**. Um deles já existe no PR #16 (`landing.formulario.recebido`) e precisa de campos a mais. Os nomes dos outros quatro são proposta; quem decide é o Landing, que é o dono deles.
+- **Quem decide a etapa do lead (0 a 3) é o Landing**, e todo evento traz o campo `etapa`. Isso inclui o critério de "grande parte do formulário" da etapa 2.
 - O evento carrega **contato e UTM**. As respostas completas do formulário o Marketing consulta na API do Landing, pelo `envioId`.
 - Dois identificadores ligam as etapas: **`visitanteId`**, do primeiro acesso até o envio, e **`envioId`**, do primeiro preenchimento até o envio.
 - Na etapa 3, o Landing continua criando ou reaproveitando **empresa e contato** no CRM, como no PR #16. **A oportunidade o Landing não cria**: quem cria é o Marketing.
 
 ## 1. Etapas do lead
 
-O Landing só informa o que o visitante fez. **A etapa é o Marketing que calcula**, a partir dos eventos, e ela nunca volta para trás.
+Cada evento corresponde a uma etapa e traz o campo **`etapa`**, sempre com o valor da tabela abaixo. **Quem decide a etapa é o Landing**, porque é ele que vê o que o visitante fez. Isso inclui o critério da etapa 2: o Landing só publica `landing.formulario.atualizado` quando o preenchimento já é "grande parte" do formulário.
 
-| Etapa | O que o visitante fez | Evento esperado | Como o Marketing processa |
+O Marketing grava a etapa recebida sem recalcular. A única regra do nosso lado é que a etapa nunca volta para trás: se chegar uma etapa menor do que a que o lead já tem, por atraso ou reentrega, ela só atualiza os dados complementares.
+
+| Etapa (`etapa`) | O que o visitante fez | Evento esperado | Como o Marketing processa |
 |---|---|---|---|
 | 0 | Chegou por anúncio (com UTM de campanha) e não interagiu | `landing.visita.registrada` | em lote, até ~5 min |
 | 0 | Clicou em "fale conosco", mas não preencheu nada | `landing.formulario.aberto` | em lote, até ~5 min |
@@ -72,7 +75,7 @@ Não fazemos o rastreamento de campanha, mas ele é **indispensável** para o Ma
 
 ## 5. Eventos
 
-Em todos os exemplos, o envelope é o mesmo; só o `tipo` e o `dados` mudam.
+Em todos os exemplos, o envelope é o mesmo; só o `tipo` e o `dados` mudam. Todo `dados` começa pelo campo `etapa` (inteiro), com o valor fixo de cada evento.
 
 ### 5.1 `landing.visita.registrada` — etapa 0 · proposta
 
@@ -80,6 +83,7 @@ Publicar quando um visitante chega a uma landing page **com parâmetros de campa
 
 | Campo de `dados` | Obrigatório | Tipo |
 |---|---|---|
+| `etapa` | sim | inteiro, sempre `0` |
 | `visitanteId` | sim | uuid |
 | `paginaId` | sim | uuid da landing page |
 | `origem` | sim | objeto da seção 4 |
@@ -95,6 +99,7 @@ Publicar quando um visitante chega a uma landing page **com parâmetros de campa
   "usuarioId": null,
   "correlacaoId": "c41d9e2a",
   "dados": {
+    "etapa": 0,
     "visitanteId": "7f3c1a9e-2b4d-4c8e-9f1a-3b5d7e9f1a2c",
     "paginaId": "5a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
     "origem": {
@@ -116,6 +121,7 @@ Publicar quando o visitante clica em "fale conosco" (ou abre o formulário) **e 
 
 | Campo de `dados` | Obrigatório | Tipo |
 |---|---|---|
+| `etapa` | sim | inteiro, sempre `0` |
 | `visitanteId` | sim | uuid |
 | `formularioId` | sim | uuid |
 | `paginaId` | não | uuid; nulo em embed ou chatbot |
@@ -127,6 +133,7 @@ Publicar quando o visitante termina de preencher **nome, telefone e e-mail**, an
 
 | Campo de `dados` | Obrigatório | Tipo |
 |---|---|---|
+| `etapa` | sim | inteiro, sempre `1` |
 | `visitanteId` | sim | uuid |
 | `envioId` | sim | uuid, criado aqui e mantido até o envio |
 | `formularioId` / `formularioVersao` | sim | uuid / inteiro |
@@ -140,6 +147,7 @@ Publicar quando o visitante termina de preencher **nome, telefone e e-mail**, an
 
 ```json
 "dados": {
+  "etapa": 1,
   "visitanteId": "7f3c1a9e-2b4d-4c8e-9f1a-3b5d7e9f1a2c",
   "envioId": "3e9d2c1b-8a7f-4e6d-9c5b-4a3f2e1d0c9b",
   "formularioId": "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
@@ -159,18 +167,15 @@ Publicar quando o visitante termina de preencher **nome, telefone e e-mail**, an
 
 ### 5.4 `landing.formulario.atualizado` — etapa 2 · proposta
 
-Publicar quando o visitante avança no formulário **depois do contato**, sem enviá-lo. O Landing não precisa decidir se o preenchimento é "grande parte": basta mandar os números de progresso, e o Marketing classifica.
+Publicar quando o visitante já preencheu **grande parte do formulário** depois do contato, sem enviá-lo. **O critério de "grande parte" é do Landing**: o evento só é publicado quando o preenchimento já atende a esse critério. Antes disso, o visitante continua na etapa 1 e nada precisa ser enviado. Pedimos só que o critério nos seja informado (seção 9), para o painel do Marketing explicar o que conta como etapa 2.
 
-**Frequência sugerida:** agrupar os salvamentos (debounce) e publicar no máximo **um evento a cada 30 s por `envioId`**, mais um quando o visitante sai da página. Isso evita um evento por tecla.
+**Frequência sugerida:** depois do primeiro evento, novos salvamentos do mesmo envio são agrupados (debounce) em no máximo **um evento a cada 30 s por `envioId`**, mais um quando o visitante sai da página. Isso mantém contato e consentimento atualizados sem um evento por tecla.
 
 | Campo de `dados` | Obrigatório | Tipo |
 |---|---|---|
+| `etapa` | sim | inteiro, sempre `2` |
 | `visitanteId` / `envioId` | sim | uuid |
 | `formularioId` / `formularioVersao` | sim | uuid / inteiro |
-| `progresso.camposPreenchidos` | sim | inteiro |
-| `progresso.camposTotal` | sim | inteiro |
-| `progresso.obrigatoriosPreenchidos` | sim | inteiro |
-| `progresso.obrigatoriosTotal` | sim | inteiro |
 | `contato` | sim | objeto da 5.3, com os valores atuais (o visitante pode ter corrigido) |
 | `consentimento` | sim | objeto da 5.3 |
 | `origem` | sim | objeto da seção 4 |
@@ -184,6 +189,7 @@ O evento do PR #16 continua como está, publicado depois que o Landing cria ou r
 | Campo de `dados` | Situação | Tipo |
 |---|---|---|
 | `envioId`, `formularioId`, `empresaId`, `contatoId`, `canal` | já existem | — |
+| `etapa` | **acrescentar** | inteiro, sempre `3` |
 | `visitanteId` | **acrescentar** | uuid |
 | `formularioVersao` | **acrescentar** | inteiro |
 | `contato` | **acrescentar** | objeto da 5.3 |
@@ -245,12 +251,14 @@ O que precisamos na resposta:
 - Respostas do formulário dentro do evento: elas ficam na API (seção 6).
 - CPF, documentos, senha ou qualquer dado sensível no evento. Mensagem fica em fila, em log e na `.dlq` (§9.7).
 - Evento a cada tecla: use o agrupamento da 5.4.
+- `landing.formulario.atualizado` antes de o preenchimento atingir o critério da etapa 2.
 
 ## 9. Pontos a combinar
 
 | Ponto | Proposta do Marketing |
 |---|---|
 | Nomes finais dos quatro eventos novos | Os da seção 5. O dono é o Landing, que pode renomear; só precisamos saber antes da implementação |
+| Critério da etapa 2 ("grande parte do formulário") | Definido e aplicado pelo Landing. Precisamos só conhecer a regra, para documentá-la no painel do Marketing |
 | CRM fora do ar na etapa 3 | Publicar `landing.formulario.recebido` mesmo assim, com `empresaId` e `contatoId` nulos, e publicar de novo com os ids quando o CRM voltar. O Marketing só cria a oportunidade quando tiver `empresaId` |
 | Validade do `visitanteId` | 90 dias, em cookie first-party |
 | Visitante que muda de e-mail entre etapas | O Marketing liga pelo `visitanteId` e pelo `envioId`, não pelo e-mail |
