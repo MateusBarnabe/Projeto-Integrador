@@ -1,0 +1,149 @@
+openapi: 3.1.0
+info:
+  title: Marketing e Automações
+  version: 0.1.0
+  summary: Contrato do módulo Marketing — o que a casca e os outros módulos consomem.
+  description: |
+    Endpoints do módulo `marketing` (Grupo 4) usados fora dele, conforme o Contrato de
+    Integração §14.1. Endpoints usados só pelo front do próprio módulo (painel, configurações,
+    modelos de mensagem, ciclo de vida) não entram aqui (`contratos/README.md` do infra).
+
+    Nesta versão: saúde do serviço (§8.5) e busca global da casca (§8.6).
+    Rotas públicas (`/public/marketing/**`) não são consumidas por outros módulos e ficam
+    documentadas no documento norteador do grupo.
+  license:
+    name: Uso acadêmico — Projeto Integrador 2026
+    identifier: LicenseRef-Academico
+servers:
+  - url: http://localhost:8080
+    description: Pelo gateway
+  - url: http://marketing:8087
+    description: Direto, entre serviços
+tags:
+  - name: busca
+    description: Busca global da casca
+  - name: saude
+    description: Estado do serviço
+
+security:
+  - bearerJwt: []
+
+paths:
+  /api/marketing/busca:
+    get:
+      tags: [busca]
+      operationId: buscarLeads
+      summary: Busca textual de leads, para a busca global da casca
+      description: |
+        Exige `marketing.lead.ver`. Procura por nome e e-mail entre os leads do tenant do token.
+        Devolve no máximo 5 resultados, sem paginação, no formato único do Contrato de
+        Integração §8.6. `rota` é relativa ao `urlFrontend` do módulo. Leads anonimizados não
+        aparecem.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+          example: maria
+      responses:
+        '200':
+          description: Resultados
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties:
+                      data:
+                        type: array
+                        maxItems: 5
+                        items: { $ref: '#/components/schemas/ResultadoBusca' }
+              example:
+                success: true
+                data:
+                  - id: 9f1c4e2a-3b5d-4c7e-8f9a-1b2c3d4e5f6a
+                    titulo: Maria Souza
+                    subtitulo: Etapa 2 · landing_page
+                    rota: /leads/9f1c4e2a-3b5d-4c7e-8f9a-1b2c3d4e5f6a
+                message: null
+                errors: []
+        '400': { $ref: '#/components/responses/DadosInvalidos' }
+        '401': { $ref: '#/components/responses/NaoAutenticado' }
+        '403': { $ref: '#/components/responses/SemPermissao' }
+
+  /api/marketing/health:
+    get:
+      tags: [saude]
+      operationId: saude
+      summary: Serviço de pé e conectado ao banco
+      security: []
+      responses:
+        '200':
+          description: Disponível
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+              example: { success: true, data: { status: UP }, message: null, errors: [] }
+        '503':
+          description: Banco indisponível
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+components:
+  securitySchemes:
+    bearerJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    DadosInvalidos:
+      description: Dado inválido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+          example:
+            success: false
+            data: null
+            message: Informe pelo menos 2 caracteres para buscar.
+            errors:
+              - { campo: q, codigo: CAMPO_INVALIDO, detalhe: A busca exige pelo menos 2 caracteres. }
+    NaoAutenticado:
+      description: Sem token, token inválido ou expirado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+    SemPermissao:
+      description: Sem a permissão exigida
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+
+  schemas:
+    Envelope:
+      type: object
+      required: [success, data, message, errors]
+      properties:
+        success: { type: boolean }
+        data: {}
+        message: { type: [string, 'null'] }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [campo, codigo, detalhe]
+            properties:
+              campo: { type: string }
+              codigo: { type: string }
+              detalhe: { type: string }
+
+    ResultadoBusca:
+      type: object
+      required: [id, titulo, rota]
+      description: Formato único de busca global do sistema (Contrato §8.6).
+      properties:
+        id: { type: string, format: uuid }
+        titulo: { type: string, description: 'Nome do lead, ou o e-mail quando não há nome' }
+        subtitulo: { type: [string, 'null'], description: Etapa e origem do lead }
+        rota: { type: string, description: Relativa ao urlFrontend do módulo }
