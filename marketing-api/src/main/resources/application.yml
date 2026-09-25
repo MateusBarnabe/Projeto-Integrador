@@ -1,0 +1,57 @@
+# Configuração do módulo marketing. Todo endereço e credencial vem de variável de ambiente
+# (Contrato §9.1); os valores padrão servem para rodar local com o docker-compose da raiz.
+
+server:
+  port: ${PORTA:8087}
+  # O token de ADMINISTRADOR é grande (Contrato §4.4)
+  max-http-request-header-size: 32KB
+  error:
+    whitelabel:
+      enabled: false
+
+spring:
+  application:
+    name: marketing
+
+  # A aplicação roda como usr_marketing; o Flyway, como own_marketing (Contrato §7.1)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORTA:5432}/${DB_NOME:plataforma}?currentSchema=marketing
+    username: ${DB_USUARIO:usr_marketing}
+    password: ${DB_SENHA:usr_marketing}
+  flyway:
+    user: ${FLYWAY_USUARIO:own_marketing}
+    password: ${FLYWAY_SENHA:own_marketing}
+    schemas: marketing
+    default-schema: marketing
+    create-schemas: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: marketing
+        jdbc:
+          time_zone: UTC
+
+  jackson:
+    time-zone: UTC
+
+  # Conecta como mq_marketing: a propriedade user_id das mensagens precisa bater com o usuário (§9.7)
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORTA:5672}
+    username: ${RABBITMQ_USUARIO:mq_marketing}
+    password: ${RABBITMQ_SENHA:mq_marketing}
+    virtual-host: ${RABBITMQ_VHOST:plataforma}
+
+  # JWKS do identity (§4.2). O caminho definitivo vem do infra-integrador-2026.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
