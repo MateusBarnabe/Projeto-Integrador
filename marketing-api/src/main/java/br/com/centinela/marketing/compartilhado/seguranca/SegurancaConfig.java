@@ -38,6 +38,8 @@ public class SegurancaConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/api/marketing/health", "/public/marketing/**", "/error").permitAll()
+                        // Documentação (desligada com SWAGGER_HABILITADO=false; fora do roteamento do gateway)
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o
                         .jwt(jwt -> { })

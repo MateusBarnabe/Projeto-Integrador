@@ -52,6 +52,15 @@ spring:
         jwt:
           jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
 
+# Swagger UI em /swagger-ui.html e OpenAPI em /v3/api-docs. O gateway da plataforma só encaminha
+# /api/marketing/**, então esses caminhos não saem pela plataforma; SWAGGER_HABILITADO=false desliga.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_HABILITADO:true}
+  swagger-ui:
+    enabled: ${SWAGGER_HABILITADO:true}
+  paths-to-match: /api/marketing/**, /public/marketing/**
+
 logging:
   pattern:
     level: "%5p [%X{requestId:-}]"

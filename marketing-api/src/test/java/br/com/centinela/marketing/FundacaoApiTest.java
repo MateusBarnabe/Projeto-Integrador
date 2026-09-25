@@ -1,6 +1,7 @@
 package br.com.centinela.marketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 
 import java.util.Map;
 
@@ -73,5 +74,13 @@ class FundacaoApiTest {
 
         assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(resposta.getBody()).containsEntry("success", false).containsKey("errors");
+    }
+
+    @Test
+    void documentacaoOpenApiRespondeSemTokenComAsRotasDoModulo() {
+        ResponseEntity<Map<String, Object>> resposta = get("/v3/api-docs");
+
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resposta.getBody()).extractingByKey("paths", MAP).containsKey("/api/marketing/health");
     }
 }

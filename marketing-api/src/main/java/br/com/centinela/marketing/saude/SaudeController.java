@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.centinela.marketing.compartilhado.web.Resposta;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 
 /**
  * {@code GET /api/marketing/health}: sem token, 200 com o serviço de pé e conectado ao banco (§8.5).
@@ -24,6 +26,8 @@ public class SaudeController {
     }
 
     @GetMapping("/api/marketing/health")
+    @Operation(summary = "Saúde do serviço e da conexão com o banco")
+    @SecurityRequirements // rota pública: sem token
     public ResponseEntity<Resposta<Map<String, String>>> saude() {
         try {
             jdbc.queryForObject("SELECT 1", Integer.class);
