@@ -1,0 +1,25 @@
+# ${BASE_PATH} e ${API_UPSTREAM} são preenchidos pelo entrypoint do nginx (envsubst).
+server {
+    listen 3007;
+
+    # Pode ser embutido pela casca da mesma origem; nunca X-Frame-Options: DENY (Contrato §12.8)
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+
+    location = / {
+        return 302 ${BASE_PATH};
+    }
+
+    location ${BASE_PATH} {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ ${BASE_PATH}index.html;
+    }
+
+    location /api/marketing/ {
+        proxy_pass ${API_UPSTREAM};
+        proxy_set_header Host $host;
+        proxy_set_header X-Request-Id $request_id;
+        # SSE do painel (norteador 9.1): sem buffer e com conexão longa
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
