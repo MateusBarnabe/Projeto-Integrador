@@ -57,7 +57,10 @@ interface PageHeaderProps {
   actions?: ReactNode;
 }
 
-/** Cabeçalho obrigatório de toda página (Design System, 12.3). */
+/**
+ * Faixa escura de cabeçalho (Design System, 12.3). No módulo, só o LayoutModulo a usa, para a
+ * faixa fixa "Marketing"; as telas das abas não desenham cabeçalho próprio.
+ */
 export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (
     <div className="flex shrink-0 items-center justify-between bg-brand-950 px-5 py-3.5 text-white">
