@@ -7,6 +7,7 @@ O que o Marketing (Grupo 4) combina com os outros grupos. Aqui fica só o que at
 | [landing-requisitos.md](landing-requisitos.md) | Grupo 7 — Landing | O que precisamos receber do Landing em cada etapa do lead (0 a 3), incluindo UTM, e como o Landing lê os campos do formulário definidos no Marketing | Rascunho |
 | [landing-eventos-propostos.asyncapi.yaml](landing-eventos-propostos.asyncapi.yaml) | Grupo 7 — Landing | Os eventos acima em AsyncAPI 3.0, para o Landing incorporar ao `landing.asyncapi.yaml` dele | Rascunho |
 | [marketing.yaml](marketing.yaml) | Casca e demais módulos | Nossos endpoints consumidos fora do módulo, em OpenAPI 3.1: saúde, busca global, definição do formulário (Landing) e resumo do lead | Rascunho |
+| [marketing.asyncapi.yaml](marketing.asyncapi.yaml) | Landing e demais módulos | Eventos publicados pelo Marketing no RabbitMQ em AsyncAPI 3.0: publicação de formulário (`marketing.formulario.publicado`) | Rascunho |
 
 ## Regras seguidas
 
@@ -19,8 +20,8 @@ Seguem o `contratos/README.md` do `infra-integrador-2026` e o Contrato de Integr
 
 ## Ainda não existe
 
-- `marketing.asyncapi.yaml`: começa com `marketing.formulario.publicado`, que tem o Landing como consumidor, assim que o Grupo 7 aceitar a proposta. Os eventos de lead (`marketing.lead.qualificado`, `marketing.lead.atribuido`, `marketing.lead.descadastrado`) entram quando um interessado confirmar.
 - `marketing.views.md`: só se o Grupo 3 pedir *views* `vw_pub_*` para relatórios.
+- Eventos de lead no AsyncAPI (`marketing.lead.qualificado`, `marketing.lead.atribuido`, `marketing.lead.descadastrado`): entram quando os módulos consumidores confirmarem interesse.
 
 ## Quando for para o `infra-integrador-2026`
 
