@@ -1,6 +1,6 @@
 # Documento Norteador — Módulo de Marketing (Grupo 4)
 
-Código `marketing` · Schema `marketing` · Projeto Integrador 2026 · Grupo 4 · Revisão de 24/09/2026
+Código `marketing` · Schema `marketing` · Projeto Integrador 2026 · Grupo 4 · Revisão de 25/09/2026
 
 *Documento norteador — incrementado conforme o projeto avança · Alinhado ao Contrato de Integração v0.7*
 
@@ -46,9 +46,11 @@ O Marketing é entregue em duas etapas. A **Etapa 1** faz o lead chegar e ser re
 
 | | Etapa 1 · Captação | Etapa 2 · Módulo integrado de marketing |
 |---|---|---|
-| O que entrega | o lead chega pelo webhook do Meta e pelos eventos do Landing, é deduplicado, avança no funil, recebe o aquecimento por e-mail e, na etapa 3 do funil, vira oportunidade no CRM | painel, lista e busca de leads, qualificação e distribuição para vendas, configurações de marketing (Meta Ads e outros canais), campos do formulário e disponibilização dos dados |
+| O que entrega | o lead chega pelo webhook do Meta e pelos eventos do Landing, é deduplicado, tem o consentimento registrado, avança no funil, recebe a confirmação de boas-vindas e o aquecimento por e-mail e, na etapa 3 do funil, vira oportunidade no CRM | painel, lista e busca de leads, qualificação e distribuição para vendas, configurações de marketing (Meta Ads e outros canais), campos do formulário e disponibilização dos dados |
 | Quem usa | ninguém vê diretamente: roda no back-end | a pessoa gestora de marketing, dentro da casca; e os módulos interessados, pela API e pelos eventos |
 | Onde está | seções 2 a 5, 8 e a superfície pública da seção 6 | seção 9, e as tabelas, rotas e permissões marcadas **[Etapa 2]** nas seções 3, 6 e 7 |
+
+A landing page e o formulário que o visitante preenche fazem parte da jornada da Etapa 1, mas são do Landing (Grupo 7): ficam na página pública, aberta a qualquer pessoa, e não na plataforma compartilhada. A Etapa 2 é a área autenticada, dentro da casca, onde a pessoa gestora define os campos que esse formulário pergunta.
 
 **O que a Etapa 2 oferece:**
 
@@ -156,8 +158,9 @@ Registro central do lead. Existe quando há um identificador de contato: leads d
 | formulario_id **[Novo]** | uuid, nullable | `formularioId` do evento, que é o `id` de `formularios` (9.5). Sem FK, para um formulário desconhecido não travar a gravação do lead |
 | formulario_versao | int, nullable | `formularioVersao` do evento, que é a `versao` de `formulario_versoes`. Antes `form_definition_version` |
 | dados_formulario | jsonb | cópia das respostas consultadas em `GET /api/landing/envios/{envioId}` nas etapas 2 e 3, como registro histórico do fato (§9.5) |
-| consentimento_marketing **[Novo]** | boolean, default false | o lead aceitou receber comunicação de marketing (LGPD). Sem ele, o job 4.2 não envia |
-| consentimento_em **[Novo]** | timestamptz, nullable | quando o consentimento foi registrado no Landing |
+| consentimento_marketing **[Novo]** | boolean, default false | o lead aceitou receber comunicação de marketing (LGPD). Sem ele, o job 4.2 não envia. É o estado atual; a evidência de cada aceite e revogação fica em `lead_consentimentos` |
+| consentimento_em **[Novo]** | timestamptz, nullable | quando o consentimento atual foi registrado no Landing |
+| boas_vindas_enviada_em **[Novo]** | timestamptz, nullable | quando o e-mail de boas-vindas saiu (4.5). Nulo enquanto não saiu; garante um envio só por lead |
 | meta_lead_id | varchar, nullable | `leadgen_id` do Meta, para dedupe de reentrega do webhook. **UNIQUE (tenant_id, meta_lead_id)**: a unicidade é por tenant |
 | crm_empresa_id / crm_contato_id **[Novo]** | uuid, nullable | recebidos em `landing.formulario.recebido`. Só o UUID, nunca FK entre schemas |
 | crm_oportunidade_id | uuid, nullable | oportunidade criada pelo Marketing na etapa 3. Só o UUID |
@@ -197,7 +200,7 @@ Timeline e auditoria da progressão do lead, exigidas pelo Prompt Mestre em todo
 | id / tenant_id | uuid | PK / not null, indexado |
 | sequencia **[Novo]** | bigint GENERATED ALWAYS AS IDENTITY, UNIQUE | ordem global, usada como `id` das mensagens SSE (9.1). O `id` é uuid e não serve para isso |
 | lead_id | uuid | FK para `leads.id`, no mesmo schema |
-| tipo_evento | varchar | `etapa_alterada`, `formulario_atualizado`, `comunicacao_enviada`, `qualificacao_alterada`, `vendedor_atribuido`, `handoff_crm`, `descadastrado`, `anonimizado` |
+| tipo_evento | varchar | `etapa_alterada`, `formulario_atualizado`, `comunicacao_enviada`, `consentimento_registrado`, `qualificacao_alterada`, `vendedor_atribuido`, `handoff_crm`, `descadastrado`, `anonimizado` |
 | etapa_anterior / etapa_nova | smallint, nullable | |
 | payload | jsonb | detalhes do evento, sem dado pessoal além do necessário |
 | colunas obrigatórias | §7.2 | antes só havia `created_at` e `created_by` |
@@ -222,9 +225,31 @@ Timeline e auditoria da progressão do lead, exigidas pelo Prompt Mestre em todo
 
 > **Regra de promoção:** uma linha do buffer só vira registro em `leads` se tiver `meta_lead_id`, e-mail ou telefone. Cliques e eventos sem nenhum identificador de contato são marcados como `processado = true` sem gerar lead, para não poluir o funil com registros vazios.
 
+### `lead_consentimentos` [Novo]
+
+Registro de evidência do consentimento, exigido pela [LGPD](LGPD.md) (8.1) e pelo requisito RC03 dos [Requisitos](Requisitos.md): data e hora, IP, *User-Agent*, versão do termo aceito e formulário de origem. É só de inclusão: uma linha por aceite ou revogação, nunca alterada. `leads.consentimento_marketing` guarda só o estado atual.
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| id / tenant_id | uuid | PK / not null, indexado |
+| lead_id | uuid | FK para `leads.id` |
+| finalidade | varchar | `marketing` nesta fase. Coluna mantida para outras finalidades, como termos de uso |
+| aceito | boolean | `true` no aceite, `false` na revogação (descadastro ou desmarcação no formulário) |
+| registrado_em | timestamptz | `consentimento.registradoEm` do evento, em UTC, ou o momento do descadastro |
+| ip | varchar(45), nullable | IPv4 ou IPv6 de quem aceitou ou revogou. Zerado na anonimização (4.3) |
+| user_agent | varchar(500), nullable | *User-Agent* do navegador. Zerado na anonimização (4.3) |
+| versao_termo | varchar, nullable | versão do texto de consentimento que a pessoa viu, informada pelo Landing. Nula na revogação |
+| origem | varchar | `landing.contato.informado`, `landing.formulario.atualizado`, `landing.formulario.recebido` ou `descadastro` |
+| formulario_id / formulario_versao | uuid / int, nullable | formulário de origem do aceite. Sem FK, como em `leads` |
+| envio_id | uuid, nullable | `envioId` do Landing |
+| evento_id | uuid, nullable | `id` do evento que trouxe o aceite, para auditoria. Nulo no descadastro |
+| colunas obrigatórias | §7.2 | |
+
+> **Quando grava:** o `consentimento` chega nos eventos das etapas 1, 2 e 3 do funil (seção 8). O consumidor só grava uma linha nova quando `aceito`, `registrado_em` ou `versao_termo` diferem da última linha do lead, para os eventos repetidos da etapa 2 não multiplicarem o registro. Na mesma transação, atualiza `leads.consentimento_marketing` e `leads.consentimento_em`. O descadastro (seção 6) grava a revogação com o IP e o *User-Agent* da requisição.
+
 ### `lead_comunicacoes`
 
-Histórico da comunicação de aquecimento. Nesta fase só por e-mail, sem chatbot.
+Histórico dos e-mails enviados ao lead: boas-vindas (4.5) e aquecimento (4.2). Nesta fase só por e-mail, sem chatbot.
 
 | Coluna | Tipo | Observação |
 |---|---|---|
@@ -277,20 +302,23 @@ Preferências de referência por canal de anúncio. Não substitui as ferramenta
 
 ### `modelos_mensagem` (antes `mensagem_templates`)
 
-Modelos de aquecimento usados pelo job de comunicação das etapas frias (0/1). É conteúdo estruturado, diferente das preferências de canal acima.
+Modelos de e-mail: a confirmação de boas-vindas (4.5) e a cadência de aquecimento das etapas frias (0/1, job 4.2). É conteúdo estruturado, diferente das preferências de canal acima.
 
 | Coluna | Tipo | Observação |
 |---|---|---|
 | id / tenant_id | uuid | |
+| tipo **[Novo]** | varchar | `boas_vindas` ou `aquecimento`. Só um modelo `boas_vindas` ativo por tenant |
 | nome | varchar | identificador amigável, ex.: "Reengajamento 7 dias" |
 | canal | varchar | `email` nesta fase |
-| etapa_alvo | smallint, nullable | 0 ou 1; nulo vale para qualquer etapa fria |
-| ordem_sequencia | int | posição na cadência (1º toque, 2º toque, ...) |
-| dias_apos_anterior | int | dias de espera desde o toque anterior |
+| etapa_alvo | smallint, nullable | só em `aquecimento`: 0 ou 1; nulo vale para qualquer etapa fria |
+| ordem_sequencia | int, nullable | só em `aquecimento`: posição na cadência (1º toque, 2º toque, ...) |
+| dias_apos_anterior | int, nullable | só em `aquecimento`: dias de espera desde o toque anterior |
 | assunto | varchar, not null | obrigatório, já que o único canal é e-mail |
 | corpo | text | com variáveis como `{{nome}}` e `{{origem}}`, no mesmo padrão de variáveis dinâmicas do Prompt Mestre (seção 18). O link de descadastro entra em todo envio (4.2) |
 | ativo | boolean | |
 | colunas obrigatórias | §7.2 | |
+
+Cada tenant começa com um modelo `boas_vindas` padrão, que a pessoa gestora edita (9.4).
 
 ### `ciclo_vida_configuracoes` (antes `lifecycle_settings`)
 
@@ -380,14 +408,14 @@ CREATE TABLE marketing.eventos_processados (
 
 ### 4.2 Comunicação de aquecimento
 
-Roda diariamente. Envia a cadência de `modelos_mensagem` por e-mail para leads frios (etapa 0/1) que ainda não esgotaram as tentativas.
+Roda diariamente. Envia a cadência de `modelos_mensagem` com `tipo = 'aquecimento'` por e-mail para leads frios (etapa 0/1) que ainda não esgotaram as tentativas.
 
 1. Seleciona leads com `etapa IN (0,1)`, `status_aquecimento = 'ativo'`, `consentimento_marketing = true`, e-mail preenchido e `now() - ultima_comunicacao_em >= dias_apos_anterior` do próximo modelo da sequência (posição `tentativas_aquecimento + 1`)
 2. **Confere `status_aquecimento != 'opt_out'` antes de enviar.** É obrigatório pela seção 64 do Prompt Mestre (opt-out de marketing)
 3. Envia o modelo correspondente, sempre com o link de descadastro `/public/marketing/descadastro/{token_descadastro}`. Grava em `lead_comunicacoes` com o `modelo_id`, incrementa `tentativas_aquecimento` e atualiza `ultima_comunicacao_em`
 4. Se não há próximo modelo na sequência daquela etapa, ou se `tentativas_aquecimento` chegou a `ciclo_vida_configuracoes.max_tentativas_aquecimento`, marca `status_aquecimento = 'esgotado'` e grava `esgotado_em = now()`
 
-> **Quem envia o e-mail:** o próprio módulo. A mensagem `identity.email.enviar` da plataforma aceita *só e-mail transacional*; campanhas e listas são do Marketing (AsyncAPI do identity e Mapa §3). Em desenvolvimento o destino é o Mailpit (`mailpit:1025`). Hoje o `docker-compose.yml` não entrega variáveis de SMTP ao serviço `marketing`, e isso está registrado como pendência com o Grupo 2.
+> **Quem envia o e-mail:** o próprio módulo, tanto o aquecimento quanto a confirmação de boas-vindas (4.5). A mensagem `identity.email.enviar` da plataforma aceita *só e-mail transacional*; campanhas e listas são do Marketing (AsyncAPI do identity e Mapa §3). Em desenvolvimento o destino é o Mailpit (`mailpit:1025`). Hoje o `docker-compose.yml` não entrega variáveis de SMTP ao serviço `marketing`, e isso está registrado como pendência com o Grupo 2.
 
 O limite de tentativas é configurado por tenant em `ciclo_vida_configuracoes`, não fixado no código. WhatsApp fica fora desta fase: está sem dono no Mapa (seções 65–67) e entra como evolução futura. Se a régua de nutrição também vale para o lead da etapa 2 com faixa `nutricao` ainda está em aberto (seção 11).
 
@@ -396,7 +424,7 @@ O limite de tentativas é configurado por tenant em `ciclo_vida_configuracoes`, 
 Roda mensalmente. Não apaga a linha do lead, porque isso quebraria o histórico do funil e as métricas de conversão do painel. Remove só o dado pessoal identificável e preserva o valor estatístico.
 
 1. Seleciona leads com `anonimizado = false` e (`status_aquecimento = 'esgotado'` com `now() - esgotado_em >= meses_retencao_pos_esgotamento`) ou (`status_aquecimento = 'opt_out'` com `now() - opt_out_em >= meses_retencao_pos_optout`)
-2. Zera `nome`, `email`, `telefone`, `whatsapp`, `token_descadastro` e `dados_formulario`. Mantém `etapa`, `origem`, `utm_*`, `pontuacao`, `faixa_qualificacao`, datas e contadores
+2. Zera `nome`, `email`, `telefone`, `whatsapp`, `token_descadastro` e `dados_formulario`, e também `ip` e `user_agent` das linhas do lead em `lead_consentimentos`. Mantém `etapa`, `origem`, `utm_*`, `pontuacao`, `faixa_qualificacao`, datas e contadores, e no registro de consentimento a finalidade, o aceite, a data e a versão do termo
 3. Marca `anonimizado = true` e registra evento em `lead_eventos`
 
 Os dois prazos de retenção são configurados por tenant em `ciclo_vida_configuracoes`, conforme a seção 83 do Prompt Mestre (LGPD).
@@ -408,6 +436,19 @@ Roda a cada minuto, só para tenants com `rodizio_ativo = true`.
 1. **Atribuição pendente:** leads MQL sem vendedor, que chegaram fora do horário comercial, recebem vendedor pelo rodízio (9.3) no início do próximo horário de atendimento
 2. **Transbordo [Pendente · Grupo 6]:** se o vendedor não fez o primeiro contato em `minutos_transbordo`, o lead passa ao próximo vendedor do rodízio. Quem registra o primeiro contato é o CRM; sem essa informação, este passo fica desligado (seção 11)
 
+### 4.5 Confirmação de boas-vindas [Novo]
+
+Atende o RF06 e o RN01 dos [Requisitos](Requisitos.md): o lead recebe uma mensagem automática de confirmação nos primeiros minutos, e o MQL é abordado por ela em até 5 minutos. Roda a cada minuto, então o e-mail sai em até 1 ou 2 minutos depois do fato.
+
+1. **Quem recebe:** lead com e-mail, `boas_vindas_enviada_em` nulo, `anonimizado = false`, `status_aquecimento != 'opt_out'` e que atende a um dos gatilhos:
+   - **enviou o formulário (etapa 3):** recebe mesmo sem `consentimento_marketing`, porque o e-mail só confirma o pedido que a própria pessoa fez;
+   - **virou MQL, quente ou morno, antes de enviar (etapa 2):** recebe só com `consentimento_marketing = true`, porque ainda não houve pedido a confirmar.
+2. **O que envia:** o modelo `boas_vindas` ativo do tenant (`modelos_mensagem`), com as variáveis do lead e o link de descadastro `/public/marketing/descadastro/{token_descadastro}`. Sai uma vez por lead: o que chegar primeiro entre os dois gatilhos.
+3. **O que grava:** `lead_comunicacoes` com o `modelo_id`, `boas_vindas_enviada_em = now()` e `comunicacao_enviada` em `lead_eventos`. Não conta em `tentativas_aquecimento`.
+4. **Falha:** grava `lead_comunicacoes` com `status = 'falhou'` e tenta de novo na execução seguinte. Depois de 3 falhas do lead, desiste e o lead aparece com a confirmação pendente no detalhe (9.2).
+
+Lead do Meta Ads não recebe: ele não enviou formulário da landing, e o consentimento dele está em aberto (seção 11). O horário comercial não se aplica: a janela de não perturbe do RN03 vale só para WhatsApp.
+
 ---
 
 ## 5. Fluxo de escrita
@@ -415,7 +456,7 @@ Roda a cada minuto, só para tenants com `rodizio_ativo = true`.
 1. **Etapa 0 do Meta:** o webhook grava em `leads_entrada_buffer`, com o tenant resolvido pelo slug do caminho e a assinatura validada (seção 6)
 2. **Etapas 0 e 1 do Landing:** o consumidor da fila `marketing.landing-leads` recebe `landing.visita.registrada`, `landing.formulario.aberto` e `landing.contato.informado` e grava em `leads_entrada_buffer`, com o `tenantId` do envelope
 3. **Drenagem:** o job 4.1 esvazia o buffer, busca os dados dos leads do Meta na Graph API, faz upsert em `leads` (dedupe por `meta_lead_id`, `visitante_id`, e-mail ou telefone) e grava `lead_eventos`
-4. **Etapa 2:** `landing.formulario.atualizado` é processado na chegada. O evento já traz `etapa: 2`. O Marketing escreve direto em `leads` + `lead_eventos`, sem passar pelo buffer. Depois consulta as respostas parciais em `GET /api/landing/envios/{envioId}`, recalcula a pontuação e, se o lead virou MQL, atribui vendedor (9.3)
+4. **Etapa 2:** `landing.formulario.atualizado` é processado na chegada. O evento já traz `etapa: 2`. O Marketing escreve direto em `leads` + `lead_eventos`, sem passar pelo buffer. Depois consulta as respostas parciais em `GET /api/landing/envios/{envioId}`, recalcula a pontuação e, se o lead virou MQL, atribui vendedor (9.3). Um MQL com consentimento passa a esperar a confirmação de boas-vindas (4.5)
 5. **Etapa 3, fluxo expresso (9.6):** `landing.formulario.recebido` é processado na chegada, em seis passos:
    1. grava `crm_empresa_id` e `crm_contato_id`;
    2. consulta as respostas em `GET /api/landing/envios/{envioId}` e guarda em `dados_formulario`;
@@ -424,7 +465,9 @@ Roda a cada minuto, só para tenants com `rodizio_ativo = true`.
    5. grava `crm_oportunidade_id`;
    6. registra em `lead_eventos` e notifica o vendedor (seção 8).
 
-   Se `empresaId` vier nulo (CRM fora do ar no momento do envio), o lead fica na etapa 3 sem oportunidade até o Landing publicar o evento de novo com os ids
+   A confirmação de boas-vindas sai pelo job 4.5, em até 1 ou 2 minutos, sem esperar o CRM. Se `empresaId` vier nulo (CRM fora do ar no momento do envio), o lead fica na etapa 3 sem oportunidade até o Landing publicar o evento de novo com os ids
+
+**Consentimento:** nas etapas 1, 2 e 3, o `consentimento` do evento é registrado em `lead_consentimentos` quando muda (seção 3). Nas etapas 2 e 3 isso acontece na chegada; na etapa 1, na drenagem do buffer, junto com a criação do lead.
 
 Todo consumo é idempotente (`eventos_processados`) e a etapa nunca volta para trás, mesmo que os eventos cheguem fora de ordem. Depois do commit de cada passo, o módulo pode publicar evento em `marketing.eventos` e pedir notificação ou registro na timeline (seção 8).
 
@@ -448,7 +491,7 @@ Rotas sem usuário ficam sob `/public/marketing/**`. O gateway as libera de toke
 >
 > O corpo do webhook traz só `leadgen_id`, `page_id`, `form_id` e `ad_id`. O webhook grava isso no buffer e responde na hora; os campos do lead são buscados depois, na drenagem (4.1).
 
-> **Descadastro:** o `GET` mostra a confirmação e o `POST` efetiva o opt-out, gravando `status_aquecimento = 'opt_out'` e `opt_out_em` e registrando em `lead_eventos`. O opt-out não acontece no `GET` porque leitores de e-mail costumam abrir links automaticamente. Token inválido responde a mesma página neutra, para não revelar se o lead existe.
+> **Descadastro:** o `GET` mostra a confirmação e o `POST` efetiva o opt-out, gravando `status_aquecimento = 'opt_out'`, `opt_out_em` e `consentimento_marketing = false`, e registrando em `lead_eventos` e a revogação em `lead_consentimentos`, com o IP e o *User-Agent* da requisição. O opt-out não acontece no `GET` porque leitores de e-mail costumam abrir links automaticamente. Token inválido responde a mesma página neutra, para não revelar se o lead existe.
 
 ### Superfície autenticada
 
@@ -698,9 +741,11 @@ Todos pela fila `marketing.landing-leads`, ligada a `landing.eventos`, com `mark
 |---|---|---|---|
 | `landing.visita.registrada` | 0 | `visitanteId`, página, `origem` (UTM) | buffer |
 | `landing.formulario.aberto` | 0 | `visitanteId`, `formularioId`, `origem` | buffer |
-| `landing.contato.informado` | 1 | + `envioId`, `formularioVersao`, contato, consentimento | buffer |
+| `landing.contato.informado` | 1 | + `envioId`, `formularioVersao`, contato, consentimento (aceite, data, IP, *User-Agent* e versão do termo) | buffer |
 | `landing.formulario.atualizado` | 2 | contato atualizado; publicado só quando o Landing considera o preenchimento "grande parte" | na chegada, com pontuação |
 | `landing.formulario.recebido` | 3 | já no PR #16; pedimos acrescentar `visitanteId`, `formularioVersao`, contato, consentimento e `origem` | na chegada, fluxo expresso |
+
+IP e *User-Agent* são dado pessoal e só viajam no evento porque são a evidência de consentimento que a [LGPD](LGPD.md) (8.1) exige. Não aparecem em log.
 
 Todo consumo é idempotente: grava o `id` em `eventos_processados` na mesma transação do efeito e ignora um `id` já visto. O evento `crm.oportunidade.criada`, citado no §12.7, não é necessário: quem cria a oportunidade é o próprio Marketing.
 
@@ -721,7 +766,9 @@ Todo consumo é idempotente: grava o `id` em `eventos_processados` na mesma tran
 - Envia `modulo:altura` a cada mudança de conteúdo, `modulo:navegar` com rota relativa (`/leads/9f1c`) e `modulo:token-expirado` ao receber `401`
 - Token só em memória, nunca em `localStorage`
 - O servidor do front envia `Content-Security-Policy: frame-ancestors 'self'` e nunca `X-Frame-Options: DENY` (§12.8)
-- Tema: Design System Centinela sobre Tailwind v4, com `lucide-react` e a fonte Inter (`ui/plataforma.css`). Ele substitui o shadcn/ui. Usar os tokens (`bg-superficie`, `text-texto`...) em vez de hex e aplicar `data-tema` recebido da casca
+- Tema: [Design System Centinela](DesignSystem/design-systemfinal.md) sobre Tailwind v4, com `lucide-react` e a fonte Inter. Ele substitui o shadcn/ui. Usar os tokens do Design System (`bg-brand-950`, `bg-brand-800`, `text-brand-300`...) em vez de hex e aplicar `data-tema` recebido da casca
+
+> **Front independente da casca [Novo].** A integração com a casca está a cargo de outro grupo, e a decisão pode mudar (iframe, micro-frontend ou front único). Por isso o front do Marketing concentra tudo o que depende da casca numa camada só, `plataforma/`: sessão e token, navegação, altura, tema e aviso de token expirado. As telas não falam com `window.parent` nem com `postMessage`; usam essa camada. Caminho base e endereço da API vêm de configuração (`import.meta.env`), não fixos no código. Cada área (painel, leads, formulários, configurações) fica em `src/features/<area>/`, com as próprias rotas, e pode ser montada em outro app sem reescrita. Sozinho, o módulo abre com um layout de desenvolvimento e login de teste; embutido, sem sidebar nem header, que são da casca.
 
 ### 9.1 Painel
 
@@ -826,7 +873,8 @@ A consulta de leads é do Marketing. O CRM só passa a ter o lead quando ele vir
 
 **Detalhe:** `GET /api/marketing/leads/{id}`
 
-- Contato, consentimento e origem (UTM, landing page, primeira visita)
+- Contato, consentimento e origem (UTM, landing page, primeira visita). O consentimento mostra o histórico de `lead_consentimentos`: aceite ou revogação, data, versão do termo e formulário. IP e *User-Agent* aparecem só aqui, nunca no resumo (9.6)
+- Confirmação de boas-vindas: enviada, pendente ou com falha (4.5)
 - Respostas do formulário, com a versão respondida
 - Pontuação com o detalhe: quais regras somaram quantos pontos (9.3)
 - Vendedor atribuído, com a ação de reatribuir (`marketing.qualificacao.editar`)
@@ -886,10 +934,11 @@ Uma tela com quatro abas: canais de anúncio, modelos de mensagem, ciclo de vida
 
 **Aba "Modelos de mensagem"**: `GET/POST/PUT/DELETE /api/marketing/modelos-mensagem`
 
-- Lista de modelos de e-mail, indicando a etapa fria (0/1) de cada um e sua posição na cadência
+- O modelo de boas-vindas no topo, separado da cadência: um por tenant, sempre ativo, editável e sem exclusão (4.5)
+- Lista de modelos de aquecimento, indicando a etapa fria (0/1) de cada um e sua posição na cadência
 - Editor com assunto e corpo, aceitando variáveis como `{{nome}}` e `{{origem}}`
 - Pré-visualização do modelo com dados de exemplo antes de salvar, incluindo o rodapé com o link de descadastro
-- Chave de ativo/inativo: modelos inativos não entram no job de comunicação
+- Chave de ativo/inativo nos modelos de aquecimento: os inativos não entram no job 4.2
 
 Cada envio grava `lead_comunicacoes.modelo_id`, o que permite medir abertura e clique por modelo quando houver rastreio (seção 11).
 
@@ -1010,6 +1059,8 @@ O `exemplo-modulo` já cobre os itens 2 a 6, 9, 10, 15 e 18 com testes automatiz
 
 Além do checklist, a Etapa 2 precisa de testes próprios: a pontuação com a matriz inicial da 9.3 (um lead de cada faixa), o rodízio com três leads MQL e dois vendedores ativos, a atribuição fora do horário comercial e a publicação de formulário gerando nova versão sem alterar a anterior.
 
+A Etapa 1 também ganha testes próprios: a confirmação de boas-vindas sai uma vez só, mesmo com o lead passando pelos dois gatilhos, e não sai para MQL sem consentimento nem para quem se descadastrou (4.5); o mesmo consentimento entregue em três eventos gera uma linha só em `lead_consentimentos`, e o descadastro grava a revogação com IP e *User-Agent*.
+
 ### Entrega no `infra-integrador-2026`
 
 - `contratos/marketing.yaml` (OpenAPI 3.1): endpoints que a casca e outros módulos usam, antes de implementar (§14.1)
@@ -1024,7 +1075,8 @@ Além do checklist, a Etapa 2 precisa de testes próprios: a pontuação com a m
 
 | Pendência | Com quem | Situação |
 |---|---|---|
-| Aceite da proposta ao Landing ([`contratos/landing-requisitos.md`](contratos/landing-requisitos.md)): cinco eventos, `visitanteId` e `envioId`, UTM, consentimento, `GET /api/landing/envios/{envioId}` e `servicos: [marketing]` em `landing.envio.ver` | Grupo 7 | **[Rascunho a enviar]** |
+| Aceite da proposta ao Landing ([`contratos/landing-requisitos.md`](contratos/landing-requisitos.md)): cinco eventos, `visitanteId` e `envioId`, UTM, consentimento com IP, *User-Agent* e versão do termo, `GET /api/landing/envios/{envioId}` e `servicos: [marketing]` em `landing.envio.ver` | Grupo 7 | **[Rascunho a enviar]** |
+| Confirmação de boas-vindas sem consentimento de marketing para quem enviou o formulário (4.5): a leitura é que ela confirma o pedido da própria pessoa e não é comunicação de marketing | Grupo 4, professores | Proposta a confirmar |
 | Campos do formulário definidos pelo Marketing (9.5): o Landing lê `GET /api/marketing/formularios/{id}`, ouve `marketing.formulario.publicado` e usa nossos ids. Muda o que o Mapa previa para a seção 56, então precisa do aceite do Grupo 7 e do registro no Mapa | Grupo 7, gestores | **[Rascunho a enviar]** |
 | Critério da etapa 2 ("grande parte do formulário"), definido e aplicado pelo Landing; precisamos conhecê-lo para documentar no painel | Grupo 7 | A combinar |
 | Consentimento de marketing dos leads do Meta Ads (etapa 0) antes do aquecimento | Grupo 4 | A definir |
@@ -1040,7 +1092,7 @@ Além do checklist, a Etapa 2 precisa de testes próprios: a pontuação com a m
 | Custo real e ROI/ROAS: hoje o custo por lead é estimado pelo orçamento informado; ROI precisa do valor do contrato, e Propostas e Contratos estão sem dono no Mapa | Grupo 4, professores | Evolução futura |
 | Construtor visual de automação (60), gatilhos e ações (61–62) e campanhas de e-mail (63), atribuídos ao Grupo 4 pelo Mapa e não cobertos aqui | Grupo 4, professores | Lacuna de escopo a definir |
 | WhatsApp e telefonia (65–67), sem dono no Mapa | — | Fora desta fase; evolução futura |
-| SMTP para o e-mail de aquecimento: o compose não entrega variáveis de SMTP ao `marketing`, e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
+| SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao `marketing`, e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
 | SSE pelo gateway: a conexão longa sobrevive à regra de `504` em 3 s? | Grupo 2 | A confirmar |
 | Rate limit de 120 req/min por IP em `/public/**` pode barrar rajadas do webhook do Meta | Grupo 2 | A confirmar |
 | Handshake do Meta exige devolver `hub.challenge` em texto puro, fora do envelope; o §8.2 só prevê exceção para download de arquivo | Grupo 2 | Pedir exceção registrada |
@@ -1056,6 +1108,14 @@ Além do checklist, a Etapa 2 precisa de testes próprios: a pontuação com a m
 ---
 
 ## 12. Registro de alterações
+
+### 25/09/2026 · boas-vindas, log de consentimento e front
+
+- Novo job 4.5: confirmação de boas-vindas por e-mail em até 1 ou 2 minutos para quem envia o formulário ou vira MQL, atendendo o RF06 e o RN01. Novo `modelos_mensagem.tipo` (`boas_vindas` ou `aquecimento`) e `leads.boas_vindas_enviada_em`
+- Nova tabela `lead_consentimentos`, com data, IP, *User-Agent*, versão do termo e formulário de cada aceite e revogação, atendendo a LGPD 8.1 e o RC03. O Landing passa a mandar IP, *User-Agent* e versão do termo no `consentimento` dos eventos; o descadastro grava a revogação; a anonimização zera IP e *User-Agent*
+- Front independente da casca: tudo o que depende dela fica na camada `plataforma/`, para aguentar mudança de decisão sobre iframe ou front único
+- Tema com os tokens do Design System Centinela (`bg-brand-*`) no lugar de `ui/plataforma.css`
+- Seção 0 deixa claro que a landing page e o formulário público são do Landing, fora da plataforma compartilhada
 
 ### 24/09/2026 · Etapa 2: módulo integrado de marketing
 
