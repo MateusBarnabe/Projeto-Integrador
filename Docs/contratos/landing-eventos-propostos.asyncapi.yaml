@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: Landing Pages e Formulários — eventos que o Marketing precisa (proposta)
-  version: 0.2.0-proposta
+  version: 0.3.0-proposta
   description: |
     RASCUNHO escrito pelo Grupo 4 (Marketing) para o Grupo 7 (Landing). O dono destes eventos
     é o Landing: este arquivo é uma sugestão para ser incorporada ao `contratos/landing.asyncapi.yaml`
@@ -292,9 +292,24 @@ components:
 
     Consentimento:
       type: object
-      required: [marketing, registradoEm]
+      description: |
+        Aceite de comunicação de marketing e a evidência que a LGPD exige (data, IP, User-Agent e
+        versão do termo). IP e User-Agent são dado pessoal e vão no evento só por serem essa evidência.
+      required: [marketing, registradoEm, ip, userAgent, versaoTermo]
       properties:
         marketing:
           type: boolean
-          description: O visitante aceitou receber comunicação de marketing (LGPD)
+          description: O visitante aceitou receber comunicação de marketing (LGPD). false registra a revogação
         registradoEm: { type: string, format: date-time }
+        ip:
+          type: string
+          maxLength: 45
+          description: IPv4 ou IPv6 do visitante no momento do aceite
+        userAgent:
+          type: string
+          maxLength: 500
+          description: User-Agent do navegador do visitante
+        versaoTermo:
+          type: string
+          maxLength: 50
+          description: Versão do texto de consentimento mostrado; muda sempre que o texto muda

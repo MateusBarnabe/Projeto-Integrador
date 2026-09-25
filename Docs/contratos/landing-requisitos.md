@@ -1,7 +1,7 @@
 # O que o Marketing precisa receber do Landing
 
 *De: Grupo 4 — Marketing e Automações · Para: Grupo 7 — Landing Pages e Formulários*
-*Rascunho de 24/09/2026 · Base: Contrato de Integração v0.7 (§9.7, §12.7) e PR #16 do Landing*
+*Rascunho de 25/09/2026 · Base: Contrato de Integração v0.7 (§9.7, §12.7) e PR #16 do Landing*
 
 O Marketing não captura o visitante na landing page. Quem vê a visita, o clique, o preenchimento e o envio é o Landing. Sem esses avisos, o funil do Marketing não existe. Este documento diz **o que** precisamos receber, **quando** e **em que formato**, para cada etapa do lead.
 
@@ -12,7 +12,7 @@ O Marketing não captura o visitante na landing page. Quem vê a visita, o cliqu
 - O Landing avisa cada fato por **evento no RabbitMQ**, na própria exchange `landing.eventos`. O Marketing liga uma fila a ela. Nenhuma chamada síncrona ao Marketing é necessária.
 - São **cinco eventos**. Um deles já existe no PR #16 (`landing.formulario.recebido`) e precisa de campos a mais. Os nomes dos outros quatro são proposta; quem decide é o Landing, que é o dono deles.
 - **Quem decide a etapa do lead (0 a 3) é o Landing**, e todo evento traz o campo `etapa`. Isso inclui o critério de "grande parte do formulário" da etapa 2.
-- O evento carrega **contato e UTM**. As respostas completas do formulário o Marketing consulta na API do Landing, pelo `envioId`.
+- O evento carrega **contato, consentimento (com IP, *User-Agent* e versão do termo, para a evidência da LGPD) e UTM**. As respostas completas do formulário o Marketing consulta na API do Landing, pelo `envioId`.
 - Dois identificadores ligam as etapas: **`visitanteId`**, do primeiro acesso até o envio, e **`envioId`**, do primeiro preenchimento até o envio.
 - Na etapa 3, o Landing continua criando ou reaproveitando **empresa e contato** no CRM, como no PR #16. **A oportunidade o Landing não cria**: quem cria é o Marketing.
 - **O lead continua sendo gerido no módulo de Marketing em todas as etapas**, inclusive depois da etapa 3. O CRM recebe só empresa, contato e oportunidade (seção 7).
@@ -146,7 +146,10 @@ Publicar quando o visitante termina de preencher **nome, telefone e e-mail**, an
 | `contato.telefone` | sim | string, só dígitos, com DDI e DDD (E.164 sem o `+`) |
 | `contato.whatsapp` | não | string, mesmo formato, quando o formulário tiver o campo |
 | `consentimento.marketing` | sim | boolean: o visitante aceitou receber comunicação de marketing |
-| `consentimento.registradoEm` | sim | date-time |
+| `consentimento.registradoEm` | sim | date-time, em UTC |
+| `consentimento.ip` | sim | string: IPv4 ou IPv6 do visitante no momento do aceite |
+| `consentimento.userAgent` | sim | string: *User-Agent* do navegador, até 500 caracteres |
+| `consentimento.versaoTermo` | sim | string: versão do texto de consentimento mostrado ao visitante (ex.: `2026-09-01` ou `v3`) |
 | `origem` | sim | objeto da seção 4 |
 
 ```json
@@ -162,12 +165,22 @@ Publicar quando o visitante termina de preencher **nome, telefone e e-mail**, an
     "telefone": "5511987654321",
     "whatsapp": null
   },
-  "consentimento": { "marketing": true, "registradoEm": "2026-09-24T13:04:40Z" },
+  "consentimento": {
+    "marketing": true,
+    "registradoEm": "2026-09-24T13:04:40Z",
+    "ip": "177.45.10.23",
+    "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) ...",
+    "versaoTermo": "2026-09-01"
+  },
   "origem": { "...": "objeto da seção 4" }
 }
 ```
 
 **Por que o consentimento:** o Marketing só manda e-mail de aquecimento para quem aceitou (LGPD, seção 64 do Prompt Mestre). Sem esse campo, não podemos enviar nada para o lead.
+
+**Por que IP, *User-Agent* e versão do termo:** a LGPD pede um registro de evidência de cada aceite, com data e hora, IP, *User-Agent*, versão do termo aceito e formulário de origem (8.1 da documentação de LGPD e RC03 dos requisitos). O Marketing guarda esse registro, mas só o Landing vê o navegador do visitante. São dados pessoais e trafegam no evento só por serem a evidência; o Marketing não os escreve em log.
+
+Se o visitante desmarcar o aceite antes de enviar, os eventos seguintes levam `marketing: false` com a nova data; o Marketing registra a revogação.
 
 ### 5.4 `landing.formulario.atualizado` — etapa 2 · proposta
 
@@ -268,7 +281,7 @@ O lead continua sendo gerido no módulo de Marketing em todas as etapas: painel,
 | CRM fora do ar na etapa 3 | Publicar `landing.formulario.recebido` mesmo assim, com `empresaId` e `contatoId` nulos, e publicar de novo com os ids quando o CRM voltar. O Marketing só cria a oportunidade quando tiver `empresaId` |
 | Validade do `visitanteId` | 90 dias, em cookie first-party |
 | Visitante que muda de e-mail entre etapas | O Marketing liga pelo `visitanteId` e pelo `envioId`, não pelo e-mail |
-| Texto do consentimento de marketing | Definido pelo Landing no formulário; só precisamos do booleano e da data |
+| Texto do consentimento de marketing | Definido pelo Landing no formulário, com uma versão que muda sempre que o texto muda. Precisamos do booleano, da data, do IP, do *User-Agent* e da versão (5.3) |
 | Quem define os campos do formulário | O Marketing (seção 10). O Landing fica com layout, estilo, editor visual e respostas |
 
 ## 10. Campos do formulário vêm do Marketing
