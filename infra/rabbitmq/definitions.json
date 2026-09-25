@@ -1,0 +1,45 @@
+{
+  "users": [
+    {
+      "name": "admin",
+      "password_hash": "Dmp28T9mcHjSVOW2DIZpoDGkNEDpQ0ztKDsAof0Qt7UvL2wb",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": ["administrator"]
+    },
+    {
+      "name": "mq_marketing",
+      "password_hash": "6xOJNpnoE+vDsCfVNevuB2htBx14/tth7glMlIuNrfkIetaw",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
+    },
+    {
+      "name": "mq_landing",
+      "password_hash": "q6KWaOW/abKXsjiiti21tuyqkF1csdDzyUa6DGhvlh2SnEx1",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
+    }
+  ],
+  "vhosts": [{ "name": "plataforma" }],
+  "permissions": [
+    { "user": "admin", "vhost": "plataforma", "configure": ".*", "write": ".*", "read": ".*" },
+    {
+      "user": "mq_marketing",
+      "vhost": "plataforma",
+      "configure": "^marketing\\..*",
+      "write": "^(marketing\\..*|identity\\.entrada)$",
+      "read": "^(marketing\\..*|landing\\.eventos)$"
+    },
+    {
+      "user": "mq_landing",
+      "vhost": "plataforma",
+      "configure": "^landing\\..*",
+      "write": "^landing\\..*",
+      "read": "^(landing\\..*|marketing\\.eventos)$"
+    }
+  ],
+  "exchanges": [
+    { "name": "marketing.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
+    { "name": "landing.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
+    { "name": "identity.entrada", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} }
+  ]
+}

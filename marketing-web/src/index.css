@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Tokens do Design System Centinela (Docs/DesignSystem/design-systemfinal.md).
+   Alterar aqui muda o módulo inteiro. Nunca usar hex direto nos componentes. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-950: #0C1A2E;
+  --color-brand-900: #0F2340;
+  --color-brand-800: #0B6B4E;
+  --color-brand-700: #0D9B6E;
+  --color-brand-600: #10B981;
+  --color-brand-500: #22C55E;
+  --color-brand-400: #4ADE80;
+  --color-brand-300: #86EFAC;
+  --color-brand-200: #BBF7D0;
+  --color-brand-100: #DCFCE7;
+  --color-brand-50:  #F0FDF4;
+}
+
+body {
+  @apply bg-gray-50 font-sans text-gray-800 antialiased;
+}

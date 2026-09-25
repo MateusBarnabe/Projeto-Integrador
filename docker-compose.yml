@@ -1,0 +1,91 @@
+# Ambiente local do Grupo 4. Imita o pedaço da plataforma (infra-integrador-2026) que o
+# Marketing usa: Postgres com o schema marketing, RabbitMQ com o vhost plataforma e Mailpit.
+# O identity, o gateway e a casca continuam vindo do repositório de infra.
+#
+#   docker compose up -d                      tudo
+#   docker compose up -d postgres rabbitmq mailpit   só a infraestrutura (para rodar os apps com npm/mvnw)
+#   docker compose up -d marketing            um app específico (sobe junto o que ele precisa)
+
+name: marketing-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: plataforma
+      POSTGRES_USER: ${POSTGRES_USUARIO:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SENHA:-postgres}
+      MARKETING_OWNER_SENHA: ${MARKETING_OWNER_SENHA:-own_marketing}
+      MARKETING_APP_SENHA: ${MARKETING_APP_SENHA:-usr_marketing}
+    ports:
+      - "${POSTGRES_PORTA:-5432}:5432"
+    volumes:
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres-dados:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d plataforma"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "${RABBITMQ_PORTA:-5672}:5672"
+      - "${RABBITMQ_PAINEL_PORTA:-15672}:15672"
+    volumes:
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_SMTP_PORTA:-1025}:1025"
+      - "${MAILPIT_PAINEL_PORTA:-8025}:8025"
+
+  # API do módulo (marketing-api). Nome de serviço igual ao da plataforma: http://marketing:8087
+  marketing:
+    build: ./marketing-api
+    environment:
+      DB_HOST: postgres
+      DB_SENHA: ${MARKETING_APP_SENHA:-usr_marketing}
+      FLYWAY_SENHA: ${MARKETING_OWNER_SENHA:-own_marketing}
+      RABBITMQ_HOST: rabbitmq
+      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # Front do módulo integrado (marketing-web), servido em /modulos/marketing/
+  marketing-front:
+    build: ./marketing-web
+    environment:
+      API_UPSTREAM: http://marketing:8087
+    ports:
+      - "3007:3007"
+    depends_on:
+      - marketing
+
+  # Placeholder do Landing (landing-web): página, formulário e API /api/landing na 8088
+  landing:
+    build: ./landing-web
+    environment:
+      MARKETING_API_URL: http://marketing:8087
+      RABBITMQ_URL: amqp://mq_landing:mq_landing@rabbitmq:5672/plataforma
+    ports:
+      - "8088:8088"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres-dados:

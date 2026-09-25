@@ -1,0 +1,19 @@
+{
+  "name": "projeto-integrador-marketing",
+  "private": true,
+  "description": "Atalhos para rodar os apps do monorepo. Cada app também roda sozinho de dentro da própria pasta.",
+  "scripts": {
+    "instalar": "npm install && npm install --prefix marketing-web && npm install --prefix landing-web",
+    "infra": "docker compose up -d postgres rabbitmq mailpit",
+    "infra:parar": "docker compose stop postgres rabbitmq mailpit",
+    "dev": "concurrently -k -n api,web,landing -c blue,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:landing\"",
+    "dev:api": "node scripts/api.mjs spring-boot:run",
+    "dev:web": "npm run dev --prefix marketing-web",
+    "dev:landing": "npm run dev --prefix landing-web",
+    "build": "node scripts/api.mjs -q package -DskipTests && npm run build --prefix marketing-web && npm run build --prefix landing-web",
+    "test:api": "node scripts/api.mjs verify"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* Mesmos tokens do Design System para a página de teste ficar coerente com a plataforma.
+   O Landing real (Grupo 7) tem o próprio visual. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-950: #0C1A2E;
+  --color-brand-800: #0B6B4E;
+  --color-brand-700: #0D9B6E;
+  --color-brand-300: #86EFAC;
+  --color-brand-100: #DCFCE7;
+  --color-brand-50:  #F0FDF4;
+}
+
+body {
+  @apply bg-white font-sans text-gray-800 antialiased;
+}
