@@ -15,53 +15,53 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 class SegurancaF1Test {
 
-    private static final UUID TENANT = UUID.fromString("a0000000-0000-4000-8000-00000000000a");
-    private static final UUID USUARIO = UUID.fromString("10000000-0000-4000-8000-000000000001");
+        private static final UUID TENANT = UUID.fromString("a0000000-0000-4000-8000-00000000000a");
+        private static final UUID USUARIO = UUID.fromString("10000000-0000-4000-8000-000000000001");
 
-    @AfterEach
-    void limparContexto() {
-        SecurityContextHolder.clearContext();
-    }
+        @AfterEach
+        void limparContexto() {
+                SecurityContextHolder.clearContext();
+        }
 
-    @Test
+        @Test
         void permissoesDoClaimViraramAuthoritiesSemPrefixo() {
-        JwtAuthenticationToken autenticacao = new JwtAuthenticationToken(jwtComClaims(
-                List.of("marketing.lead.ver", "marketing.lead.editar")));
+                JwtAuthenticationToken autenticacao = new JwtAuthenticationToken(jwtComClaims(
+                                List.of("marketing.lead.ver", "marketing.lead.editar")));
 
-        var convertido = SegurancaConfig.conversorDePermissoes().convert(autenticacao.getToken());
+                var convertido = SegurancaConfig.conversorDePermissoes().convert(autenticacao.getToken());
 
-        assertThat(convertido.getAuthorities())
-                .extracting("authority")
-                .containsExactlyInAnyOrder("marketing.lead.ver", "marketing.lead.editar");
-    }
+                assertThat(convertido.getAuthorities())
+                                .extracting("authority")
+                                .containsExactlyInAnyOrder("marketing.lead.ver", "marketing.lead.editar");
+        }
 
-    @Test
-    void contextoLeTenantESubDoToken() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new JwtAuthenticationToken(jwtComClaims(List.of("marketing.lead.ver"))));
+        @Test
+        void contextoLeTenantESubDoToken() {
+                SecurityContextHolder.getContext().setAuthentication(
+                                new JwtAuthenticationToken(jwtComClaims(List.of("marketing.lead.ver"))));
 
-        assertThat(ContextoSeguranca.exigirUsuarioAtual())
-                .isEqualTo(new UsuarioAtual(TENANT, USUARIO));
-    }
+                assertThat(ContextoSeguranca.exigirUsuarioAtual())
+                                .isEqualTo(new UsuarioAtual(TENANT, USUARIO));
+        }
 
-    @Test
-    void contextoRejeitaTokenSemTenantValido() {
-        Jwt jwt = new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
-                java.util.Map.of("alg", "none"),
-                java.util.Map.of("sub", USUARIO.toString(), "perms", List.of("marketing.lead.ver")));
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        @Test
+        void contextoRejeitaTokenSemTenantValido() {
+                Jwt jwt = new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
+                                java.util.Map.of("alg", "none"),
+                                java.util.Map.of("sub", USUARIO.toString(), "perms", List.of("marketing.lead.ver")));
+                SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
 
-        assertThatThrownBy(ContextoSeguranca::exigirUsuarioAtual)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("tenant_id");
-    }
+                assertThatThrownBy(ContextoSeguranca::exigirUsuarioAtual)
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessageContaining("tenant_id");
+        }
 
-    private static Jwt jwtComClaims(List<String> permissoes) {
-        return new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
-                java.util.Map.of("alg", "none"),
-                java.util.Map.of(
-                        "sub", USUARIO.toString(),
-                        "tenant_id", TENANT.toString(),
-                        "perms", permissoes));
-    }
+        private static Jwt jwtComClaims(List<String> permissoes) {
+                return new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
+                                java.util.Map.of("alg", "none"),
+                                java.util.Map.of(
+                                                "sub", USUARIO.toString(),
+                                                "tenant_id", TENANT.toString(),
+                                                "perms", permissoes));
+        }
 }
