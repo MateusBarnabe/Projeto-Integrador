@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -42,6 +43,11 @@ public class TratadorDeErros {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Resposta<Void>> metodoNaoSuportado(HttpRequestMethodNotSupportedException ex) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(Resposta.erro("Método não suportado."));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Resposta<Void>> semPermissao(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Resposta.erro("Sem permissão para esta ação."));
     }
 
     @ExceptionHandler(Exception.class)

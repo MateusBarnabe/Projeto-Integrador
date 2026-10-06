@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -46,9 +47,9 @@ class SegurancaF1Test {
 
     @Test
     void contextoRejeitaTokenSemTenantValido() {
-        Jwt jwt = new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
-                java.util.Map.of("alg", "none"),
-                java.util.Map.of("sub", USUARIO.toString(), "perms", List.of("marketing.lead.ver")));
+        Jwt jwt = jwtComClaims(Map.of(
+                "sub", USUARIO.toString(),
+                "perms", List.of("marketing.lead.ver")));
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
 
         assertThatThrownBy(ContextoSeguranca::exigirUsuarioAtual)
@@ -56,12 +57,15 @@ class SegurancaF1Test {
                 .hasMessageContaining("tenant_id");
     }
 
-    private static Jwt jwtComClaims(List<String> permissoes) {
+        private static Jwt jwtComClaims(List<String> permissoes) {
+                return jwtComClaims(Map.of(
+                                "sub", USUARIO.toString(),
+                                "tenant_id", TENANT.toString(),
+                                "perms", permissoes));
+        }
+
+        private static Jwt jwtComClaims(Map<String, Object> claims) {
         return new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
-                java.util.Map.of("alg", "none"),
-                java.util.Map.of(
-                        "sub", USUARIO.toString(),
-                        "tenant_id", TENANT.toString(),
-                        "perms", permissoes));
+                                Map.of("alg", "none"), claims);
     }
 }
