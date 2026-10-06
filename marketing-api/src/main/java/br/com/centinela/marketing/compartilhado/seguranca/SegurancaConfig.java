@@ -1,7 +1,9 @@
 package br.com.centinela.marketing.compartilhado.seguranca;
 
 import java.io.IOException;
+import java.net.URI;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -10,6 +12,12 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -20,64 +28,65 @@ import br.com.centinela.marketing.compartilhado.web.Resposta;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Rotas públicas sem token (§12.6) e o resto exigindo o JWT do identity,
- * validado localmente
- * pelo JWKS (§4.2). Permissões são conferidas nos controllers com
- * {@code @PreAuthorize} (§5.2).
+ * Rotas públicas sem token (§12.6) e o resto exigindo o JWT do identity, validado localmente
+ * pelo JWKS (§4.2). Permissões são conferidas nos controllers com {@code @PreAuthorize} (§5.2).
  */
 @Configuration
 @EnableMethodSecurity
 public class SegurancaConfig {
 
-        private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
-        public SegurancaConfig(ObjectMapper objectMapper) {
-                this.objectMapper = objectMapper;
-        }
+    public SegurancaConfig(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
-        @Bean
-        SecurityFilterChain filtros(HttpSecurity http) throws Exception {
-                return http
-                                .csrf(AbstractHttpConfigurer::disable)
-                                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                                .authorizeHttpRequests(a -> a
-                                                .requestMatchers("/api/marketing/health", "/public/marketing/**",
-                                                                "/error")
-                                                .permitAll()
-                                                // Documentação (desligada com SWAGGER_HABILITADO=false; fora do
-                                                // roteamento do gateway)
-                                                .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
-                                                                "/v3/api-docs/**")
-                                                .permitAll()
-                                                .anyRequest().authenticated())
-                                .oauth2ResourceServer(o -> o
-                                                .jwt(jwt -> jwt.jwtAuthenticationConverter(conversorDePermissoes()))
-                                                .authenticationEntryPoint((req, res, ex) -> escrever(res,
-                                                                HttpStatus.UNAUTHORIZED,
-                                                                "Token ausente, inválido ou expirado.")))
-                                .exceptionHandling(e -> e
-                                                .authenticationEntryPoint(
-                                                                (req, res, ex) -> escrever(res, HttpStatus.UNAUTHORIZED,
-                                                                                "Token ausente, inválido ou expirado."))
-                                                .accessDeniedHandler((req, res, ex) -> escrever(res,
-                                                                HttpStatus.FORBIDDEN, "Sem permissão para esta ação.")))
-                                .build();
-        }
+    @Bean
+    JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") URI jwkSetUri) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri.toString()).build();
+        OAuth2TokenValidator<Jwt> validadores = new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(), new ClaimsJwtValidator());
+        decoder.setJwtValidator(validadores);
+        return decoder;
+    }
 
-        static JwtAuthenticationConverter conversorDePermissoes() {
-                JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
-                permissoes.setAuthoritiesClaimName("perms");
-                permissoes.setAuthorityPrefix("");
+    @Bean
+    SecurityFilterChain filtros(HttpSecurity http) throws Exception {
+        return http
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(a -> a
+                        .requestMatchers("/api/marketing/health", "/public/marketing/**", "/error").permitAll()
+                        // Documentação (desligada com SWAGGER_HABILITADO=false; fora do roteamento do gateway)
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(o -> o
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(conversorDePermissoes()))
+                        .authenticationEntryPoint((req, res, ex) ->
+                                escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado.")))
+                .exceptionHandling(e -> e
+                        .authenticationEntryPoint((req, res, ex) ->
+                                escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado."))
+                        .accessDeniedHandler((req, res, ex) ->
+                                escrever(res, HttpStatus.FORBIDDEN, "Sem permissão para esta ação.")))
+                .build();
+    }
 
-                JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
-                conversor.setJwtGrantedAuthoritiesConverter(permissoes);
-                return conversor;
-        }
+    /** O exemplo oficial da plataforma define o claim "perms" sem prefixo de authority. */
+    static JwtAuthenticationConverter conversorDePermissoes() {
+        JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
+        permissoes.setAuthoritiesClaimName("perms");
+        permissoes.setAuthorityPrefix("");
 
-        private void escrever(HttpServletResponse res, HttpStatus status, String mensagem) throws IOException {
-                res.setStatus(status.value());
-                res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                res.setCharacterEncoding("UTF-8");
-                objectMapper.writeValue(res.getOutputStream(), Resposta.erro(mensagem));
-        }
+        JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
+        conversor.setJwtGrantedAuthoritiesConverter(permissoes);
+        return conversor;
+    }
+
+    private void escrever(HttpServletResponse res, HttpStatus status, String mensagem) throws IOException {
+        res.setStatus(status.value());
+        res.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        res.setCharacterEncoding("UTF-8");
+        objectMapper.writeValue(res.getOutputStream(), Resposta.erro(mensagem));
+    }
 }

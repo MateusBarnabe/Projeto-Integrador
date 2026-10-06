@@ -6,7 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
-/** Ponto único para obter a identidade autenticada usada pelo domínio. */
+/** Ponto único para obter a identidade autenticada de um token de usuário. */
 public final class ContextoSeguranca {
 
     private ContextoSeguranca() {
@@ -33,9 +33,12 @@ public final class ContextoSeguranca {
     }
 
     private static UUID uuid(String valor, String mensagem) {
+        if (valor == null) {
+            throw new IllegalStateException(mensagem);
+        }
         try {
             return UUID.fromString(valor);
-        } catch (IllegalArgumentException | NullPointerException excecao) {
+        } catch (IllegalArgumentException excecao) {
             throw new IllegalStateException(mensagem, excecao);
         }
     }
