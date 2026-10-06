@@ -10,6 +10,8 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,7 +44,7 @@ public class SegurancaConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o
-                        .jwt(jwt -> { })
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(conversorDePermissoes()))
                         .authenticationEntryPoint((req, res, ex) ->
                                 escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado.")))
                 .exceptionHandling(e -> e
@@ -52,6 +54,16 @@ public class SegurancaConfig {
                                 escrever(res, HttpStatus.FORBIDDEN, "Sem permissão para esta ação.")))
                 .build();
     }
+
+        static JwtAuthenticationConverter conversorDePermissoes() {
+                JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
+                permissoes.setAuthoritiesClaimName("perms");
+                permissoes.setAuthorityPrefix("");
+
+                JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
+                conversor.setJwtGrantedAuthoritiesConverter(permissoes);
+                return conversor;
+        }
 
     private void escrever(HttpServletResponse res, HttpStatus status, String mensagem) throws IOException {
         res.setStatus(status.value());

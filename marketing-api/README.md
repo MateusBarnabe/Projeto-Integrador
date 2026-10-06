@@ -157,7 +157,7 @@ Configuração do Spring Security:
 - `401` ("Token ausente, inválido ou expirado.") e `403` ("Sem permissão para esta ação.") saem no formato do envelope;
 - `@EnableMethodSecurity` liga o `@PreAuthorize` para conferir permissões nos controllers (Contrato §5.2).
 
-Ainda falta ler o `tenant_id`, o `sub` e as permissões do token e transformá-los em *authorities* do Spring. Isso é a tarefa F1 dos próximos passos.
+O claim `perms` é convertido em *authorities* sem prefixo, para uso com `@PreAuthorize`. O `tenant_id` e o `sub` do token podem ser obtidos por `ContextoSeguranca.exigirUsuarioAtual()`, que devolve um `UsuarioAtual`. O tenant nunca é lido do corpo ou da query; tokens de serviço e o cabeçalho `X-Tenant-Id` entram nas tarefas de integração correspondentes.
 
 ### `compartilhado.documentacao.OpenApiConfig`
 
