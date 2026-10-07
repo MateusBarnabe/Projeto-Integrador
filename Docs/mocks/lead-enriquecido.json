@@ -1,0 +1,27 @@
+{
+  "id": "70000000-0000-4000-8000-000000000001",
+  "tipo": "landing.lead.enriquecido",
+  "tenantId": "a0000000-0000-4000-8000-00000000000a",
+  "dados": {
+    "visitanteId": "71000000-0000-4000-8000-000000000001",
+    "nome": "Ana Souza",
+    "email": "ana.souza@example.com",
+    "whatsapp": "5511999999999",
+    "telefone": "551133334444",
+    "utm_source": "google",
+    "utm_medium": "cpc",
+    "utm_campaign": "black-friday-b2b",
+    "utm_content": "criativo-consultoria",
+    "referrer": "https://www.google.com/",
+    "device_type": "desktop",
+    "os": "Windows",
+    "browser": "Edge",
+    "location": "Goiania, GO, BR",
+    "timezone": "America/Sao_Paulo",
+    "language": "pt-BR",
+    "dwell_time_seconds": 142,
+    "scroll_depth_percent": 75,
+    "clicked_elements": ["cta-principal", "simulador-preco"],
+    "pages_visited": ["/", "/solucoes", "/contato"]
+  }
+}
