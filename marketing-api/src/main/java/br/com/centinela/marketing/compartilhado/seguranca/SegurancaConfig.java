@@ -13,11 +13,11 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
@@ -42,14 +42,14 @@ public class SegurancaConfig {
         this.objectMapper = objectMapper;
     }
 
-        @Bean
-        JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") URI jwkSetUri) {
-                NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri.toString()).build();
-                OAuth2TokenValidator<Jwt> validadores = new DelegatingOAuth2TokenValidator<>(
-                                JwtValidators.createDefault(), new ClaimsJwtValidator());
-                decoder.setJwtValidator(validadores);
-                return decoder;
-        }
+    @Bean
+    JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") URI jwkSetUri) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri.toString()).build();
+        OAuth2TokenValidator<Jwt> validadores = new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(), new ClaimsJwtValidator());
+        decoder.setJwtValidator(validadores);
+        return decoder;
+    }
 
     @Bean
     SecurityFilterChain filtros(HttpSecurity http) throws Exception {
@@ -74,16 +74,16 @@ public class SegurancaConfig {
                 .build();
     }
 
-        /** O exemplo oficial da plataforma define o claim "perms" sem prefixo de authority. */
-        static JwtAuthenticationConverter conversorDePermissoes() {
-                JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
-                permissoes.setAuthoritiesClaimName("perms");
-                permissoes.setAuthorityPrefix("");
+    /** O exemplo oficial da plataforma define o claim "perms" sem prefixo de authority. */
+    static JwtAuthenticationConverter conversorDePermissoes() {
+        JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
+        permissoes.setAuthoritiesClaimName("perms");
+        permissoes.setAuthorityPrefix("");
 
-                JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
-                conversor.setJwtGrantedAuthoritiesConverter(permissoes);
-                return conversor;
-        }
+        JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
+        conversor.setJwtGrantedAuthoritiesConverter(permissoes);
+        return conversor;
+    }
 
     private void escrever(HttpServletResponse res, HttpStatus status, String mensagem) throws IOException {
         res.setStatus(status.value());

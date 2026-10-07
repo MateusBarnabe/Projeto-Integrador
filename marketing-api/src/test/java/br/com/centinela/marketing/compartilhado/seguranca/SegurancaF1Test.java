@@ -25,7 +25,7 @@ class SegurancaF1Test {
     }
 
     @Test
-        void permissoesDoClaimViraramAuthoritiesSemPrefixo() {
+    void permissoesDoClaimViraramAuthoritiesSemPrefixo() {
         JwtAuthenticationToken autenticacao = new JwtAuthenticationToken(jwtComClaims(
                 List.of("marketing.lead.ver", "marketing.lead.editar")));
 
@@ -57,15 +57,15 @@ class SegurancaF1Test {
                 .hasMessageContaining("tenant_id");
     }
 
-        private static Jwt jwtComClaims(List<String> permissoes) {
-                return jwtComClaims(Map.of(
-                                "sub", USUARIO.toString(),
-                                "tenant_id", TENANT.toString(),
-                                "perms", permissoes));
-        }
+    private static Jwt jwtComClaims(List<String> permissoes) {
+        return jwtComClaims(Map.of(
+                "sub", USUARIO.toString(),
+                "tenant_id", TENANT.toString(),
+                "perms", permissoes));
+    }
 
-        private static Jwt jwtComClaims(Map<String, Object> claims) {
+    private static Jwt jwtComClaims(Map<String, Object> claims) {
         return new Jwt("token", Instant.now(), Instant.now().plusSeconds(60),
-                                Map.of("alg", "none"), claims);
+                Map.of("alg", "none"), claims);
     }
 }
