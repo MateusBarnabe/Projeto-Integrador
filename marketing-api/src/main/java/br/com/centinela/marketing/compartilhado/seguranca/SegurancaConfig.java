@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,6 +70,7 @@ public class SegurancaConfig {
                                 escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado."))
                         .accessDeniedHandler((req, res, ex) ->
                                 escrever(res, HttpStatus.FORBIDDEN, "Sem permissão para esta ação.")))
+                .addFilterAfter(new TenantFiltro(), BearerTokenAuthenticationFilter.class)
                 .build();
     }
 

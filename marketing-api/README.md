@@ -188,6 +188,14 @@ Regras para as próximas tabelas (norteador, seção 3):
 - FK só dentro do schema `marketing`; referência a outro módulo guarda só o UUID;
 - dinheiro em `numeric(15,2)`; percentual em `numeric(9,4)`, em pontos percentuais.
 
+### Fundação das entidades (F2)
+
+- `EntidadeBase` fornece as sete colunas, gera o UUID da aplicação e preenche datas e auditoria nos callbacks JPA;
+- `TenantFiltro` coloca o `tenant_id` do token em `TenantContexto` durante a requisição;
+- `ResolvedorDeTenant` integra o contexto ao `@TenantId` do Hibernate;
+- entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e herdar a restrição `deleted_at IS NULL` da base;
+- `Paginacao.pedido` limita `tamanho` a 100 e `Pagina` devolve `{itens, pagina, tamanho, total}`.
+
 ## Endpoints atuais
 
 | Método | Rota | Token | Resposta |
