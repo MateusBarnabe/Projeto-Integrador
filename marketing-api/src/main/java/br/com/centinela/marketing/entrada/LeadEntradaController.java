@@ -28,7 +28,7 @@ public class LeadEntradaController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('marketing.lead.ver')")
+    // @PreAuthorize("hasAuthority('marketing.lead.ver')")
     public Resposta<Pagina<LeadEntradaResumo>> listar(
             @RequestParam(required = false) Integer pagina,
             @RequestParam(required = false) Integer tamanho,

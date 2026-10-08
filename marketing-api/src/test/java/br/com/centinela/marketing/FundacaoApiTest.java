@@ -15,21 +15,24 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 /**
- * Sobe a API contra um PostgreSQL real, com os mesmos usuários e schema da plataforma
- * (infra/postgres/init/01-marketing.sh), e confere as regras básicas do checklist §15.
- * Sem Docker disponível, os testes são pulados.
+ * Sobe a API contra um PostgreSQL real, com os mesmos usuários e schema da
+ * plataforma (infra/postgres/init/01-marketing.sh), e confere as regras básicas
+ * do checklist §15. Sem Docker disponível, os testes são pulados.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestPropertySource(properties = "marketing.iot.consumer.enabled=false")
 class FundacaoApiTest {
 
-    private static final ParameterizedTypeReference<Map<String, Object>> JSON = new ParameterizedTypeReference<>() { };
+    private static final ParameterizedTypeReference<Map<String, Object>> JSON = new ParameterizedTypeReference<>() {
+    };
 
     @Container // o @Testcontainers fecha o container no fim da classe
     @SuppressWarnings("resource")

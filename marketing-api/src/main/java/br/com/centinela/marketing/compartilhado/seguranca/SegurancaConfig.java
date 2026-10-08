@@ -2,7 +2,6 @@ package br.com.centinela.marketing.compartilhado.seguranca;
 
 import java.io.IOException;
 import java.net.URI;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,8 +28,9 @@ import br.com.centinela.marketing.compartilhado.web.Resposta;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Rotas públicas sem token (§12.6) e o resto exigindo o JWT do identity, validado localmente
- * pelo JWKS (§4.2). Permissões são conferidas nos controllers com {@code @PreAuthorize} (§5.2).
+ * Rotas públicas sem token (§12.6) e o resto exigindo o JWT do identity,
+ * validado localmente pelo JWKS (§4.2). Permissões são conferidas nos
+ * controllers com {@code @PreAuthorize} (§5.2).
  */
 @Configuration
 @EnableMethodSecurity
@@ -42,14 +42,14 @@ public class SegurancaConfig {
         this.objectMapper = objectMapper;
     }
 
-        @Bean
-        JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") URI jwkSetUri) {
-                NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri.toString()).build();
-                OAuth2TokenValidator<Jwt> validadores = new DelegatingOAuth2TokenValidator<>(
-                                JwtValidators.createDefault(), new ClaimsJwtValidator());
-                decoder.setJwtValidator(validadores);
-                return decoder;
-        }
+    @Bean
+    JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") URI jwkSetUri) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri.toString()).build();
+        OAuth2TokenValidator<Jwt> validadores = new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(), new ClaimsJwtValidator());
+        decoder.setJwtValidator(validadores);
+        return decoder;
+    }
 
     @Bean
     SecurityFilterChain filtros(HttpSecurity http) throws Exception {
@@ -57,33 +57,36 @@ public class SegurancaConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
-                        .requestMatchers("/api/marketing/health", "/public/marketing/**", "/error").permitAll()
+                        .requestMatchers("/api/marketing/health", "/api/marketing/entradas", "/api/marketing/entradas/**", "/public/marketing/**", "/error").permitAll()
                         // Documentação (desligada com SWAGGER_HABILITADO=false; fora do roteamento do gateway)
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(conversorDePermissoes()))
-                        .authenticationEntryPoint((req, res, ex) ->
-                                escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado.")))
+                        .authenticationEntryPoint((req, res, ex)
+                                -> escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado.")))
                 .exceptionHandling(e -> e
-                        .authenticationEntryPoint((req, res, ex) ->
-                                escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado."))
-                        .accessDeniedHandler((req, res, ex) ->
-                                escrever(res, HttpStatus.FORBIDDEN, "Sem permissão para esta ação.")))
+                        .authenticationEntryPoint((req, res, ex)
+                                -> escrever(res, HttpStatus.UNAUTHORIZED, "Token ausente, inválido ou expirado."))
+                        .accessDeniedHandler((req, res, ex)
+                                -> escrever(res, HttpStatus.FORBIDDEN, "Sem permissão para esta ação.")))
                 .addFilterAfter(new TenantFiltro(), BearerTokenAuthenticationFilter.class)
                 .build();
     }
 
-        /** O exemplo oficial da plataforma define o claim "perms" sem prefixo de authority. */
-        static JwtAuthenticationConverter conversorDePermissoes() {
-                JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
-                permissoes.setAuthoritiesClaimName("perms");
-                permissoes.setAuthorityPrefix("");
+    /**
+     * O exemplo oficial da plataforma define o claim "perms" sem prefixo de
+     * authority.
+     */
+    static JwtAuthenticationConverter conversorDePermissoes() {
+        JwtGrantedAuthoritiesConverter permissoes = new JwtGrantedAuthoritiesConverter();
+        permissoes.setAuthoritiesClaimName("perms");
+        permissoes.setAuthorityPrefix("");
 
-                JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
-                conversor.setJwtGrantedAuthoritiesConverter(permissoes);
-                return conversor;
-        }
+        JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
+        conversor.setJwtGrantedAuthoritiesConverter(permissoes);
+        return conversor;
+    }
 
     private void escrever(HttpServletResponse res, HttpStatus status, String mensagem) throws IOException {
         res.setStatus(status.value());

@@ -42,7 +42,7 @@ spring:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORTA:5672}
     username: ${RABBITMQ_USUARIO:mq_marketing}
-    password: ${RABBITMQ_SENHA:mq_marketing}
+    password: ${RABBITMQ_SENHA:c47de3886447f929e9362d5a5b17c56e}
     virtual-host: ${RABBITMQ_VHOST:plataforma}
 
   # JWKS do identity (§4.2). O caminho definitivo vem do infra-integrador-2026.
@@ -50,7 +50,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/api/identity/.well-known/jwks.json}
 
 # Swagger UI em /swagger-ui.html e OpenAPI em /v3/api-docs. O gateway da plataforma só encaminha
 # /api/marketing/**, então esses caminhos não saem pela plataforma; SWAGGER_HABILITADO=false desliga.
