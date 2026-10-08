@@ -56,7 +56,8 @@ services:
       DB_SENHA: ${MARKETING_APP_SENHA:-usr_marketing}
       FLYWAY_SENHA: ${MARKETING_OWNER_SENHA:-own_marketing}
       RABBITMQ_HOST: rabbitmq
-      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+      RABBITMQ_SENHA: ${RABBITMQ_SENHA:-mq_marketing}
+      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://host.docker.internal:8081/api/identity/.well-known/jwks.json}
     ports:
       - "8087:8087"
     depends_on:
