@@ -1,9 +1,10 @@
 package br.com.centinela.marketing.entrada;
 
 import java.util.Map;
+import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,7 +14,7 @@ import br.com.centinela.marketing.compartilhado.web.Pagina;
 import br.com.centinela.marketing.compartilhado.web.Paginacao;
 import br.com.centinela.marketing.compartilhado.web.Resposta;
 
-/** Visão autenticada para demonstrar e inspecionar as entradas capturadas pelo IOT. */
+/** Visão para demonstrar e inspecionar as entradas capturadas pelo IOT. */
 @RestController
 @RequestMapping("/api/marketing/entradas")
 public class LeadEntradaController {
@@ -22,9 +23,11 @@ public class LeadEntradaController {
             "criadoEm", "criadoEm", "nome", "nome", "campanha", "utmCampaign");
 
     private final LeadEntradaBufferRepository repository;
+    private final ObjectMapper objectMapper;
 
-    public LeadEntradaController(LeadEntradaBufferRepository repository) {
+    public LeadEntradaController(LeadEntradaBufferRepository repository, ObjectMapper objectMapper) {
         this.repository = repository;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping
@@ -35,20 +38,52 @@ public class LeadEntradaController {
             @RequestParam(required = false) String ordenar) {
         var pedido = Paginacao.pedido(pagina, tamanho, ordenar, CAMPOS_ORDENAVEIS);
         Page<LeadEntradaBuffer> resultado = repository.findAll(pedido);
-        return Resposta.ok(Pagina.de(resultado, LeadEntradaResumo::de));
+        return Resposta.ok(Pagina.de(resultado, buffer -> LeadEntradaResumo.de(buffer, objectMapper)));
     }
 
     public record LeadEntradaResumo(
+            UUID id,
             String nome,
             String email,
+            String whatsapp,
+            String telefone,
             String campanha,
             String origem,
             String tipo,
+            String utmMedium,
+            String utmContent,
+            String referrer,
+            Object dadosTecnicos,
+            Object dadosComportamentais,
             boolean processado) {
 
-        static LeadEntradaResumo de(LeadEntradaBuffer buffer) {
-            return new LeadEntradaResumo(buffer.getNome(), buffer.getEmail(), buffer.getUtmCampaign(),
-                    buffer.getUtmSource(), buffer.getTipo(), buffer.isProcessado());
+        static LeadEntradaResumo de(LeadEntradaBuffer buffer, ObjectMapper mapper) {
+            return new LeadEntradaResumo(
+                    buffer.getId(),
+                    buffer.getNome(),
+                    buffer.getEmail(),
+                    buffer.getWhatsapp(),
+                    buffer.getTelefone(),
+                    buffer.getUtmCampaign(),
+                    buffer.getUtmSource(),
+                    buffer.getTipo(),
+                    buffer.getUtmMedium(),
+                    buffer.getUtmContent(),
+                    buffer.getReferrer(),
+                    parseJson(buffer.getDadosTecnicos(), mapper),
+                    parseJson(buffer.getDadosComportamentais(), mapper),
+                    buffer.isProcessado());
+        }
+
+        private static Object parseJson(String json, ObjectMapper mapper) {
+            if (json == null || json.isBlank()) {
+                return null;
+            }
+            try {
+                return mapper.readValue(json, Object.class);
+            } catch (Exception e) {
+                return json;
+            }
         }
     }
 }
