@@ -80,7 +80,7 @@ O número da migration é da tarefa, não da ordem de merge: cada tarefa sai num
 
 | ID | Tarefa | Bloqueado por | Bloqueia | § |
 |---|---|---|---|---|
-| **D1** | `V2`: `leads` (com `temperatura` gerada a partir da `etapa` e as chaves únicas), `lead_eventos` (com `sequencia`, usada pelo SSE) e `lead_consentimentos` (só inclusão) | F2 | F7, D3, E2, E5, E7, E8, E10, Q1, A2 | 3 |
+| **D1** | **[concluída]** `V2`: `leads` (com `temperatura` gerada a partir da `etapa` e as chaves únicas), `lead_eventos` (com `sequencia`, usada pelo SSE) e `lead_consentimentos` (só inclusão) | F2 | F7, D3, E2, E5, E7, E8, E10, Q1, A2 | 3 |
 | **D2** | `V3`: `leads_entrada_buffer` | F2 | E1, E2, E3, E10 | 3 |
 | **D3** | `V4`: `modelos_mensagem`, `lead_comunicacoes` e `ciclo_vida_configuracoes` | F2, D1 | D7, E8, E10, A3 | 3 |
 | **D4** | `V5`: `formularios` e `formulario_versoes` (versão publicada nunca muda) | F2 | A1 | 3, 9.5 |
