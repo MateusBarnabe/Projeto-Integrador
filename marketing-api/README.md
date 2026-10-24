@@ -93,6 +93,7 @@ marketing-api/
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
+    │       ├── application-dev.yml            perfil dev (Flyway fora de ordem)
     │       └── db/migration/                  migrations do Flyway
     │           └── V1__cria_eventos_processados.sql
     └── test/java/br/com/centinela/marketing/
@@ -175,6 +176,8 @@ O Swagger documenta tudo o que a API tem. O contrato publicado para os outros gr
 ## Banco e migrations
 
 Toda mudança de banco é uma migration do Flyway em `src/main/resources/db/migration`, com o nome `V<número>__descricao.sql` (dois sublinhados). O Flyway roda sozinho quando a API sobe, conectado como `own_marketing`, que é dono do schema. A aplicação usa o `usr_marketing`, que só pode ler e escrever nas tabelas; ele não cria nem altera tabela.
+
+Cada tarefa de dados do [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md) tem um número de migration fixo (`V2` é a D1, `V3` é a D2 e assim por diante), e os PRs podem ser mergeados fora dessa ordem. Por isso o ambiente local roda com o perfil `dev` ([application-dev.yml](src/main/resources/application-dev.yml)), que liga o `spring.flyway.out-of-order`: se o seu banco já tem a `V5` e chega a `V3`, ela é aplicada em vez de travar a subida. O perfil é ativado pelo `spring-boot:run` (configurado no `pom.xml`) e pelo `docker-compose.yml` da raiz; a imagem publicada na plataforma roda sem ele, e os testes também, porque sobem o banco do zero.
 
 | Migration | O que faz |
 |---|---|

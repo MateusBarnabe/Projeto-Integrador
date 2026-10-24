@@ -1,0 +1,9 @@
+# Perfil de desenvolvimento (spring-boot:run e docker-compose da raiz). Nunca é ativado na plataforma.
+# O application-local.yml continua livre para ajustes pessoais de cada um (está no .gitignore).
+
+spring:
+  # As migrations têm número fixo por tarefa (V2 = D1, V3 = D2...) e os PRs podem entrar fora
+  # dessa ordem. No banco local, que guarda as migrations já aplicadas, isso deixa aplicar uma
+  # versão menor que chegou depois. Na plataforma e nos testes o banco sobe do zero, sem isso.
+  flyway:
+    out-of-order: true
