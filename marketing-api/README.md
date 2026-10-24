@@ -90,13 +90,17 @@ marketing-api/
     │   │   │       ├── ErroCampo.java
     │   │   │       ├── TratadorDeErros.java
     │   │   │       └── RequestIdFilter.java
+    │   │   ├── formularios/                   formulários e versões publicadas (D4)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
     │       └── db/migration/                  migrations do Flyway
-    │           └── V1__cria_eventos_processados.sql
+    │           ├── V1__cria_eventos_processados.sql
+    │           └── V5__cria_formularios.sql
     └── test/java/br/com/centinela/marketing/
-        └── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
+        └── formularios/                       regras do formulário e testes da V5
 ```
 
 **Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `formularios/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (buffer e consumidores). Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
@@ -179,6 +183,7 @@ Toda mudança de banco é uma migration do Flyway em `src/main/resources/db/migr
 | Migration | O que faz |
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
+| `V5__cria_formularios.sql` | D4: `formularios` (com `versao_ativa`) e `formulario_versoes` (`campos` em `jsonb`, sempre um array). Chave única `(formulario_id, versao)`. O trigger `tg_formulario_versoes_imutavel` recusa qualquer mudança em `versao`, `campos`, `publicado_em`, `formulario_id` ou `tenant_id` de uma versão gravada; só as colunas de controle (`updated_*`, `deleted_at`) mudam |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -195,6 +200,20 @@ Regras para as próximas tabelas (norteador, seção 3):
 - `ResolvedorDeTenant` integra o contexto ao `@TenantId` do Hibernate;
 - entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e herdar a restrição `deleted_at IS NULL` da base;
 - `Paginacao.pedido` limita `tamanho` a 100 e `Pagina` devolve `{itens, pagina, tamanho, total}`.
+
+### Formulários (D4)
+
+Pacote `formularios`, com as duas tabelas da `V5` (norteador §3 e §9.5):
+
+| Classe | O que é |
+|---|---|
+| `Formulario` | formulário do tenant (um por landing page ou campanha). `publicar(campos, publicadoEm)` cria a próxima `FormularioVersao` e atualiza `versao_ativa`; o formulário precisa estar salvo antes, para ter id. A versão e o formulário devem ser gravados na mesma transação |
+| `FormularioVersao` | versão publicada, `@Immutable`. Recusa lista vazia, `id` ou `chave` de campo repetidos, e guarda os campos na ordem de exibição |
+| `Campo` | *record* de cada item de `campos`, no formato do schema `Campo` da §9.5. Exige chave e rótulo, e opções quando o tipo é lista, radio ou checkbox |
+| `TipoCampo` | os 11 tipos de campo; no JSON sai o valor em minúsculas (`lista`, `cnpj`...) |
+| `FormularioRepository`, `FormularioVersaoRepository` | Spring Data; versão por número e histórico de versões em ordem |
+
+A obrigatoriedade dos campos fixos (nome, e-mail, telefone e consentimento), o evento `marketing.formulario.publicado` e as rotas ficam na A1.
 
 ## Endpoints atuais
 
@@ -214,5 +233,12 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | `healthRespondeSemTokenComEnvelope` | `/health` sem token dá `200`, com o envelope completo e o `X-Request-Id` na resposta |
 | `rotaAutenticadaSemTokenResponde401ComEnvelope` | rota protegida sem token dá `401` no formato do envelope |
 | `documentacaoOpenApiRespondeSemTokenComAsRotasDoModulo` | `/v3/api-docs` abre sem token e lista `/api/marketing/health` |
+
+`BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
+
+| Teste | O que confere |
+|---|---|
+| `formularios.FormularioTest` | opções obrigatórias nos campos de escolha, publicar só formulário salvo, chave repetida e ordem dos campos |
+| `formularios.FormularioRepositoryTest` | a `V5` contra o banco real: publicar cria a versão 2 sem mudar a 1, JSON dos campos, trigger que barra alteração de versão publicada, versão única por formulário, isolamento por tenant e soft delete |
 
 Os testes do checklist da plataforma (§15) que faltam, como `403` sem permissão, cabeçalho de 32 KB e `404` para dado de outro tenant, dependem das primeiras rotas de negócio (tarefa F7).
