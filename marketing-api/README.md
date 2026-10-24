@@ -90,6 +90,7 @@ marketing-api/
     │   │   │       ├── ErroCampo.java
     │   │   │       ├── TratadorDeErros.java
     │   │   │       └── RequestIdFilter.java
+    │   │   ├── formularios/                   formulários e versões publicadas (D4)
     │   │   ├── leads/                         lead, timeline e consentimentos (D1)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
@@ -97,6 +98,11 @@ marketing-api/
     │       ├── application-dev.yml            perfil dev (Flyway fora de ordem)
     │       └── db/migration/                  migrations do Flyway
     │           ├── V1__cria_eventos_processados.sql
+    │           └── V5__cria_formularios.sql
+    └── test/java/br/com/centinela/marketing/
+        ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
+        └── formularios/                       regras do formulário e testes da V5
     │           └── V2__cria_leads.sql
     └── test/java/br/com/centinela/marketing/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
@@ -186,6 +192,7 @@ Cada tarefa de dados do [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md) tem um núme
 | Migration | O que faz |
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
+| `V5__cria_formularios.sql` | D4: `formularios` (com `versao_ativa`) e `formulario_versoes` (`campos` em `jsonb`, sempre um array). Chave única `(formulario_id, versao)`. O trigger `tg_formulario_versoes_imutavel` recusa qualquer mudança em `versao`, `campos`, `publicado_em`, `formulario_id` ou `tenant_id` de uma versão gravada; só as colunas de controle (`updated_*`, `deleted_at`) mudam |
 | `V2__cria_leads.sql` | D1: `leads` (com `temperatura` gerada a partir da `etapa`), `lead_eventos` (com `sequencia` por identidade, usada pelo SSE) e `lead_consentimentos` (só inclusão). Chaves únicas `(tenant_id, visitante_id)`, `(tenant_id, meta_lead_id)` e `token_descadastro`; `CHECK` nos valores fechados do norteador (etapa, origem, faixa, status e tipos) |
 
 Regras para as próximas tabelas (norteador, seção 3):
@@ -204,6 +211,19 @@ Regras para as próximas tabelas (norteador, seção 3):
 - entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e o `@SQLRestriction("deleted_at IS NULL")`. O Hibernate não herda o `@SQLRestriction` de uma `@MappedSuperclass`: sem ele na entidade, os registros excluídos continuam aparecendo nas consultas;
 - `Paginacao.pedido` limita `tamanho` a 100 e `Pagina` devolve `{itens, pagina, tamanho, total}`.
 
+### Formulários (D4)
+
+Pacote `formularios`, com as duas tabelas da `V5` (norteador §3 e §9.5):
+
+| Classe | O que é |
+|---|---|
+| `Formulario` | formulário do tenant (um por landing page ou campanha). `publicar(campos, publicadoEm)` cria a próxima `FormularioVersao` e atualiza `versao_ativa`; o formulário precisa estar salvo antes, para ter id. A versão e o formulário devem ser gravados na mesma transação |
+| `FormularioVersao` | versão publicada, `@Immutable`. Recusa lista vazia, `id` ou `chave` de campo repetidos, e guarda os campos na ordem de exibição |
+| `Campo` | *record* de cada item de `campos`, no formato do schema `Campo` da §9.5. Exige chave e rótulo, e opções quando o tipo é lista, radio ou checkbox |
+| `TipoCampo` | os 11 tipos de campo; no JSON sai o valor em minúsculas (`lista`, `cnpj`...) |
+| `FormularioRepository`, `FormularioVersaoRepository` | Spring Data; versão por número e histórico de versões em ordem |
+
+A obrigatoriedade dos campos fixos (nome, e-mail, telefone e consentimento), o evento `marketing.formulario.publicado` e as rotas ficam na A1.
 Os valores fechados do norteador (`meta_ads`, `opt_out`, `landing.contato.informado`...) viram enums Java que implementam `ValorPersistido`. Cada enum tem um `Conversor` (subclasse de `ConversorDeValor`) para gravar o valor do norteador, e não o nome da constante; a entidade usa `@Convert(converter = OEnum.Conversor.class)`.
 
 ### Leads (D1)
@@ -243,6 +263,8 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 
 | Teste | O que confere |
 |---|---|
+| `formularios.FormularioTest` | opções obrigatórias nos campos de escolha, publicar só formulário salvo, chave repetida e ordem dos campos |
+| `formularios.FormularioRepositoryTest` | a `V5` contra o banco real: publicar cria a versão 2 sem mudar a 1, JSON dos campos, trigger que barra alteração de versão publicada, versão única por formulário, isolamento por tenant e soft delete |
 | `leads.LeadTest` | etapa nunca rebaixa, contato vazio não apaga dado, regra de promoção, token de descadastro, consentimento repetido e corte do *User-Agent* |
 | `leads.LeadRepositoryTest` | a `V2` contra o banco real: sete colunas, `temperatura` gerada (também ao avançar a etapa), isolamento por tenant no `findById` e nas consultas, unicidade de `visitante_id` e `meta_lead_id` por tenant, soft delete, ordem da timeline, histórico de consentimentos e FK do evento para o lead |
 
