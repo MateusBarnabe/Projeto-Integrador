@@ -4,7 +4,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.TenantId;
 import org.springframework.data.domain.Persistable;
 import org.springframework.security.core.Authentication;
@@ -25,11 +24,12 @@ import jakarta.persistence.Transient;
 /**
  * Campos e callbacks comuns a todas as entidades do Marketing.
  *
- * Entidades concretas devem acrescentar {@code @SQLDelete} com o próprio nome de tabela;
- * {@code @SQLRestriction} nesta classe esconde registros com soft delete.
+ * Entidades concretas devem declarar o soft delete com o próprio nome de tabela:
+ * {@code @SQLDelete(sql = "UPDATE marketing.<tabela> SET deleted_at = now(), updated_at = now() WHERE id = ?")}
+ * e {@code @SQLRestriction("deleted_at IS NULL")}. O Hibernate não herda {@code @SQLRestriction}
+ * de uma {@code @MappedSuperclass}, por isso ela não fica aqui.
  */
 @MappedSuperclass
-@SQLRestriction("deleted_at IS NULL")
 public abstract class EntidadeBase implements Persistable<UUID> {
 
     @Id
