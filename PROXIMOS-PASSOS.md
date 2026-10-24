@@ -82,7 +82,7 @@ Uma migration por tarefa, na ordem dos números. Todas com as sete colunas obrig
 | **D2** | `V3`: `leads_entrada_buffer` | F2 | E1, E2, E3, E10 | 3 |
 | **D3** | `V4`: `modelos_mensagem`, `lead_comunicacoes` e `ciclo_vida_configuracoes` | F2, D1 | D7, E8, E10, A3 | 3 |
 | **D4** | `V5`: `formularios` e `formulario_versoes` (versão publicada nunca muda) | F2 | A1 | 3, 9.5 |
-| **D5** | `V6`: `regras_pontuacao`, `qualificacao_configuracoes` e `vendedores_rodizio` | F2 | D7, Q1, Q2, A3 | 3, 9.3 |
+| **D5** | **[concluída]** `V6`: `regras_pontuacao`, `qualificacao_configuracoes` e `vendedores_rodizio` | F2 | D7, Q1, Q2, A3 | 3, 9.3 |
 | **D6** | `V7`: `canais_anuncio`, com os segredos do Meta cifrados e nunca devolvidos pela API | F2, X6 | E3, A3 | 3, 9.4 |
 | **D7** | Valores iniciais por tenant: modelo de boas-vindas padrão, regras de pontuação iniciais (tabela da 9.3), configurações de qualificação e de ciclo de vida. Criados na primeira vez que o tenant usa o módulo | D3, D5 | E8, A3 | 3, 9.3 |
 
