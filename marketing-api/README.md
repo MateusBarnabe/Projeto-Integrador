@@ -90,13 +90,17 @@ marketing-api/
     │   │   │       ├── ErroCampo.java
     │   │   │       ├── TratadorDeErros.java
     │   │   │       └── RequestIdFilter.java
+    │   │   ├── qualificacao/                  regras de pontuação, faixas e rodízio (D5)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
     │       └── db/migration/                  migrations do Flyway
-    │           └── V1__cria_eventos_processados.sql
+    │           ├── V1__cria_eventos_processados.sql
+    │           └── V6__cria_qualificacao.sql
     └── test/java/br/com/centinela/marketing/
-        └── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
+        └── qualificacao/                      regras da qualificação e testes da V6
 ```
 
 **Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `formularios/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (buffer e consumidores). Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
@@ -179,6 +183,7 @@ Toda mudança de banco é uma migration do Flyway em `src/main/resources/db/migr
 | Migration | O que faz |
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
+| `V6__cria_qualificacao.sql` | D5: `regras_pontuacao` (`valores` em `jsonb`; regra de campo exige `campo_chave`), `qualificacao_configuracoes` (uma por tenant; `dias_atendimento` em `smallint[]` de 1 a 7; morno abaixo de quente; início antes do fim) e `vendedores_rodizio` (único por `(tenant_id, vendedor_id)`) |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -195,6 +200,20 @@ Regras para as próximas tabelas (norteador, seção 3):
 - `ResolvedorDeTenant` integra o contexto ao `@TenantId` do Hibernate;
 - entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e herdar a restrição `deleted_at IS NULL` da base;
 - `Paginacao.pedido` limita `tamanho` a 100 e `Pagina` devolve `{itens, pagina, tamanho, total}`.
+
+### Qualificação (D5)
+
+Pacote `qualificacao`, com as três tabelas da `V6` (norteador §3 e §9.3). O cálculo da pontuação é da Q1 e o rodízio da Q2; aqui ficam os dados e as validações de cada registro.
+
+| Classe | O que é |
+|---|---|
+| `RegraPontuacao` | critério da pontuação. `porCampo(criterio, chave, valores, pontos)` para respostas do formulário e `porUtm(criterio, valores, pontos)` para a origem do tráfego; recusa critério vazio, lista de valores vazia e pontos negativos. Em `utm`, `campo_chave` fica nulo |
+| `QualificacaoConfiguracao` | faixas e rodízio do tenant. `padrao()` traz os valores iniciais das Regras de Negócio: MQL quente a partir de 70, morno a partir de 40, rodízio ligado, de segunda a sexta das 8h às 18h e transbordo de 15 minutos. Os dias de atendimento saem como `Set<DayOfWeek>`, com a mesma numeração do banco (1 = segunda) |
+| `VendedorRodizio` | vendedor na escala, só com o UUID do identity. `registrarAtribuicao` move o vendedor para o fim da fila |
+| `FonteRegra` | `campo_formulario` ou `utm`, gravado pelo `ConversorDeValor` |
+| `RegraPontuacaoRepository`, `QualificacaoConfiguracaoRepository`, `VendedorRodizioRepository` | Spring Data. `existsByCampoChaveAndAtivoTrue` serve para o aviso de "campo usado em regra" da tela de formulários; `findFirstBy` devolve a configuração do tenant atual |
+
+Os valores fechados do norteador viram enums Java que implementam `ValorPersistido`, com um `Conversor` (subclasse de `ConversorDeValor`) para gravar o valor do norteador, e não o nome da constante.
 
 ## Endpoints atuais
 
@@ -214,5 +233,12 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | `healthRespondeSemTokenComEnvelope` | `/health` sem token dá `200`, com o envelope completo e o `X-Request-Id` na resposta |
 | `rotaAutenticadaSemTokenResponde401ComEnvelope` | rota protegida sem token dá `401` no formato do envelope |
 | `documentacaoOpenApiRespondeSemTokenComAsRotasDoModulo` | `/v3/api-docs` abre sem token e lista `/api/marketing/health` |
+
+`BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
+
+| Teste | O que confere |
+|---|---|
+| `qualificacao.QualificacaoTest` | valores padrão das Regras de Negócio e recusa de limites, horários, dias e regras incoerentes |
+| `qualificacao.QualificacaoRepositoryTest` | a `V6` contra o banco real: valores das regras em JSON, filtro de ativas, `CHECK` da chave de campo, configuração única por tenant com `dias_atendimento` em array, e vendedor único na escala do tenant |
 
 Os testes do checklist da plataforma (§15) que faltam, como `403` sem permissão, cabeçalho de 32 KB e `404` para dado de outro tenant, dependem das primeiras rotas de negócio (tarefa F7).
