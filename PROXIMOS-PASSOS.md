@@ -64,7 +64,7 @@ Cada trilha pode ser de uma pessoa ou dupla. No começo, as trilhas 2 e 3 espera
 
 | ID | Tarefa | Bloqueado por | Bloqueia | § |
 |---|---|---|---|---|
-| **F1** | Ler do JWT o `tenant_id`, o `sub` (usuário) e as permissões, e transformar as permissões em *authorities* para o `@PreAuthorize`. Criar um jeito único de obter o tenant e o usuário atuais. Usar o `exemplo-modulo` do `infra-integrador-2026` como referência | — | F2, F7, A1, A2, A3 | 1, 6 |
+| **F1** | **[concluída]** Ler do JWT o `tenant_id`, o `sub` (usuário) e as permissões, e transformar as permissões em *authorities* para o `@PreAuthorize`. Criar um jeito único de obter o tenant e o usuário atuais. Usar o `exemplo-modulo` do `infra-integrador-2026` como referência | — | F2, F7, A1, A2, A3 | 1, 6 |
 | **F2** | **[concluída]** Classe base das entidades com as sete colunas (`id`, `tenant_id`, datas, `created_by`/`updated_by` vindos do token), *soft delete* e filtro automático por tenant. Resposta paginada padrão `{itens, pagina, tamanho, total}`, com `tamanho` máximo de 100 e `ordenar` | F1 | D1, D2, D3, D4, D5, D6 | 3, 6 |
 | **F3** | Publicador de eventos: envelope da §9.7 (`id`, `tipo`, `versao`, `tenantId`, `moduloOrigem`, `ocorridoEm`, `usuarioId`, `correlacaoId`, `dados`), propriedade `user_id = mq_marketing` e envio **só depois do commit** | — | N1, Q2, A1 | 8 |
 | **F4** | Base de consumo: declarar a fila `marketing.landing-leads` (ligada a `landing.eventos`) e a DLQ `marketing.landing-leads.dlq` (depois de 3 falhas); consumo idempotente com `eventos_processados` | — | E1, E5 | 5, 8 |
@@ -74,11 +74,13 @@ Cada trilha pode ser de uma pessoa ou dupla. No começo, as trilhas 2 e 3 espera
 
 ### Dados: migrations do Flyway (D)
 
-Uma migration por tarefa, na ordem dos números. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador.
+Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador.
+
+O número da migration é da tarefa, não da ordem de merge: cada tarefa sai numa branch própria e os PRs podem entrar fora de ordem (por exemplo, a `V5` da D4 antes da `V3` da D2). Na plataforma e nos testes o banco sobe do zero e aplica tudo em ordem. No banco local, o perfil `dev` liga o `out-of-order` do Flyway para aplicar uma versão menor que chegou depois (ver o [README da API](marketing-api/README.md#banco-e-migrations)).
 
 | ID | Tarefa | Bloqueado por | Bloqueia | § |
 |---|---|---|---|---|
-| **D1** | `V2`: `leads` (com `temperatura` gerada a partir da `etapa` e as chaves únicas), `lead_eventos` (com `sequencia`, usada pelo SSE) e `lead_consentimentos` (só inclusão) | F2 | F7, D3, E2, E5, E7, E8, E10, Q1, A2 | 3 |
+| **D1** | **[concluída]** `V2`: `leads` (com `temperatura` gerada a partir da `etapa` e as chaves únicas), `lead_eventos` (com `sequencia`, usada pelo SSE) e `lead_consentimentos` (só inclusão) | F2 | F7, D3, E2, E5, E7, E8, E10, Q1, A2 | 3 |
 | **D2** | `V3`: `leads_entrada_buffer` | F2 | E1, E2, E3, E10 | 3 |
 | **D3** | `V4`: `modelos_mensagem`, `lead_comunicacoes` e `ciclo_vida_configuracoes` | F2, D1 | D7, E8, E10, A3 | 3 |
 | **D4** | **[concluída]** `V5`: `formularios` e `formulario_versoes` (versão publicada nunca muda) | F2 | A1 | 3, 9.5 |
