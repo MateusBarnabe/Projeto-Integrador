@@ -90,13 +90,17 @@ marketing-api/
     │   │   │       ├── ErroCampo.java
     │   │   │       ├── TratadorDeErros.java
     │   │   │       └── RequestIdFilter.java
+    │   │   ├── leads/                         lead, timeline e consentimentos (D1)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
     │       └── db/migration/                  migrations do Flyway
-    │           └── V1__cria_eventos_processados.sql
+    │           ├── V1__cria_eventos_processados.sql
+    │           └── V2__cria_leads.sql
     └── test/java/br/com/centinela/marketing/
-        └── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
+        ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
+        └── leads/                             regras do lead e testes da V2
 ```
 
 **Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `formularios/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (buffer e consumidores). Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
@@ -179,6 +183,7 @@ Toda mudança de banco é uma migration do Flyway em `src/main/resources/db/migr
 | Migration | O que faz |
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
+| `V2__cria_leads.sql` | D1: `leads` (com `temperatura` gerada a partir da `etapa`), `lead_eventos` (com `sequencia` por identidade, usada pelo SSE) e `lead_consentimentos` (só inclusão). Chaves únicas `(tenant_id, visitante_id)`, `(tenant_id, meta_lead_id)` e `token_descadastro`; `CHECK` nos valores fechados do norteador (etapa, origem, faixa, status e tipos) |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -195,6 +200,22 @@ Regras para as próximas tabelas (norteador, seção 3):
 - `ResolvedorDeTenant` integra o contexto ao `@TenantId` do Hibernate;
 - entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e herdar a restrição `deleted_at IS NULL` da base;
 - `Paginacao.pedido` limita `tamanho` a 100 e `Pagina` devolve `{itens, pagina, tamanho, total}`.
+
+Os valores fechados do norteador (`meta_ads`, `opt_out`, `landing.contato.informado`...) viram enums Java que implementam `ValorPersistido`. Cada enum tem um `Conversor` (subclasse de `ConversorDeValor`) para gravar o valor do norteador, e não o nome da constante; a entidade usa `@Convert(converter = OEnum.Conversor.class)`.
+
+### Leads (D1)
+
+Pacote `leads`, com as três tabelas da `V2`:
+
+| Classe | O que é |
+|---|---|
+| `Lead` | registro central. `avancarEtapa` nunca rebaixa a etapa (§2); `atualizarContato` não apaga um dado existente com valor vazio; `possuiIdentificadorDeContato` é a regra de promoção do buffer (Meta, e-mail ou telefone); `registrarConsentimento` muda só o estado atual. O `token_descadastro` é gerado na criação (32 bytes aleatórios em base64url). `temperatura` é coluna gerada pelo banco e só de leitura |
+| `LeadEvento` | item da timeline. A `sequencia` vem do banco e é a ordem usada pelo SSE; `etapaAlterada` monta o registro de mudança de etapa |
+| `LeadConsentimento` | evidência de aceite ou revogação, sem métodos de alteração. `doLanding` para os eventos das etapas 1 a 3, `revogacaoPorDescadastro` para o link de descadastro; `repete` evita gravar de novo o mesmo consentimento da etapa 2. O *User-Agent* é cortado em 500 caracteres |
+| `LeadRepository`, `LeadEventoRepository`, `LeadConsentimentoRepository` | Spring Data; a busca por `visitante_id` e por `meta_lead_id` e a timeline em ordem de `sequencia` |
+| `OrigemLead`, `Temperatura`, `StatusAquecimento`, `FaixaQualificacao`, `TipoEventoLead`, `OrigemConsentimento` | valores fechados das colunas |
+
+Fora de requisição (jobs, consumidores de eventos), toda leitura e gravação deve rodar dentro de `TenantContexto.executar(tenant, ...)`: o Hibernate fixa o tenant quando abre a sessão e usa esse valor tanto para preencher `tenant_id` quanto para filtrar as consultas, inclusive o `findById`. Por isso ainda não há busca por `token_descadastro`: a rota pública de descadastro (E7) não tem tenant no token e precisa resolver o tenant antes de consultar.
 
 ## Endpoints atuais
 
@@ -214,5 +235,12 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | `healthRespondeSemTokenComEnvelope` | `/health` sem token dá `200`, com o envelope completo e o `X-Request-Id` na resposta |
 | `rotaAutenticadaSemTokenResponde401ComEnvelope` | rota protegida sem token dá `401` no formato do envelope |
 | `documentacaoOpenApiRespondeSemTokenComAsRotasDoModulo` | `/v3/api-docs` abre sem token e lista `/api/marketing/health` |
+
+`BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
+
+| Teste | O que confere |
+|---|---|
+| `leads.LeadTest` | etapa nunca rebaixa, contato vazio não apaga dado, regra de promoção, token de descadastro, consentimento repetido e corte do *User-Agent* |
+| `leads.LeadRepositoryTest` | a `V2` contra o banco real: sete colunas, `temperatura` gerada (também ao avançar a etapa), isolamento por tenant no `findById` e nas consultas, unicidade de `visitante_id` e `meta_lead_id` por tenant, soft delete, ordem da timeline, histórico de consentimentos e FK do evento para o lead |
 
 Os testes do checklist da plataforma (§15) que faltam, como `403` sem permissão, cabeçalho de 32 KB e `404` para dado de outro tenant, dependem das primeiras rotas de negócio (tarefa F7).
