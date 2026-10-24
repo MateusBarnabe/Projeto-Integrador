@@ -84,6 +84,7 @@ marketing-api/
     │   │   ├── MarketingApplication.java      ponto de entrada
     │   │   ├── compartilhado/                 o que todas as áreas usam
     │   │   │   ├── documentacao/OpenApiConfig.java
+    │   │   │   ├── mensageria/                envelope e publicação de eventos (F3)
     │   │   │   ├── seguranca/SegurancaConfig.java
     │   │   │   └── web/                       envelope, erros e X-Request-Id
     │   │   │       ├── Resposta.java
@@ -157,7 +158,29 @@ Configuração do Spring Security:
 - `401` ("Token ausente, inválido ou expirado.") e `403` ("Sem permissão para esta ação.") saem no formato do envelope;
 - `@EnableMethodSecurity` liga o `@PreAuthorize` para conferir permissões nos controllers (Contrato §5.2).
 
-O claim `perms` é convertido em *authorities* sem prefixo, para uso com `@PreAuthorize`. O `tenant_id` e o `sub` do token podem ser obtidos por `ContextoSeguranca.exigirUsuarioAtual()`, que devolve um `UsuarioAtual`. O tenant nunca é lido do corpo ou da query; tokens de serviço e o cabeçalho `X-Tenant-Id` entram nas tarefas de integração correspondentes.
+O claim `perms` é convertido em *authorities* sem prefixo, para uso com `@PreAuthorize`. O `tenant_id` e o `sub` do token podem ser obtidos por `ContextoSeguranca.exigirUsuarioAtual()`, que devolve um `UsuarioAtual`; `ContextoSeguranca.usuarioAtual()` devolve um `Optional`, vazio em rotina, rota pública ou token de serviço. O tenant nunca é lido do corpo ou da query; tokens de serviço e o cabeçalho `X-Tenant-Id` entram nas tarefas de integração correspondentes.
+
+### `compartilhado.mensageria` (F3)
+
+Publicação de mensagens no RabbitMQ, seguindo o Contrato §9.7 e o norteador §8:
+
+| Classe | O que é |
+|---|---|
+| `Evento` | *record* do envelope: `id`, `tipo`, `versao`, `tenantId`, `moduloOrigem` (`marketing`), `ocorridoEm` (UTC), `usuarioId`, `correlacaoId` e `dados` |
+| `PublicadorDeEventos` | o que o domínio chama. `publicar(tipo, versao, dados)` vai para a exchange `marketing.eventos`; `pedirAPlataforma(tipo, versao, dados)` vai para `identity.entrada`. A routing key é o tipo. Monta o envelope com o tenant de `TenantContexto`, o usuário do token (nulo em rotina e token de serviço) e o `X-Request-Id` como `correlacaoId`. Recusa tipo fora do padrão `modulo.entidade.acao` e chamada fora de transação |
+| `EnvioDeEventos` | `@TransactionalEventListener(AFTER_COMMIT)`: só envia depois do commit, então um rollback descarta a mensagem. Põe `user_id` igual ao usuário da conexão (`mq_marketing`), `message_id` igual ao `id` do envelope, `type` igual ao tipo e entrega persistente |
+| `MensageriaConfig` | mensagens em JSON com o `ObjectMapper` da API |
+
+Uso típico, dentro do serviço transacional que muda o dado:
+
+```java
+publicador.publicar("marketing.formulario.publicado", 1,
+        Map.of("formularioId", formulario.getId(), "versao", versao.getVersao(), "publicadoEm", versao.getPublicadoEm()));
+```
+
+Todo tipo novo precisa estar em [Docs/contratos/marketing.asyncapi.yaml](../Docs/contratos/marketing.asyncapi.yaml) antes de ser publicado, e `dados` não leva senha, token, segredo nem dado pessoal além do necessário.
+
+**Limite conhecido:** se o RabbitMQ estiver fora do ar no momento do envio, a transação já foi confirmada e o evento se perde; o erro vai para o log com o tipo, o `id` e o tenant, sem os dados. Se algum fluxo não puder perder evento, o caminho é uma tabela de saída (*outbox*) gravada na mesma transação.
 
 ### `compartilhado.documentacao.OpenApiConfig`
 
@@ -214,5 +237,14 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | `healthRespondeSemTokenComEnvelope` | `/health` sem token dá `200`, com o envelope completo e o `X-Request-Id` na resposta |
 | `rotaAutenticadaSemTokenResponde401ComEnvelope` | rota protegida sem token dá `401` no formato do envelope |
 | `documentacaoOpenApiRespondeSemTokenComAsRotasDoModulo` | `/v3/api-docs` abre sem token e lista `/api/marketing/health` |
+
+`compartilhado.mensageria.PublicadorDeEventosTest` sobe a aplicação com o PostgreSQL e um RabbitMQ do Testcontainers carregado com o mesmo [definitions.json](../infra/rabbitmq/definitions.json) do ambiente local, com os mesmos usuários, permissões e exchanges. O broker confere o `user_id` de verdade. O teste observa as exchanges como `admin`, com filas temporárias:
+
+| Teste | O que confere |
+|---|---|
+| `publicaOEnvelopeEmMarketingEventosDepoisDoCommit` | envelope completo, `user_id = mq_marketing`, routing key, `message_id` e `correlacaoId` vindo do `X-Request-Id` |
+| `nadaSaiQuandoATransacaoFazRollback` | rollback não publica nada |
+| `pedidoAPlataformaVaiParaIdentityEntradaComOUsuarioDoToken` | pedido em `identity.entrada`, e não em `marketing.eventos`, com o `usuarioId` do token |
+| `publicarForaDeTransacaoEhRecusado`, `tipoForaDoPadraoEhRecusado` | as duas proteções do publicador |
 
 Os testes do checklist da plataforma (§15) que faltam, como `403` sem permissão, cabeçalho de 32 KB e `404` para dado de outro tenant, dependem das primeiras rotas de negócio (tarefa F7).
