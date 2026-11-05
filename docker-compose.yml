@@ -53,11 +53,12 @@ services:
     build: ./marketing-api
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_HOST: postgres
-      DB_SENHA: ${MARKETING_APP_SENHA:-usr_marketing}
-      FLYWAY_SENHA: ${MARKETING_OWNER_SENHA:-own_marketing}
+      # Mesmos nomes de variável do docker-compose.yml da plataforma
+      DB_URL: jdbc:postgresql://postgres:5432/plataforma
+      DB_APP_PASSWORD: ${MARKETING_APP_SENHA:-usr_marketing}
+      DB_OWNER_PASSWORD: ${MARKETING_OWNER_SENHA:-own_marketing}
       RABBITMQ_HOST: rabbitmq
-      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+      JWKS_URI: ${JWKS_URI:-http://host.docker.internal:8081/api/identity/.well-known/jwks.json}
     ports:
       - "8087:8087"
     depends_on:

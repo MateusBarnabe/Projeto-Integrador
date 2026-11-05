@@ -58,17 +58,17 @@ docker compose up -d --build marketing    # na raiz; sobe junto o Postgres e o R
 
 ## Variáveis de ambiente
 
-Todo endereço e credencial vem de variável de ambiente (Contrato §9.1). Os valores padrão servem para rodar local com o `docker-compose.yml` da raiz. A lista completa está em [application.yml](src/main/resources/application.yml).
+Todo endereço e credencial vem de variável de ambiente (Contrato §9.1). **Os nomes são os mesmos que o `docker-compose.yml` do `infra-integrador-2026` entrega ao serviço `marketing`**: na plataforma, a imagem recebe essas variáveis e não usa os padrões. Os valores padrão servem para rodar local com o `docker-compose.yml` da raiz. A lista completa está em [application.yml](src/main/resources/application.yml).
 
 | Variável | Padrão | Para quê |
 |---|---|---|
-| `PORTA` | `8087` | porta HTTP |
-| `DB_HOST`, `DB_PORTA`, `DB_NOME` | `localhost`, `5432`, `plataforma` | endereço do Postgres |
-| `DB_USUARIO`, `DB_SENHA` | `usr_marketing` | usuário da aplicação (só lê e escreve nas tabelas) |
-| `FLYWAY_USUARIO`, `FLYWAY_SENHA` | `own_marketing` | dono do schema, roda as migrations |
-| `RABBITMQ_HOST`, `RABBITMQ_PORTA`, `RABBITMQ_VHOST` | `localhost`, `5672`, `plataforma` | endereço do RabbitMQ |
-| `RABBITMQ_USUARIO`, `RABBITMQ_SENHA` | `mq_marketing` | usuário do módulo no RabbitMQ |
-| `IDENTITY_JWKS_URI` | `http://localhost:8081/.well-known/jwks.json` | chaves públicas do identity para validar o JWT |
+| `SERVER_PORT` | `8087` | porta HTTP |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/plataforma` | endereço do Postgres. O schema vem do `search_path` dos usuários, ajustado pelo init do banco |
+| `DB_APP_USER`, `DB_APP_PASSWORD` | `usr_marketing` | usuário da aplicação (só lê e escreve nas tabelas) |
+| `DB_OWNER_USER`, `DB_OWNER_PASSWORD` | `own_marketing` | dono do schema, roda as migrations |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_VHOST` | `localhost`, `5672`, `plataforma` | endereço do RabbitMQ |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | `mq_marketing` | usuário do módulo no RabbitMQ |
+| `JWKS_URI` | `http://localhost:8081/api/identity/.well-known/jwks.json` | chaves públicas do identity para validar o JWT |
 | `SWAGGER_HABILITADO` | `true` | `false` desliga o Swagger UI e o `/v3/api-docs` |
 
 ## Estrutura de pastas
@@ -163,7 +163,7 @@ Configuração do Spring Security:
 
 - API sem estado (sem sessão), sem CSRF;
 - **sem token:** `/api/marketing/health`, `/public/marketing/**`, `/error` e as rotas da documentação (`/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`);
-- **todo o resto exige JWT** do identity, validado localmente pelas chaves do `IDENTITY_JWKS_URI` (Contrato §4.2);
+- **todo o resto exige JWT** do identity, validado localmente pelas chaves do `JWKS_URI` (Contrato §4.2);
 - `401` ("Token ausente, inválido ou expirado.") e `403` ("Sem permissão para esta ação.") saem no formato do envelope;
 - `@EnableMethodSecurity` liga o `@PreAuthorize` para conferir permissões nos controllers (Contrato §5.2).
 

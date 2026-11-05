@@ -90,7 +90,7 @@ O `docker-compose.yml` imita só o pedaço da plataforma que o Marketing usa:
 - **RabbitMQ:** vhost `plataforma`, um usuário por módulo (`mq_marketing`, `mq_landing`, com senha igual ao nome) e as exchanges `marketing.eventos`, `landing.eventos` e `identity.entrada` ([infra/rabbitmq](infra/rabbitmq/definitions.json)). As filas são declaradas pelo módulo que consome.
 - **Mailpit:** recebe os e-mails de boas-vindas e de aquecimento.
 
-O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador-2026`. O identity nunca é simulado: as rotas autenticadas precisam de um token real de um usuário de teste, e o endereço do JWKS vai em `IDENTITY_JWKS_URI`. Sem ele, só as rotas públicas e o `/health` respondem. Se os dois composes rodarem ao mesmo tempo, as portas 5432, 5672 e 15672 conflitam: suba só os apps deste repositório e aponte-os para a infraestrutura da plataforma.
+O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador-2026`. O identity nunca é simulado: as rotas autenticadas precisam de um token real de um usuário de teste, e o endereço do JWKS vai em `JWKS_URI`. A API usa os mesmos nomes de variável do compose da plataforma ([marketing-api/README.md](marketing-api/README.md#variáveis-de-ambiente)). Sem ele, só as rotas públicas e o `/health` respondem. Se os dois composes rodarem ao mesmo tempo, as portas 5432, 5672 e 15672 conflitam: suba só os apps deste repositório e aponte-os para a infraestrutura da plataforma.
 
 ## Documentação (`Docs/`)
 
