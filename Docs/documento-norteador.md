@@ -195,7 +195,7 @@ temperatura varchar GENERATED ALWAYS AS (
 ) STORED
 ```
 
-> **Ajuste pendente na `V2` [Novo].** A `V2` já mesclada ainda tem `visitante_id` (com a chave única), `formulario_versao` e os valores antigos de origem do consentimento. A tarefa D8 do [PROXIMOS-PASSOS](../PROXIMOS-PASSOS.md) troca isso por `sessao_id`, `canal` e `envio_lido_em`, numa migration nova, sem editar a `V2`.
+> **Ajuste da `V2` na `V8` [Novo].** As colunas acima são o resultado da `V2` com a `V8` (tarefa D8 do [PROXIMOS-PASSOS](../PROXIMOS-PASSOS.md)), que tirou `visitante_id` e `formulario_versao`, criou `sessao_id`, `canal` e `envio_lido_em` e trocou os valores antigos de origem do consentimento e de tipo de evento, sem editar a `V2`.
 
 > **Fronteira com Contato do CRM [Pendente · Grupo 6].** O CRM é o dono de empresas e contatos (§10), e o Mapa proíbe copiar a tabela de outro grupo. Até o envio, o lead não existe no CRM, e `leads` guarda os dados de contato de quem ainda *não* é contato (lead do Meta e captura do chatbot). No envio, o Landing cria o contato e o lead passa a apontar para ele por `crm_contato_id`. Precisamos confirmar com o Grupo 6 que essa leitura atende à regra do dono único (seção 11).
 

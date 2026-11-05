@@ -23,7 +23,8 @@ import jakarta.persistence.Table;
 
 /**
  * Registro central do lead (norteador §3). Existe a partir do momento em que há um identificador
- * de contato; o visitante de etapa 0 sem contato fica só no buffer de entrada.
+ * de contato: lead do Meta (etapa 0), captura do chatbot (etapa 1) ou envio do Landing (etapa 3).
+ * Visitante sem contato não chega ao Marketing.
  */
 @Entity
 @Table(name = "leads")
@@ -84,21 +85,27 @@ public class Lead extends EntidadeBase {
     @Column(name = "last_touch")
     private OffsetDateTime lastTouch;
 
-    @Column(name = "visitante_id")
-    private UUID visitanteId;
+    @Column(name = "canal")
+    @Convert(converter = CanalLead.Conversor.class)
+    private CanalLead canal;
+
+    @Column(name = "sessao_id")
+    private UUID sessaoId;
 
     @Column(name = "envio_id")
     private UUID envioId;
 
+    /** Id do formulário no Landing; sem FK, só o UUID. */
     @Column(name = "formulario_id")
     private UUID formularioId;
 
-    @Column(name = "formulario_versao")
-    private Integer formularioVersao;
-
+    /** Respostas do envio como vieram do Landing: {@code campoId}, {@code rotulo}, {@code tipo}, {@code valor}. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "dados_formulario")
-    private Map<String, Object> dadosFormulario;
+    private List<Map<String, Object>> dadosFormulario;
+
+    @Column(name = "envio_lido_em")
+    private OffsetDateTime envioLidoEm;
 
     @Column(name = "consentimento_marketing", nullable = false)
     private boolean consentimentoMarketing;
@@ -195,9 +202,63 @@ public class Lead extends EntidadeBase {
         this.whatsapp = preencher(this.whatsapp, whatsapp);
     }
 
-    /** Liga o lead ao visitante do Landing, que é o mesmo da etapa 0 à 3. */
-    public void vincularVisitante(UUID visitanteId) {
-        this.visitanteId = preencher(this.visitanteId, visitanteId);
+    /** Liga o lead à sessão do chatbot, que também identifica o envio da mesma conversa. */
+    public void vincularSessao(UUID sessaoId) {
+        this.sessaoId = preencher(this.sessaoId, sessaoId);
+    }
+
+    /**
+     * Liga o lead a um envio do Landing ({@code landing.formulario.recebido}). Um envio novo
+     * substitui o anterior e deixa a leitura das respostas pendente até {@link #registrarRespostas}.
+     */
+    public void vincularEnvio(UUID envioId, UUID formularioId, CanalLead canal) {
+        Objects.requireNonNull(envioId, "envioId");
+        if (!envioId.equals(this.envioId)) {
+            this.envioId = envioId;
+            this.envioLidoEm = null;
+        }
+        this.formularioId = preencher(this.formularioId, formularioId);
+        this.canal = preencher(this.canal, canal);
+    }
+
+    /**
+     * Guarda a cópia das respostas lidas em {@code GET /api/landing/envios/{id}}. Envio anonimizado
+     * no Landing chega com os valores nulos e não apaga a cópia que já existe (norteador §9.5).
+     */
+    public void registrarRespostas(List<Map<String, Object>> respostas, boolean anonimizadoNoLanding,
+            OffsetDateTime lidoEm) {
+        if (envioId == null) {
+            throw new IllegalStateException("Lead sem envio do Landing para registrar respostas.");
+        }
+        if (!anonimizadoNoLanding || dadosFormulario == null) {
+            this.dadosFormulario = respostas == null ? List.of() : List.copyOf(respostas);
+        }
+        this.envioLidoEm = Objects.requireNonNull(lidoEm, "lidoEm");
+    }
+
+    /** O envio já chegou, mas as respostas ainda não foram lidas no Landing (job 4.6). */
+    public boolean leituraDoEnvioPendente() {
+        return envioId != null && envioLidoEm == null;
+    }
+
+    /** Empresa e contato criados ou reaproveitados no CRM pelo Landing. Só o UUID. */
+    public void vincularCrm(UUID empresaId, UUID contatoId) {
+        this.crmEmpresaId = preencher(this.crmEmpresaId, empresaId);
+        this.crmContatoId = preencher(this.crmContatoId, contatoId);
+    }
+
+    /**
+     * Oportunidade criada pelo Landing no CRM, recebida em {@code crm.oportunidade.criada}.
+     *
+     * @return {@code true} se o lead passou a apontar para ela agora
+     */
+    public boolean vincularOportunidade(UUID oportunidadeId) {
+        Objects.requireNonNull(oportunidadeId, "oportunidadeId");
+        if (oportunidadeId.equals(crmOportunidadeId)) {
+            return false;
+        }
+        crmOportunidadeId = oportunidadeId;
+        return true;
     }
 
     /** Guarda o {@code leadgen_id} do Meta, usado para descartar reentregas do webhook. */
@@ -214,7 +275,7 @@ public class Lead extends EntidadeBase {
         this.consentimentoEm = Objects.requireNonNull(registradoEm, "registradoEm");
     }
 
-    /** Regra de promoção do buffer (§3): só vira lead quem tem Meta, e-mail ou telefone. */
+    /** Só é lead quem tem um identificador de contato: Meta, e-mail ou telefone (§3). */
     public boolean possuiIdentificadorDeContato() {
         return temTexto(metaLeadId) || temTexto(email) || temTexto(telefone);
     }
@@ -304,8 +365,12 @@ public class Lead extends EntidadeBase {
         return lastTouch;
     }
 
-    public UUID getVisitanteId() {
-        return visitanteId;
+    public CanalLead getCanal() {
+        return canal;
+    }
+
+    public UUID getSessaoId() {
+        return sessaoId;
     }
 
     public UUID getEnvioId() {
@@ -316,12 +381,12 @@ public class Lead extends EntidadeBase {
         return formularioId;
     }
 
-    public Integer getFormularioVersao() {
-        return formularioVersao;
+    public List<Map<String, Object>> getDadosFormulario() {
+        return dadosFormulario;
     }
 
-    public Map<String, Object> getDadosFormulario() {
-        return dadosFormulario;
+    public OffsetDateTime getEnvioLidoEm() {
+        return envioLidoEm;
     }
 
     public boolean isConsentimentoMarketing() {

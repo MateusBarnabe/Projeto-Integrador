@@ -6,9 +6,8 @@ import br.com.centinela.marketing.compartilhado.dados.ValorPersistido;
 /** De onde veio um aceite ou revogação de consentimento (coluna {@code lead_consentimentos.origem}). */
 public enum OrigemConsentimento implements ValorPersistido {
 
-    CONTATO_INFORMADO("landing.contato.informado"),
-    FORMULARIO_ATUALIZADO("landing.formulario.atualizado"),
     FORMULARIO_RECEBIDO("landing.formulario.recebido"),
+    CHATBOT_LEAD_CAPTURADO("landing.chatbot.lead_capturado"),
     DESCADASTRO("descadastro");
 
     private final String valor;
