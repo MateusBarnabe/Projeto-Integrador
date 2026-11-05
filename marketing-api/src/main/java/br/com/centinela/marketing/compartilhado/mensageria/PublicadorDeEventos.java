@@ -35,7 +35,7 @@ public class PublicadorDeEventos {
         this.publicadorSpring = publicadorSpring;
     }
 
-    /** Publica um fato do Marketing em {@code marketing.eventos} (ex.: {@code marketing.formulario.publicado}). */
+    /** Publica um fato do Marketing em {@code marketing.eventos} (ex.: {@code marketing.lead.qualificado}). */
     public Evento publicar(String tipo, int versao, Object dados) {
         return enfileirar(EXCHANGE_EVENTOS, tipo, versao, dados);
     }

@@ -119,37 +119,37 @@ class PublicadorDeEventosTest {
 
     @Test
     void publicaOEnvelopeEmMarketingEventosDepoisDoCommit() throws Exception {
-        UUID formulario = UUID.randomUUID();
+        UUID lead = UUID.randomUUID();
         MDC.put(RequestIdFilter.CHAVE_MDC, "req-123");
 
-        Evento publicado = emTransacao(() -> publicador.publicar("marketing.formulario.publicado", 1,
-                Map.of("formularioId", formulario, "versao", 2)));
+        Evento publicado = emTransacao(() -> publicador.publicar("marketing.lead.qualificado", 1,
+                Map.of("leadId", lead, "pontuacao", 85)));
 
         Message mensagem = observador.receive(filaEventos.getName(), 5_000);
         assertThat(mensagem).as("mensagem em marketing.eventos").isNotNull();
         var propriedades = mensagem.getMessageProperties();
         assertThat(propriedades.getReceivedUserId()).isEqualTo("mq_marketing");
-        assertThat(propriedades.getReceivedRoutingKey()).isEqualTo("marketing.formulario.publicado");
+        assertThat(propriedades.getReceivedRoutingKey()).isEqualTo("marketing.lead.qualificado");
         assertThat(propriedades.getMessageId()).isEqualTo(publicado.id().toString());
         assertThat(propriedades.getContentType()).isEqualTo("application/json");
 
         JsonNode envelope = json.readTree(mensagem.getBody());
         assertThat(envelope.get("id").asText()).isEqualTo(publicado.id().toString());
-        assertThat(envelope.get("tipo").asText()).isEqualTo("marketing.formulario.publicado");
+        assertThat(envelope.get("tipo").asText()).isEqualTo("marketing.lead.qualificado");
         assertThat(envelope.get("versao").asInt()).isEqualTo(1);
         assertThat(envelope.get("tenantId").asText()).isEqualTo(TENANT.toString());
         assertThat(envelope.get("moduloOrigem").asText()).isEqualTo("marketing");
         assertThat(envelope.get("ocorridoEm").asText()).endsWith("Z");
         assertThat(envelope.get("usuarioId").isNull()).as("rotina, sem usuário").isTrue();
         assertThat(envelope.get("correlacaoId").asText()).isEqualTo("req-123");
-        assertThat(envelope.get("dados").get("formularioId").asText()).isEqualTo(formulario.toString());
-        assertThat(envelope.get("dados").get("versao").asInt()).isEqualTo(2);
+        assertThat(envelope.get("dados").get("leadId").asText()).isEqualTo(lead.toString());
+        assertThat(envelope.get("dados").get("pontuacao").asInt()).isEqualTo(85);
     }
 
     @Test
     void nadaSaiQuandoATransacaoFazRollback() {
         TenantContexto.executar(TENANT, () -> transacao.executeWithoutResult(status -> {
-            publicador.publicar("marketing.formulario.publicado", 1, Map.of("versao", 1));
+            publicador.publicar("marketing.lead.qualificado", 1, Map.of("pontuacao", 85));
             status.setRollbackOnly();
         }));
 
@@ -175,15 +175,15 @@ class PublicadorDeEventosTest {
     @Test
     void publicarForaDeTransacaoEhRecusado() {
         assertThatThrownBy(() -> TenantContexto.executar(TENANT,
-                () -> publicador.publicar("marketing.formulario.publicado", 1, Map.of())))
+                () -> publicador.publicar("marketing.lead.qualificado", 1, Map.of())))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void tipoForaDoPadraoEhRecusado() {
-        assertThatThrownBy(() -> emTransacao(() -> publicador.publicar("FormularioPublicado", 1, Map.of())))
+        assertThatThrownBy(() -> emTransacao(() -> publicador.publicar("LeadQualificado", 1, Map.of())))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> emTransacao(() -> publicador.publicar("marketing.formulario", 1, Map.of())))
+        assertThatThrownBy(() -> emTransacao(() -> publicador.publicar("marketing.lead", 1, Map.of())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
