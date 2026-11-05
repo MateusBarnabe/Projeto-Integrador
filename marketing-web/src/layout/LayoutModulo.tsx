@@ -1,13 +1,12 @@
 import { useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
-import { FileText, LayoutDashboard, Megaphone, Settings, Users } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Settings, Users } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
 import { plataforma } from '@/plataforma';
 
 const ABAS = [
   { rota: '/painel', nome: 'Painel', icone: LayoutDashboard },
   { rota: '/leads', nome: 'Leads', icone: Users },
-  { rota: '/formularios', nome: 'Formulários', icone: FileText },
   { rota: '/configuracoes', nome: 'Configurações', icone: Settings },
 ];
 
