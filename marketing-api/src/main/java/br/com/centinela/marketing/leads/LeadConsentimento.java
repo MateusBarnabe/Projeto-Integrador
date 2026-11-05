@@ -39,15 +39,17 @@ public class LeadConsentimento extends EntidadeBase {
     @Column(name = "registrado_em", nullable = false, updatable = false)
     private OffsetDateTime registradoEm;
 
-    // ip e user_agent só mudam na anonimização (4.3)
+    // Só no descadastro, que é nosso: o Landing não informa o IP nem o User-Agent do aceite.
+    // ip e user_agent só mudam na anonimização (4.3).
     @Column(name = "ip")
     private String ip;
 
     @Column(name = "user_agent")
     private String userAgent;
 
-    @Column(name = "versao_termo", updatable = false)
-    private String versaoTermo;
+    /** Texto do consentimento exibido no aceite, como o Landing registrou no envio. */
+    @Column(name = "texto_termo", updatable = false)
+    private String textoTermo;
 
     @Column(name = "origem", nullable = false, updatable = false)
     @Convert(converter = OrigemConsentimento.Conversor.class)
@@ -56,11 +58,11 @@ public class LeadConsentimento extends EntidadeBase {
     @Column(name = "formulario_id", updatable = false)
     private UUID formularioId;
 
-    @Column(name = "formulario_versao", updatable = false)
-    private Integer formularioVersao;
-
     @Column(name = "envio_id", updatable = false)
     private UUID envioId;
+
+    @Column(name = "sessao_id", updatable = false)
+    private UUID sessaoId;
 
     @Column(name = "evento_id", updatable = false)
     private UUID eventoId;
@@ -68,29 +70,29 @@ public class LeadConsentimento extends EntidadeBase {
     protected LeadConsentimento() {
     }
 
-    private LeadConsentimento(UUID leadId, OrigemConsentimento origem, boolean aceito,
-            OffsetDateTime registradoEm, String ip, String userAgent) {
+    private LeadConsentimento(UUID leadId, OrigemConsentimento origem, boolean aceito, OffsetDateTime registradoEm) {
         this.leadId = Objects.requireNonNull(leadId, "leadId");
         this.origem = Objects.requireNonNull(origem, "origem");
         this.registradoEm = Objects.requireNonNull(registradoEm, "registradoEm");
         this.finalidade = FINALIDADE_MARKETING;
         this.aceito = aceito;
-        this.ip = ip;
-        this.userAgent = limitarUserAgent(userAgent);
     }
 
-    /** Consentimento que chegou num evento do Landing (etapas 1, 2 e 3). */
+    /**
+     * Aceite que veio do Landing: no {@code landing.chatbot.lead_capturado} (aceite e data, sem texto)
+     * ou na leitura do envio de {@code landing.formulario.recebido} (aceite, data e texto).
+     */
     public static LeadConsentimento doLanding(UUID leadId, OrigemConsentimento origem, boolean aceito,
-            OffsetDateTime registradoEm, String ip, String userAgent, String versaoTermo,
-            UUID formularioId, Integer formularioVersao, UUID envioId, UUID eventoId) {
+            OffsetDateTime registradoEm, String textoTermo, UUID formularioId, UUID envioId, UUID sessaoId,
+            UUID eventoId) {
         if (origem == OrigemConsentimento.DESCADASTRO) {
             throw new IllegalArgumentException("Use revogacaoPorDescadastro para o descadastro.");
         }
-        LeadConsentimento consentimento = new LeadConsentimento(leadId, origem, aceito, registradoEm, ip, userAgent);
-        consentimento.versaoTermo = versaoTermo;
+        LeadConsentimento consentimento = new LeadConsentimento(leadId, origem, aceito, registradoEm);
+        consentimento.textoTermo = textoTermo;
         consentimento.formularioId = formularioId;
-        consentimento.formularioVersao = formularioVersao;
         consentimento.envioId = envioId;
+        consentimento.sessaoId = sessaoId;
         consentimento.eventoId = eventoId;
         return consentimento;
     }
@@ -98,18 +100,23 @@ public class LeadConsentimento extends EntidadeBase {
     /** Revogação feita pelo link de descadastro, com o IP e o User-Agent da requisição. */
     public static LeadConsentimento revogacaoPorDescadastro(UUID leadId, OffsetDateTime registradoEm,
             String ip, String userAgent) {
-        return new LeadConsentimento(leadId, OrigemConsentimento.DESCADASTRO, false, registradoEm, ip, userAgent);
+        LeadConsentimento revogacao = new LeadConsentimento(leadId, OrigemConsentimento.DESCADASTRO, false,
+                registradoEm);
+        revogacao.ip = ip;
+        revogacao.userAgent = limitarUserAgent(userAgent);
+        return revogacao;
     }
 
     /**
-     * Diz se este registro repete o anterior. Os eventos da etapa 2 chegam várias vezes; só grava
-     * uma linha nova quando o aceite, o momento ou a versão do termo mudam (norteador §3).
+     * Diz se este registro repete o anterior. A captura do chatbot e o envio da mesma conversa
+     * trazem o mesmo aceite; só grava uma linha nova quando o aceite, o momento ou o texto do termo
+     * mudam (norteador §3). O texto que faltava na captura não conta como mudança.
      */
     public boolean repete(LeadConsentimento anterior) {
         return anterior != null
                 && anterior.aceito == aceito
                 && anterior.registradoEm.isEqual(registradoEm)
-                && Objects.equals(anterior.versaoTermo, versaoTermo);
+                && (textoTermo == null || Objects.equals(anterior.textoTermo, textoTermo));
     }
 
     private static String limitarUserAgent(String userAgent) {
@@ -143,8 +150,8 @@ public class LeadConsentimento extends EntidadeBase {
         return userAgent;
     }
 
-    public String getVersaoTermo() {
-        return versaoTermo;
+    public String getTextoTermo() {
+        return textoTermo;
     }
 
     public OrigemConsentimento getOrigem() {
@@ -155,12 +162,12 @@ public class LeadConsentimento extends EntidadeBase {
         return formularioId;
     }
 
-    public Integer getFormularioVersao() {
-        return formularioVersao;
-    }
-
     public UUID getEnvioId() {
         return envioId;
+    }
+
+    public UUID getSessaoId() {
+        return sessaoId;
     }
 
     public UUID getEventoId() {

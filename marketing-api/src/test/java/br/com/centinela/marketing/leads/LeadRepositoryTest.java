@@ -17,7 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import br.com.centinela.marketing.compartilhado.dados.BancoDeTeste;
 import br.com.centinela.marketing.compartilhado.tenant.TenantContexto;
 
-/** Confere a migration V2 e o mapeamento das entidades de lead contra o PostgreSQL real. */
+/** Confere as migrations V2 e V8 e o mapeamento das entidades de lead contra o PostgreSQL real. */
 class LeadRepositoryTest extends BancoDeTeste {
 
     private static final OffsetDateTime AGORA = OffsetDateTime.of(2026, 10, 1, 12, 0, 0, 0, ZoneOffset.UTC);
@@ -71,25 +71,81 @@ class LeadRepositoryTest extends BancoDeTeste {
 
     @Test
     void leadDeOutroTenantNaoAparece() {
-        UUID visitante = UUID.randomUUID();
-        Lead salvo = TenantContexto.calcular(tenant, () -> leads.save(novoLead(visitante, 1)));
+        UUID sessao = UUID.randomUUID();
+        Lead salvo = TenantContexto.calcular(tenant, () -> leads.save(novoLead(sessao, 1)));
 
         TenantContexto.executar(outroTenant, () -> {
             assertThat(leads.findById(salvo.getId())).isEmpty();
-            assertThat(leads.findByVisitanteId(visitante)).isEmpty();
+            assertThat(leads.findBySessaoId(sessao)).isEmpty();
         });
         TenantContexto.executar(tenant, () ->
-                assertThat(leads.findByVisitanteId(visitante)).map(Lead::getId).contains(salvo.getId()));
+                assertThat(leads.findBySessaoId(sessao)).map(Lead::getId).contains(salvo.getId()));
     }
 
     @Test
-    void visitanteEhUnicoPorTenant() {
-        UUID visitante = UUID.randomUUID();
-        TenantContexto.executar(tenant, () -> leads.save(novoLead(visitante, 1)));
+    void sessaoDoChatbotEhUnicaPorTenant() {
+        UUID sessao = UUID.randomUUID();
+        TenantContexto.executar(tenant, () -> leads.save(novoLead(sessao, 1)));
 
-        TenantContexto.executar(outroTenant, () -> leads.save(novoLead(visitante, 1)));
-        assertThatThrownBy(() -> TenantContexto.executar(tenant, () -> leads.saveAndFlush(novoLead(visitante, 2))))
+        TenantContexto.executar(outroTenant, () -> leads.save(novoLead(sessao, 1)));
+        assertThatThrownBy(() -> TenantContexto.executar(tenant, () -> leads.saveAndFlush(novoLead(sessao, 2))))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void envioEhUnicoPorTenantEGuardaRespostasECanal() {
+        UUID envio = UUID.randomUUID();
+        UUID formulario = UUID.randomUUID();
+        UUID contato = UUID.randomUUID();
+        Lead salvo = TenantContexto.calcular(tenant, () -> {
+            Lead lead = new Lead(OrigemLead.LANDING_PAGE, 3);
+            lead.vincularEnvio(envio, formulario, CanalLead.LANDING_PAGE);
+            lead.vincularCrm(UUID.randomUUID(), contato);
+            return leads.save(lead);
+        });
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM marketing.leads WHERE envio_id IS NOT NULL AND envio_lido_em IS NULL AND id = ?",
+                Integer.class, salvo.getId())).as("leitura pendente").isEqualTo(1);
+
+        TenantContexto.executar(tenant, () -> {
+            Lead lead = leads.findByEnvioId(envio).orElseThrow();
+            lead.registrarRespostas(List.of(Map.of("campoId", UUID.randomUUID().toString(), "rotulo", "Cargo",
+                    "tipo", "LISTA_OPCOES", "valor", "Decisor")), false, AGORA);
+            leads.saveAndFlush(lead);
+        });
+
+        Lead lido = TenantContexto.calcular(tenant, () -> leads.findFirstByCrmContatoIdOrderByCriadoEmAsc(contato))
+                .orElseThrow();
+        assertThat(lido.getId()).isEqualTo(salvo.getId());
+        assertThat(lido.getCanal()).isEqualTo(CanalLead.LANDING_PAGE);
+        assertThat(lido.getFormularioId()).isEqualTo(formulario);
+        assertThat(lido.getEnvioLidoEm()).isEqualTo(AGORA);
+        assertThat(lido.getDadosFormulario()).singleElement()
+                .satisfies(resposta -> assertThat(resposta).containsEntry("rotulo", "Cargo"));
+        TenantContexto.executar(outroTenant, () -> assertThat(leads.findByEnvioId(envio)).isEmpty());
+
+        assertThatThrownBy(() -> TenantContexto.executar(tenant, () -> {
+            Lead repetido = new Lead(OrigemLead.LANDING_PAGE, 3);
+            repetido.vincularEnvio(envio, formulario, CanalLead.FORMULARIO);
+            leads.saveAndFlush(repetido);
+        })).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void bancoRecusaCanalEOrigemDeConsentimentoForaDoContrato() {
+        Lead lead = TenantContexto.calcular(tenant, () -> leads.save(novoLead(UUID.randomUUID(), 1)));
+
+        assertThatThrownBy(() -> jdbc.update("UPDATE marketing.leads SET canal = 'whatsapp' WHERE id = ?",
+                lead.getId())).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO marketing.lead_consentimentos
+                    (id, tenant_id, lead_id, finalidade, aceito, registrado_em, origem, created_at, updated_at)
+                VALUES (?, ?, ?, 'marketing', true, now(), 'landing.contato.informado', now(), now())
+                """, UUID.randomUUID(), tenant, lead.getId())).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO marketing.lead_eventos (id, tenant_id, lead_id, tipo_evento, created_at, updated_at)
+                VALUES (?, ?, ?, 'formulario_atualizado', now(), now())
+                """, UUID.randomUUID(), tenant, lead.getId())).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -140,10 +196,11 @@ class LeadRepositoryTest extends BancoDeTeste {
         Lead lead = TenantContexto.calcular(tenant, () -> leads.save(novoLead(UUID.randomUUID(), 1)));
         UUID formulario = UUID.randomUUID();
 
+        String texto = "Autorizo o uso dos meus dados para contato comercial. ".repeat(10);
+
         TenantContexto.executar(tenant, () -> {
-            consentimentos.save(LeadConsentimento.doLanding(lead.getId(), OrigemConsentimento.CONTATO_INFORMADO,
-                    true, AGORA, "203.0.113.10", "Mozilla/5.0", "v1", formulario, 1, UUID.randomUUID(),
-                    UUID.randomUUID()));
+            consentimentos.save(LeadConsentimento.doLanding(lead.getId(), OrigemConsentimento.FORMULARIO_RECEBIDO,
+                    true, AGORA, texto, formulario, UUID.randomUUID(), null, UUID.randomUUID()));
             consentimentos.save(LeadConsentimento.revogacaoPorDescadastro(lead.getId(), AGORA.plusDays(3),
                     "2001:db8::1", "Mozilla/5.0"));
         });
@@ -157,6 +214,9 @@ class LeadRepositoryTest extends BancoDeTeste {
                 () -> consentimentos.findByLeadIdOrderByRegistradoEmDescCriadoEmDesc(lead.getId())))
                 .extracting(LeadConsentimento::getFormularioId)
                 .containsExactly(null, formulario);
+        assertThat(TenantContexto.calcular(tenant,
+                () -> consentimentos.findByLeadIdOrderByRegistradoEmDescCriadoEmDesc(lead.getId())).get(1)
+                .getTextoTermo()).as("texto longo cabe na coluna text").isEqualTo(texto);
     }
 
     @Test
@@ -166,9 +226,9 @@ class LeadRepositoryTest extends BancoDeTeste {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
-    private static Lead novoLead(UUID visitante, int etapa) {
+    private static Lead novoLead(UUID sessao, int etapa) {
         Lead lead = new Lead(OrigemLead.LANDING_PAGE, etapa);
-        lead.vincularVisitante(visitante);
+        lead.vincularSessao(sessao);
         return lead;
     }
 

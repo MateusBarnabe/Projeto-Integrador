@@ -7,7 +7,7 @@ import br.com.centinela.marketing.compartilhado.dados.ValorPersistido;
 public enum TipoEventoLead implements ValorPersistido {
 
     ETAPA_ALTERADA("etapa_alterada"),
-    FORMULARIO_ATUALIZADO("formulario_atualizado"),
+    RESPOSTAS_LIDAS("respostas_lidas"),
     COMUNICACAO_ENVIADA("comunicacao_enviada"),
     CONSENTIMENTO_REGISTRADO("consentimento_registrado"),
     QUALIFICACAO_ALTERADA("qualificacao_alterada"),
