@@ -92,17 +92,21 @@ marketing-api/
     │   │   │       ├── TratadorDeErros.java
     │   │   │       └── RequestIdFilter.java
     │   │   ├── leads/                         lead, timeline e consentimentos (D1)
+    │   │   ├── qualificacao/                  regras de pontuação, faixas e rodízio (D5)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
     │       ├── application-dev.yml            perfil dev (Flyway fora de ordem)
     │       └── db/migration/                  migrations do Flyway
     │           ├── V1__cria_eventos_processados.sql
-    │           └── V2__cria_leads.sql
+    │           ├── V2__cria_leads.sql
+    │           └── V6__cria_qualificacao.sql
     └── test/java/br/com/centinela/marketing/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
         ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
-        └── leads/                             regras do lead e testes da V2
+        ├── compartilhado/mensageria/          testes do publicador (Testcontainers com RabbitMQ)
+        ├── leads/                             regras do lead e testes da V2
+        └── qualificacao/                      regras da qualificação e testes da V6
 ```
 
 **Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `formularios/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (buffer e consumidores). Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
@@ -210,6 +214,7 @@ Cada tarefa de dados do [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md) tem um núme
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
 | `V2__cria_leads.sql` | D1: `leads` (com `temperatura` gerada a partir da `etapa`), `lead_eventos` (com `sequencia` por identidade, usada pelo SSE) e `lead_consentimentos` (só inclusão). Chaves únicas `(tenant_id, visitante_id)`, `(tenant_id, meta_lead_id)` e `token_descadastro`; `CHECK` nos valores fechados do norteador (etapa, origem, faixa, status e tipos) |
+| `V6__cria_qualificacao.sql` | D5: `regras_pontuacao` (`valores` em `jsonb`; cada fonte preenche só o próprio alvo: `formulario_id` e `campo_id` do Landing em `campo_formulario`, `campo_meta` em `campo_meta`, nada em `utm`), `qualificacao_configuracoes` (uma por tenant; `dias_atendimento` em `smallint[]` de 1 a 7; morno abaixo de quente; início antes do fim) e `vendedores_rodizio` (único por `(tenant_id, vendedor_id)`) |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -242,6 +247,18 @@ Pacote `leads`, com as três tabelas da `V2`:
 | `OrigemLead`, `Temperatura`, `StatusAquecimento`, `FaixaQualificacao`, `TipoEventoLead`, `OrigemConsentimento` | valores fechados das colunas |
 
 Fora de requisição (jobs, consumidores de eventos), toda leitura e gravação deve rodar dentro de `TenantContexto.executar(tenant, ...)`: o Hibernate fixa o tenant quando abre a sessão e usa esse valor tanto para preencher `tenant_id` quanto para filtrar as consultas, inclusive o `findById`. Por isso ainda não há busca por `token_descadastro`: a rota pública de descadastro (E7) não tem tenant no token e precisa resolver o tenant antes de consultar.
+
+### Qualificação (D5)
+
+Pacote `qualificacao`, com as três tabelas da `V6` (norteador §3 e §9.3). O cálculo da pontuação é da Q1 e o rodízio da Q2; aqui ficam os dados e as validações de cada registro.
+
+| Classe | O que é |
+|---|---|
+| `RegraPontuacao` | critério da pontuação. `porCampo(criterio, formularioId, campoId, valores, pontos)` para a resposta de um campo de formulário do Landing (ids do resumo do formulário, sem FK), `porCampoMeta(criterio, pergunta, valores, pontos)` para o formulário instantâneo do Meta e `porUtm(criterio, valores, pontos)` para a origem do tráfego. `alterar` muda critério, valores e pontos; `apontarPara...` troca a fonte e limpa o alvo anterior. Recusa critério vazio, alvo incompleto, lista de valores vazia e pontos negativos |
+| `QualificacaoConfiguracao` | faixas e rodízio do tenant. `padrao()` traz os valores iniciais das Regras de Negócio: MQL quente a partir de 70, morno a partir de 40, rodízio ligado, de segunda a sexta das 8h às 18h e transbordo de 15 minutos. Os dias de atendimento saem como `Set<DayOfWeek>`, com a mesma numeração do banco (1 = segunda) |
+| `VendedorRodizio` | vendedor na escala, só com o UUID do identity. `registrarAtribuicao` move o vendedor para o fim da fila |
+| `FonteRegra` | `campo_formulario`, `campo_meta` ou `utm`, gravado pelo `ConversorDeValor` |
+| `RegraPontuacaoRepository`, `QualificacaoConfiguracaoRepository`, `VendedorRodizioRepository` | Spring Data. `findByAtivoTrueAndFormularioId` traz as regras do formulário de um envio e `findByAtivoTrueAndFonte` as de UTM e do Meta, para o motor da Q1; `findFirstBy` devolve a configuração do tenant atual |
 
 ## Endpoints atuais
 
@@ -277,5 +294,7 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 |---|---|
 | `leads.LeadTest` | etapa nunca rebaixa, contato vazio não apaga dado, regra de promoção, token de descadastro, consentimento repetido e corte do *User-Agent* |
 | `leads.LeadRepositoryTest` | a `V2` contra o banco real: sete colunas, `temperatura` gerada (também ao avançar a etapa), isolamento por tenant no `findById` e nas consultas, unicidade de `visitante_id` e `meta_lead_id` por tenant, soft delete, ordem da timeline, histórico de consentimentos e FK do evento para o lead |
+| `qualificacao.QualificacaoTest` | valores padrão das Regras de Negócio e recusa de limites, horários, dias e regras incoerentes |
+| `qualificacao.QualificacaoRepositoryTest` | a `V6` contra o banco real: valores das regras em JSON, filtro de ativas por formulário e por fonte, `CHECK` do alvo de cada fonte, configuração única por tenant com `dias_atendimento` em array, e vendedor único na escala do tenant |
 
 Os testes do checklist da plataforma (§15) que faltam, como `403` sem permissão, cabeçalho de 32 KB e `404` para dado de outro tenant, dependem das primeiras rotas de negócio (tarefa F7).
