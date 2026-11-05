@@ -1,22 +1,22 @@
 # landing-web (placeholder do Landing)
 
-> **Este app não é o nosso módulo.** A landing page, o formulário público e os eventos do funil são do **módulo Landing, do Grupo 7**. Este é um *placeholder*: uma imitação mínima e descartável, que cumpre o mesmo contrato que pedimos ao Grupo 7 e serve só para testar localmente a jornada inteira do lead.
+> **Este app não é o nosso módulo.** A landing page, os formulários, os envios e os eventos `landing.*` são do **módulo Landing, do Grupo 7**. Este é um *placeholder*: uma imitação mínima e descartável, que cumpre o contrato publicado pelo Grupo 7 e serve só para testar localmente a jornada inteira do lead.
 
 A jornada que ele permite testar:
 
 1. o visitante chega pelo anúncio, com UTM na URL;
-2. clica em "Fale conosco" e preenche o formulário, cujos campos foram montados no construtor do Marketing;
-3. cada passo publica um evento no RabbitMQ (`landing.*`), que o Marketing consome;
-4. no envio, o Marketing cria a oportunidade no CRM.
+2. clica em "Fale conosco" e preenche um formulário de exemplo, definido aqui mesmo (o formulário é do Landing);
+3. no envio, o placeholder cria empresa, contato e oportunidade no stub do CRM e publica `landing.formulario.recebido`;
+4. o Marketing consome o evento, lê as respostas em `GET /api/landing/envios/{id}` e liga o lead à oportunidade quando recebe `crm.oportunidade.criada`.
 
 Quando o Landing real existir, basta desligar este app e apontar o Marketing para o módulo do Grupo 7. O placeholder usa o mesmo nome de serviço (`landing`), a mesma porta (`8088`) e as mesmas rotas (`/api/landing/**`), então **o código do Marketing não muda**.
 
 O contrato que ele imita:
 
-- [Docs/contratos/landing-requisitos.md](../Docs/contratos/landing-requisitos.md): o que pedimos ao Grupo 7;
-- [Docs/contratos/landing-eventos-propostos.asyncapi.yaml](../Docs/contratos/landing-eventos-propostos.asyncapi.yaml): os cinco eventos.
+- `contratos/landing.yaml` e `contratos/landing.asyncapi.yaml` do `infra-integrador-2026`: o contrato publicado pelo Grupo 7;
+- [Docs/contratos/landing-requisitos.md](../Docs/contratos/landing-requisitos.md): o que consumimos e o que ainda pedimos a eles.
 
-> **Estado atual (25/09/2026): esqueleto.** A página de exemplo e o `/api/landing/health` funcionam. O formulário, os eventos e a gravação dos envios ainda não existem (tarefas L1 a L5 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
+> **Estado atual (25/09/2026, revisado em 05/11/2026): esqueleto.** A página de exemplo e o `/api/landing/health` funcionam. O formulário, os eventos, a gravação dos envios e o stub do CRM ainda não existem (tarefas L1 a L5 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
 
 | | |
 |---|---|
@@ -55,7 +55,6 @@ Em container, roda **um processo só**: o servidor Node entrega a página (o bui
 | Variável | Padrão | Para quê |
 |---|---|---|
 | `PORTA` | `8088` | porta do servidor Node |
-| `MARKETING_API_URL` | `http://localhost:8087` | API do Marketing, de onde vem a definição do formulário |
 | `RABBITMQ_URL` | `amqp://mq_landing:mq_landing@localhost:5672/plataforma` | RabbitMQ; conecta como `mq_landing`, porque o `user_id` das mensagens precisa bater com o usuário |
 | `SERVIDOR_PROXY_ALVO` | `http://localhost:8088` | para onde o Vite repassa `/api/landing` em desenvolvimento |
 
@@ -88,11 +87,11 @@ Servidor Express. Hoje tem:
 - `GET /api/landing/health`: `200` com `{"status": "UP"}` no envelope;
 - entrega da página: se `dist/` existir, como no container, serve os arquivos e manda qualquer outra rota para o `index.html`. Em desenvolvimento, quem entrega a página é o Vite.
 
-É aqui que vão entrar a publicação dos eventos no RabbitMQ, a gravação dos envios e o `GET /api/landing/envios/{envioId}`.
+É aqui que vão entrar a publicação dos eventos no RabbitMQ, a gravação dos envios, o `GET /api/landing/envios/{id}` e o `GET /api/landing/formularios/{id}/resumo`.
 
 ### `server/config.ts`
 
-Objeto `config` com `porta`, `marketingApiUrl` e `rabbitmqUrl`, lidos das variáveis de ambiente.
+Objeto `config` com `porta` e `rabbitmqUrl`, lidos das variáveis de ambiente. O placeholder não chama a API do Marketing, assim como o Landing real.
 
 ### `server/envelope.ts`
 
@@ -100,7 +99,7 @@ Tipo `Resposta<T>` e as funções `ok(data)` e `erro(mensagem, erros?)`, no mesm
 
 ### `src/App.tsx`
 
-Landing page de um tenant de teste ("Empresa A · Consultoria"): chamada principal, botão **Fale conosco** e três cartões de benefícios. O botão abre o espaço onde o formulário vai aparecer. Hoje esse espaço mostra só um texto explicando que ali entra o formulário montado a partir da definição publicada no Marketing.
+Landing page de um tenant de teste ("Empresa A · Consultoria"): chamada principal, botão **Fale conosco** e três cartões de benefícios. O botão abre o espaço onde o formulário vai aparecer. Hoje esse espaço mostra só um texto explicando que ali entra o formulário de exemplo do placeholder.
 
 ### `src/AvisoPlaceholder.tsx`
 
@@ -110,19 +109,16 @@ Faixa amarela no topo: "Placeholder do Landing (Grupo 7) para testes locais do G
 
 Detalhes e dependências em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md), tarefas L1 a L5:
 
-1. **Visitante e UTM:** gerar o `visitanteId` num cookie e guardar UTM, `fbclid` e `gclid` da URL.
-2. **Eventos:** publicar os cinco eventos em `landing.eventos`, com o envelope da §9.7, `moduloOrigem: "landing"` e `user_id = mq_landing`:
+1. **Página e UTM (L1):** guardar a primeira e a última origem (UTM, `fbclid`, `gclid`, referenciador e página de entrada) e mostrar um formulário de exemplo, com o aceite de consentimento.
+2. **Eventos (L2):** publicar em `landing.eventos`, com o envelope da §9.7, `moduloOrigem: "landing"` e `user_id = mq_landing`, os dois eventos do `landing.asyncapi.yaml`:
 
-   | Quando | Evento | Etapa do funil |
+   | Quando | Evento | Etapa no Marketing |
    |---|---|---|
-   | chegou pela URL com UTM | `landing.visita.registrada` | 0 |
-   | clicou em "Fale conosco" | `landing.formulario.aberto` | 0 |
-   | preencheu nome, telefone e e-mail | `landing.contato.informado` | 1 |
-   | preencheu "grande parte" (ex.: 50% dos campos) | `landing.formulario.atualizado` | 2 |
-   | enviou | `landing.formulario.recebido` | 3 |
+   | o chatbot de exemplo recebe e-mail ou telefone, com consentimento | `landing.chatbot.lead_capturado` (`sessaoId`, contato, origem, consentimento) | 1 |
+   | o formulário é enviado | `landing.formulario.recebido` (`envioId`, `formularioId`, `canal`, `empresaId`, `contatoId`) | 3 |
 
-3. **Formulário a partir do Marketing:** ler `GET /api/marketing/formularios/{id}`, com cache pela versão, e desenhar os campos fixos (nome, e-mail, telefone e aceite de marketing, com a versão do termo) e os configuráveis.
-4. **Envios:** gravar as respostas e expor `GET /api/landing/envios/{envioId}`.
-5. **Etapa 3:** criar ou reaproveitar empresa e contato no CRM (stub). **Nunca** criar a oportunidade, porque isso é do Marketing.
+   A etapa não vai no evento: quem decide é o Marketing.
+3. **Envios (L3):** gravar as respostas e expor `GET /api/landing/envios/{id}` e `GET /api/landing/formularios/{id}/resumo`, no formato do `landing.yaml`.
+4. **CRM (L4 e L5):** no envio, antes do evento, criar empresa, contato e oportunidade no stub do CRM, com `origem: landing` e `origemModuloId` igual ao `envioId`. O stub publica `crm.oportunidade.criada` em `crm.eventos`.
 
 **Regras de desacoplamento:** o Marketing nunca importa código daqui, e este app nunca lê o schema `marketing`. Os dois conversam só por RabbitMQ e HTTP, como o Landing real faria. Se o Grupo 7 mudar um nome ou formato, atualize primeiro o contrato em `Docs/contratos/`, depois este placeholder e o consumidor do Marketing.

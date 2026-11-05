@@ -1,6 +1,6 @@
 # Projeto Integrador 2026 · Grupo 4 · Marketing e Automações
 
-Módulo `marketing` da plataforma integrada do Projeto Integrador 2026 (PUC Goiás, Análise e Desenvolvimento de Sistemas). Cuida da captação e do funil de leads (Meta Ads e landing pages), da confirmação de boas-vindas e do aquecimento por e-mail, da qualificação (lead scoring e MQL), do rodízio entre vendedores, do painel da pessoa gestora de marketing e dos campos do formulário de captação.
+Módulo `marketing` da plataforma integrada do Projeto Integrador 2026 (PUC Goiás, Análise e Desenvolvimento de Sistemas). Cuida da captação e do funil de leads (Meta Ads e landing pages), da confirmação de boas-vindas e do aquecimento por e-mail, da qualificação (lead scoring e MQL), do rodízio entre vendedores e do painel da pessoa gestora de marketing. Os formulários e os envios são do Landing (Grupo 7); o Marketing lê as respostas pela API dele.
 
 O módulo roda dentro da plataforma do Grupo 2 (`infra-integrador-2026`) e conversa com o CRM (Grupo 6) e com o Landing (Grupo 7) por API e eventos no RabbitMQ.
 
@@ -27,7 +27,7 @@ Cada pasta tem um README com a estrutura, os arquivos e as classes: [marketing-a
 | `marketing-web` | Front que a casca abre em `/modulos/marketing/` | 3007 | `marketing-front` |
 | `landing-web` | Página do tenant (Vite na 3008 em desenvolvimento) e API `/api/landing/**` | 8088 | não vai para a plataforma |
 
-O `landing-web` **não é nosso módulo**: é um placeholder que cumpre o mesmo contrato que pedimos ao Grupo 7 ([landing-requisitos.md](Docs/contratos/landing-requisitos.md)). Ele serve para testar a jornada inteira localmente, do anúncio à oportunidade no CRM, passando pelo construtor de formulário da Etapa 2. Ele usa o nome de serviço e a porta do Landing real (`landing:8088`), então a troca pelo módulo do Grupo 7 é só de configuração, sem mudar o código do Marketing.
+O `landing-web` **não é nosso módulo**: é um placeholder que imita o contrato publicado pelo Grupo 7 (`landing.yaml` e `landing.asyncapi.yaml` do infra; o que consumimos está em [landing-requisitos.md](Docs/contratos/landing-requisitos.md)). Ele serve para testar a jornada inteira localmente, do anúncio à oportunidade no CRM. Ele usa o nome de serviço e a porta do Landing real (`landing:8088`), então a troca pelo módulo do Grupo 7 é só de configuração, sem mudar o código do Marketing.
 
 ## Pré-requisitos
 
@@ -97,7 +97,7 @@ O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador
 | Arquivo | Conteúdo |
 |---|---|
 | [documento-norteador.md](Docs/documento-norteador.md) | **Fonte da verdade do grupo:** etapas do projeto, funil, tabelas, jobs, endpoints, permissões, mensageria, Etapa 2, testes e pendências. O `.html` é a mesma coisa em página |
-| [contratos/](Docs/contratos/) | O que atravessa a fronteira do módulo: OpenAPI e AsyncAPI do Marketing e o que pedimos ao Landing |
+| [contratos/](Docs/contratos/) | O que atravessa a fronteira do módulo: OpenAPI e AsyncAPI do Marketing (cópias do infra) e o que consumimos e pedimos ao Landing |
 | [permissoes/marketing.yaml](Docs/permissoes/marketing.yaml) · [modulos/marketing.json](Docs/modulos/marketing.json) | Permissões e registro no menu da casca, para o PR no `infra-integrador-2026` |
 | [DesignSystem/](Docs/DesignSystem/) | Design System Centinela: tokens, componentes e padrões de tela |
 | [Fluxo.md](Docs/Fluxo.md) · [Requisitos.md](Docs/Requisitos.md) · [Regras de Negocio.md](Docs/Regras%20de%20Negocio.md) · [LGPD.md](Docs/LGPD.md) · [Troubleshooting.md](Docs/Troubleshooting.md) | Levantamento de negócio: fluxo do lead, requisitos, pontuação e rodízio, LGPD e operação |
