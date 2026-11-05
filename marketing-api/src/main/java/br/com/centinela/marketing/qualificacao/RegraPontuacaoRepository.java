@@ -10,6 +10,9 @@ public interface RegraPontuacaoRepository extends JpaRepository<RegraPontuacao, 
 
     List<RegraPontuacao> findByAtivoTrue();
 
-    /** Usado para avisar antes de remover do formulário um campo que pontua (§9.5). */
-    boolean existsByCampoChaveAndAtivoTrue(String campoChave);
+    /** Regras ativas de uma fonte, ex.: as de UTM, que valem para todo lead. */
+    List<RegraPontuacao> findByAtivoTrueAndFonte(FonteRegra fonte);
+
+    /** Regras ativas dos campos de um formulário do Landing, para pontuar um envio dele. */
+    List<RegraPontuacao> findByAtivoTrueAndFormularioId(UUID formularioId);
 }

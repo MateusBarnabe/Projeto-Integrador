@@ -39,35 +39,59 @@ class QualificacaoRepositoryTest extends BancoDeTeste {
 
     @Test
     void regrasGuardamValoresEmJsonEFiltramAsAtivas() {
+        UUID formulario = UUID.randomUUID();
+        UUID outroFormulario = UUID.randomUUID();
+        UUID campoCargo = UUID.randomUUID();
         TenantContexto.executar(tenant, () -> {
-            regras.save(RegraPontuacao.porCampo("Cargo", "cargo", List.of("Decisor", "Sócio"), 30));
+            regras.save(RegraPontuacao.porCampo("Cargo", formulario, campoCargo, List.of("Decisor", "Sócio"), 30));
+            regras.save(RegraPontuacao.porCampo("Cargo", outroFormulario, UUID.randomUUID(), List.of("Gerente"), 30));
+            regras.save(RegraPontuacao.porCampoMeta("Cargo", "qual_o_seu_cargo", List.of("Decisor"), 30));
             regras.save(RegraPontuacao.porUtm("Origem do tráfego",
                     List.of(Map.of("source", "google", "medium", "cpc"), Map.of("direto", true)), 20));
-            RegraPontuacao inativa = RegraPontuacao.porCampo("Prazo", "prazo", List.of("Imediato"), 25);
+            RegraPontuacao inativa = RegraPontuacao.porCampo("Prazo", formulario, UUID.randomUUID(),
+                    List.of("Imediato"), 25);
             inativa.desativar();
             regras.save(inativa);
         });
 
         TenantContexto.executar(tenant, () -> {
-            List<RegraPontuacao> ativas = regras.findByAtivoTrue();
-            assertThat(ativas).extracting(RegraPontuacao::getCriterio)
-                    .containsExactlyInAnyOrder("Cargo", "Origem do tráfego");
-            RegraPontuacao utm = ativas.stream().filter(r -> r.getFonte() == FonteRegra.UTM).findFirst().orElseThrow();
+            assertThat(regras.findByAtivoTrue()).hasSize(4);
+            assertThat(regras.findByAtivoTrueAndFormularioId(formulario))
+                    .as("só as ativas do formulário")
+                    .singleElement()
+                    .satisfies(regra -> {
+                        assertThat(regra.getCampoId()).isEqualTo(campoCargo);
+                        assertThat(regra.getValores()).containsExactly("Decisor", "Sócio");
+                    });
+            assertThat(regras.findByAtivoTrueAndFonte(FonteRegra.CAMPO_META))
+                    .extracting(RegraPontuacao::getCampoMeta).containsExactly("qual_o_seu_cargo");
+            RegraPontuacao utm = regras.findByAtivoTrueAndFonte(FonteRegra.UTM).getFirst();
             assertThat(utm.getValores()).containsExactly(
                     Map.of("source", "google", "medium", "cpc"), Map.of("direto", true));
-            assertThat(regras.existsByCampoChaveAndAtivoTrue("cargo")).isTrue();
-            assertThat(regras.existsByCampoChaveAndAtivoTrue("prazo")).as("regra inativa").isFalse();
         });
+        TenantContexto.executar(UUID.randomUUID(),
+                () -> assertThat(regras.findByAtivoTrueAndFormularioId(formulario)).as("outro tenant").isEmpty());
     }
 
     @Test
-    void bancoExigeChaveNaRegraDeCampo() {
-        assertThatThrownBy(() -> jdbc.update("""
+    void bancoExigeOAlvoCertoParaCadaFonte() {
+        String insert = """
                 INSERT INTO marketing.regras_pontuacao
-                    (id, tenant_id, criterio, fonte, valores, pontos, created_at, updated_at)
-                VALUES (?, ?, 'Cargo', 'campo_formulario', '["Decisor"]', 30, now(), now())
-                """, UUID.randomUUID(), tenant))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                    (id, tenant_id, criterio, fonte, formulario_id, campo_id, campo_meta, valores, pontos,
+                     created_at, updated_at)
+                VALUES (?, ?, 'Cargo', ?, ?, ?, ?, '["Decisor"]', 30, now(), now())
+                """;
+        UUID formulario = UUID.randomUUID();
+        UUID campo = UUID.randomUUID();
+
+        assertThatThrownBy(() -> jdbc.update(insert, UUID.randomUUID(), tenant, "campo_formulario",
+                formulario, null, null)).as("campo sem campo_id").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(insert, UUID.randomUUID(), tenant, "campo_meta",
+                null, null, null)).as("meta sem pergunta").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(insert, UUID.randomUUID(), tenant, "utm",
+                formulario, campo, null)).as("utm com campo").isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbc.update(insert, UUID.randomUUID(), tenant, "campo_formulario", formulario, campo, null))
+                .isEqualTo(1);
     }
 
     @Test

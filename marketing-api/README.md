@@ -183,7 +183,7 @@ Toda mudança de banco é uma migration do Flyway em `src/main/resources/db/migr
 | Migration | O que faz |
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
-| `V6__cria_qualificacao.sql` | D5: `regras_pontuacao` (`valores` em `jsonb`; regra de campo exige `campo_chave`), `qualificacao_configuracoes` (uma por tenant; `dias_atendimento` em `smallint[]` de 1 a 7; morno abaixo de quente; início antes do fim) e `vendedores_rodizio` (único por `(tenant_id, vendedor_id)`) |
+| `V6__cria_qualificacao.sql` | D5: `regras_pontuacao` (`valores` em `jsonb`; cada fonte preenche só o próprio alvo: `formulario_id` e `campo_id` do Landing em `campo_formulario`, `campo_meta` em `campo_meta`, nada em `utm`), `qualificacao_configuracoes` (uma por tenant; `dias_atendimento` em `smallint[]` de 1 a 7; morno abaixo de quente; início antes do fim) e `vendedores_rodizio` (único por `(tenant_id, vendedor_id)`) |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -207,11 +207,11 @@ Pacote `qualificacao`, com as três tabelas da `V6` (norteador §3 e §9.3). O c
 
 | Classe | O que é |
 |---|---|
-| `RegraPontuacao` | critério da pontuação. `porCampo(criterio, chave, valores, pontos)` para respostas do formulário e `porUtm(criterio, valores, pontos)` para a origem do tráfego; recusa critério vazio, lista de valores vazia e pontos negativos. Em `utm`, `campo_chave` fica nulo |
+| `RegraPontuacao` | critério da pontuação. `porCampo(criterio, formularioId, campoId, valores, pontos)` para a resposta de um campo de formulário do Landing (ids do resumo do formulário, sem FK), `porCampoMeta(criterio, pergunta, valores, pontos)` para o formulário instantâneo do Meta e `porUtm(criterio, valores, pontos)` para a origem do tráfego. `alterar` muda critério, valores e pontos; `apontarPara...` troca a fonte e limpa o alvo anterior. Recusa critério vazio, alvo incompleto, lista de valores vazia e pontos negativos |
 | `QualificacaoConfiguracao` | faixas e rodízio do tenant. `padrao()` traz os valores iniciais das Regras de Negócio: MQL quente a partir de 70, morno a partir de 40, rodízio ligado, de segunda a sexta das 8h às 18h e transbordo de 15 minutos. Os dias de atendimento saem como `Set<DayOfWeek>`, com a mesma numeração do banco (1 = segunda) |
 | `VendedorRodizio` | vendedor na escala, só com o UUID do identity. `registrarAtribuicao` move o vendedor para o fim da fila |
-| `FonteRegra` | `campo_formulario` ou `utm`, gravado pelo `ConversorDeValor` |
-| `RegraPontuacaoRepository`, `QualificacaoConfiguracaoRepository`, `VendedorRodizioRepository` | Spring Data. `existsByCampoChaveAndAtivoTrue` serve para o aviso de "campo usado em regra" da tela de formulários; `findFirstBy` devolve a configuração do tenant atual |
+| `FonteRegra` | `campo_formulario`, `campo_meta` ou `utm`, gravado pelo `ConversorDeValor` |
+| `RegraPontuacaoRepository`, `QualificacaoConfiguracaoRepository`, `VendedorRodizioRepository` | Spring Data. `findByAtivoTrueAndFormularioId` traz as regras do formulário de um envio e `findByAtivoTrueAndFonte` as de UTM e do Meta, para o motor da Q1; `findFirstBy` devolve a configuração do tenant atual |
 
 Os valores fechados do norteador viram enums Java que implementam `ValorPersistido`, com um `Conversor` (subclasse de `ConversorDeValor`) para gravar o valor do norteador, e não o nome da constante.
 
@@ -239,6 +239,6 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | Teste | O que confere |
 |---|---|
 | `qualificacao.QualificacaoTest` | valores padrão das Regras de Negócio e recusa de limites, horários, dias e regras incoerentes |
-| `qualificacao.QualificacaoRepositoryTest` | a `V6` contra o banco real: valores das regras em JSON, filtro de ativas, `CHECK` da chave de campo, configuração única por tenant com `dias_atendimento` em array, e vendedor único na escala do tenant |
+| `qualificacao.QualificacaoRepositoryTest` | a `V6` contra o banco real: valores das regras em JSON, filtro de ativas por formulário e por fonte, `CHECK` do alvo de cada fonte, configuração única por tenant com `dias_atendimento` em array, e vendedor único na escala do tenant |
 
 Os testes do checklist da plataforma (§15) que faltam, como `403` sem permissão, cabeçalho de 32 KB e `404` para dado de outro tenant, dependem das primeiras rotas de negócio (tarefa F7).

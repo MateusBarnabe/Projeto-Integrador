@@ -2,6 +2,7 @@ package br.com.centinela.marketing.qualificacao;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLDelete;
@@ -17,6 +18,9 @@ import jakarta.persistence.Table;
 /**
  * Critério da pontuação do lead (§9.3). Cada critério conta uma vez por lead: se duas regras do
  * mesmo critério baterem, vale a de mais pontos (isso é do motor de pontuação, Q1).
+ *
+ * <p>O formulário é do Landing: a regra de campo aponta para um campo de um formulário pelos ids do
+ * resumo do formulário ({@code GET /api/landing/formularios/{id}/resumo}). Só o UUID, sem FK.
  */
 @Entity
 @Table(name = "regras_pontuacao")
@@ -31,10 +35,16 @@ public class RegraPontuacao extends EntidadeBase {
     @Convert(converter = FonteRegra.Conversor.class)
     private FonteRegra fonte;
 
-    @Column(name = "campo_chave")
-    private String campoChave;
+    @Column(name = "formulario_id")
+    private UUID formularioId;
 
-    /** Em {@code campo_formulario}, as respostas (texto); em {@code utm}, objetos com source, medium etc. */
+    @Column(name = "campo_id")
+    private UUID campoId;
+
+    @Column(name = "campo_meta")
+    private String campoMeta;
+
+    /** Em campos, as respostas (texto); em {@code utm}, objetos com source, medium etc. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "valores", nullable = false)
     private List<Object> valores;
@@ -48,27 +58,35 @@ public class RegraPontuacao extends EntidadeBase {
     protected RegraPontuacao() {
     }
 
-    private RegraPontuacao(String criterio, FonteRegra fonte, String campoChave, List<?> valores, int pontos) {
-        alterar(criterio, fonte, campoChave, valores, pontos);
+    private RegraPontuacao(String criterio, List<?> valores, int pontos) {
+        alterar(criterio, valores, pontos);
     }
 
-    /** Regra sobre uma resposta do formulário, pela {@code chave} do campo. */
-    public static RegraPontuacao porCampo(String criterio, String campoChave, List<String> valores, int pontos) {
-        return new RegraPontuacao(criterio, FonteRegra.CAMPO_FORMULARIO, campoChave, valores, pontos);
+    /** Regra sobre a resposta de um campo de formulário do Landing. */
+    public static RegraPontuacao porCampo(String criterio, UUID formularioId, UUID campoId,
+            List<String> valores, int pontos) {
+        RegraPontuacao regra = new RegraPontuacao(criterio, valores, pontos);
+        regra.apontarParaCampo(formularioId, campoId);
+        return regra;
+    }
+
+    /** Regra sobre a resposta de uma pergunta do formulário instantâneo do Meta, pelo nome da pergunta. */
+    public static RegraPontuacao porCampoMeta(String criterio, String pergunta, List<String> valores, int pontos) {
+        RegraPontuacao regra = new RegraPontuacao(criterio, valores, pontos);
+        regra.apontarParaCampoMeta(pergunta);
+        return regra;
     }
 
     /** Regra sobre a origem do tráfego, ex.: {@code [{"source": "google", "medium": "cpc"}, {"direto": true}]}. */
     public static RegraPontuacao porUtm(String criterio, List<?> valores, int pontos) {
-        return new RegraPontuacao(criterio, FonteRegra.UTM, null, valores, pontos);
+        RegraPontuacao regra = new RegraPontuacao(criterio, valores, pontos);
+        regra.apontarParaUtm();
+        return regra;
     }
 
-    public void alterar(String criterio, FonteRegra fonte, String campoChave, List<?> valores, int pontos) {
+    public void alterar(String criterio, List<?> valores, int pontos) {
         if (criterio == null || criterio.isBlank()) {
             throw new IllegalArgumentException("Regra de pontuação sem critério.");
-        }
-        Objects.requireNonNull(fonte, "fonte");
-        if (fonte == FonteRegra.CAMPO_FORMULARIO && (campoChave == null || campoChave.isBlank())) {
-            throw new IllegalArgumentException("Regra sobre campo do formulário precisa da chave do campo.");
         }
         if (valores == null || valores.isEmpty()) {
             throw new IllegalArgumentException("Regra de pontuação sem valores que a disparem.");
@@ -77,10 +95,34 @@ public class RegraPontuacao extends EntidadeBase {
             throw new IllegalArgumentException("Pontos não podem ser negativos.");
         }
         this.criterio = criterio.strip();
-        this.fonte = fonte;
-        this.campoChave = fonte == FonteRegra.UTM ? null : campoChave.strip();
         this.valores = List.copyOf(valores);
         this.pontos = pontos;
+    }
+
+    public void apontarParaCampo(UUID formularioId, UUID campoId) {
+        Objects.requireNonNull(formularioId, "Regra sobre campo do formulário precisa do formulário.");
+        Objects.requireNonNull(campoId, "Regra sobre campo do formulário precisa do campo.");
+        this.fonte = FonteRegra.CAMPO_FORMULARIO;
+        this.formularioId = formularioId;
+        this.campoId = campoId;
+        this.campoMeta = null;
+    }
+
+    public void apontarParaCampoMeta(String pergunta) {
+        if (pergunta == null || pergunta.isBlank()) {
+            throw new IllegalArgumentException("Regra sobre o Meta precisa do nome da pergunta.");
+        }
+        this.fonte = FonteRegra.CAMPO_META;
+        this.formularioId = null;
+        this.campoId = null;
+        this.campoMeta = pergunta.strip();
+    }
+
+    public void apontarParaUtm() {
+        this.fonte = FonteRegra.UTM;
+        this.formularioId = null;
+        this.campoId = null;
+        this.campoMeta = null;
     }
 
     public void ativar() {
@@ -99,8 +141,16 @@ public class RegraPontuacao extends EntidadeBase {
         return fonte;
     }
 
-    public String getCampoChave() {
-        return campoChave;
+    public UUID getFormularioId() {
+        return formularioId;
+    }
+
+    public UUID getCampoId() {
+        return campoId;
+    }
+
+    public String getCampoMeta() {
+        return campoMeta;
     }
 
     public List<Object> getValores() {

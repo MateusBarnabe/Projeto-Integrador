@@ -9,6 +9,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,23 +41,38 @@ class QualificacaoTest {
     }
 
     @Test
-    void regraDeCampoPrecisaDaChaveEDeValores() {
-        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", " ", List.of("Decisor"), 30))
+    void regraDeCampoPrecisaDoFormularioDoCampoEDeValores() {
+        UUID formulario = UUID.randomUUID();
+        UUID campo = UUID.randomUUID();
+
+        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", null, campo, List.of("Decisor"), 30))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", formulario, null, List.of("Decisor"), 30))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", formulario, campo, List.of(), 30))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", "cargo", List.of(), 30))
+        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", formulario, campo, List.of("Decisor"), -1))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> RegraPontuacao.porCampo("Cargo", "cargo", List.of("Decisor"), -1))
+        assertThatThrownBy(() -> RegraPontuacao.porCampoMeta("Cargo", " ", List.of("Decisor"), 30))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void regraDeUtmNaoGuardaChaveDeCampo() {
-        RegraPontuacao regra = RegraPontuacao.porUtm("Origem do tráfego",
-                List.of(Map.of("source", "google", "medium", "cpc")), 20);
+    void trocarAFonteLimpaOAlvoAnterior() {
+        RegraPontuacao regra = RegraPontuacao.porCampo("Cargo", UUID.randomUUID(), UUID.randomUUID(),
+                List.of("Decisor"), 30);
 
-        regra.alterar("Origem do tráfego", FonteRegra.UTM, "cargo", List.of(Map.of("direto", true)), 10);
+        regra.apontarParaUtm();
+        regra.alterar("Origem do tráfego", List.of(Map.of("direto", true)), 10);
 
-        assertThat(regra.getCampoChave()).isNull();
+        assertThat(regra.getFonte()).isEqualTo(FonteRegra.UTM);
+        assertThat(regra.getFormularioId()).isNull();
+        assertThat(regra.getCampoId()).isNull();
         assertThat(regra.getPontos()).isEqualTo(10);
+
+        regra.apontarParaCampoMeta(" qual_o_seu_cargo ");
+
+        assertThat(regra.getFonte()).isEqualTo(FonteRegra.CAMPO_META);
+        assertThat(regra.getCampoMeta()).isEqualTo("qual_o_seu_cargo");
     }
 }

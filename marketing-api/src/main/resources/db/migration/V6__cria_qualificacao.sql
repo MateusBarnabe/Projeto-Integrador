@@ -6,9 +6,12 @@ CREATE TABLE marketing.regras_pontuacao (
     tenant_id    uuid NOT NULL,
     -- Nome amigável; cada critério conta uma vez por lead, valendo a regra de mais pontos
     criterio     varchar(100) NOT NULL,
-    fonte        varchar(20) NOT NULL CHECK (fonte IN ('campo_formulario', 'utm')),
-    -- chave do campo (§9.5), a mesma em todos os formulários do tenant
-    campo_chave  varchar(100),
+    fonte        varchar(20) NOT NULL CHECK (fonte IN ('campo_formulario', 'campo_meta', 'utm')),
+    -- Formulário e campo são do Landing (ids do resumo do formulário); só o UUID, sem FK
+    formulario_id uuid,
+    campo_id     uuid,
+    -- Nome da pergunta do formulário instantâneo do Meta
+    campo_meta   varchar(200),
     -- Respostas que disparam a regra; em utm, objetos como {"source": "google", "medium": "cpc"}
     valores      jsonb NOT NULL CHECK (jsonb_typeof(valores) = 'array'),
     pontos       int NOT NULL,
@@ -20,10 +23,16 @@ CREATE TABLE marketing.regras_pontuacao (
     created_by   uuid,
     updated_by   uuid,
 
-    CONSTRAINT ck_regras_pontuacao_campo CHECK (fonte <> 'campo_formulario' OR campo_chave IS NOT NULL)
+    -- Cada fonte preenche só o próprio alvo
+    CONSTRAINT ck_regras_pontuacao_alvo CHECK (
+        (fonte = 'campo_formulario' AND formulario_id IS NOT NULL AND campo_id IS NOT NULL AND campo_meta IS NULL)
+        OR (fonte = 'campo_meta' AND campo_meta IS NOT NULL AND formulario_id IS NULL AND campo_id IS NULL)
+        OR (fonte = 'utm' AND formulario_id IS NULL AND campo_id IS NULL AND campo_meta IS NULL)
+    )
 );
 
 CREATE INDEX ix_regras_pontuacao_tenant ON marketing.regras_pontuacao (tenant_id);
+CREATE INDEX ix_regras_pontuacao_formulario ON marketing.regras_pontuacao (tenant_id, formulario_id);
 
 
 -- Uma linha por tenant
