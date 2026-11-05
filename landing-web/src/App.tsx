@@ -51,8 +51,8 @@ export function App() {
       {formularioAberto && (
         <section className="mx-auto w-full max-w-xl px-6 pb-16">
           <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
-            Aqui entra o formulário montado a partir da definição publicada no módulo de Marketing
-            (GET /api/marketing/formularios/&#123;id&#125;).
+            Aqui entra o formulário de exemplo do placeholder. O formulário é do Landing: o
+            Marketing só recebe o evento do envio e lê as respostas em GET /api/landing/envios/&#123;id&#125;.
           </div>
         </section>
       )}
