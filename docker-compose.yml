@@ -52,6 +52,7 @@ services:
   marketing:
     build: ./marketing-api
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       DB_HOST: postgres
       DB_SENHA: ${MARKETING_APP_SENHA:-usr_marketing}
       FLYWAY_SENHA: ${MARKETING_OWNER_SENHA:-own_marketing}

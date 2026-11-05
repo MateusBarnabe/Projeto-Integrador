@@ -84,22 +84,28 @@ marketing-api/
     │   │   ├── MarketingApplication.java      ponto de entrada
     │   │   ├── compartilhado/                 o que todas as áreas usam
     │   │   │   ├── documentacao/OpenApiConfig.java
+    │   │   │   ├── mensageria/                envelope e publicação de eventos (F3)
     │   │   │   ├── seguranca/SegurancaConfig.java
     │   │   │   └── web/                       envelope, erros e X-Request-Id
     │   │   │       ├── Resposta.java
     │   │   │       ├── ErroCampo.java
     │   │   │       ├── TratadorDeErros.java
     │   │   │       └── RequestIdFilter.java
+    │   │   ├── leads/                         lead, timeline e consentimentos (D1)
     │   │   ├── qualificacao/                  regras de pontuação, faixas e rodízio (D5)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
+    │       ├── application-dev.yml            perfil dev (Flyway fora de ordem)
     │       └── db/migration/                  migrations do Flyway
     │           ├── V1__cria_eventos_processados.sql
+    │           ├── V2__cria_leads.sql
     │           └── V6__cria_qualificacao.sql
     └── test/java/br/com/centinela/marketing/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
         ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
+        ├── compartilhado/mensageria/          testes do publicador (Testcontainers com RabbitMQ)
+        ├── leads/                             regras do lead e testes da V2
         └── qualificacao/                      regras da qualificação e testes da V6
 ```
 
@@ -161,7 +167,29 @@ Configuração do Spring Security:
 - `401` ("Token ausente, inválido ou expirado.") e `403` ("Sem permissão para esta ação.") saem no formato do envelope;
 - `@EnableMethodSecurity` liga o `@PreAuthorize` para conferir permissões nos controllers (Contrato §5.2).
 
-O claim `perms` é convertido em *authorities* sem prefixo, para uso com `@PreAuthorize`. O `tenant_id` e o `sub` do token podem ser obtidos por `ContextoSeguranca.exigirUsuarioAtual()`, que devolve um `UsuarioAtual`. O tenant nunca é lido do corpo ou da query; tokens de serviço e o cabeçalho `X-Tenant-Id` entram nas tarefas de integração correspondentes.
+O claim `perms` é convertido em *authorities* sem prefixo, para uso com `@PreAuthorize`. O `tenant_id` e o `sub` do token podem ser obtidos por `ContextoSeguranca.exigirUsuarioAtual()`, que devolve um `UsuarioAtual`; `ContextoSeguranca.usuarioAtual()` devolve um `Optional`, vazio em rotina, rota pública ou token de serviço. O tenant nunca é lido do corpo ou da query; tokens de serviço e o cabeçalho `X-Tenant-Id` entram nas tarefas de integração correspondentes.
+
+### `compartilhado.mensageria` (F3)
+
+Publicação de mensagens no RabbitMQ, seguindo o Contrato §9.7 e o norteador §8:
+
+| Classe | O que é |
+|---|---|
+| `Evento` | *record* do envelope: `id`, `tipo`, `versao`, `tenantId`, `moduloOrigem` (`marketing`), `ocorridoEm` (UTC), `usuarioId`, `correlacaoId` e `dados` |
+| `PublicadorDeEventos` | o que o domínio chama. `publicar(tipo, versao, dados)` vai para a exchange `marketing.eventos`; `pedirAPlataforma(tipo, versao, dados)` vai para `identity.entrada`. A routing key é o tipo. Monta o envelope com o tenant de `TenantContexto`, o usuário do token (nulo em rotina e token de serviço) e o `X-Request-Id` como `correlacaoId`. Recusa tipo fora do padrão `modulo.entidade.acao` e chamada fora de transação |
+| `EnvioDeEventos` | `@TransactionalEventListener(AFTER_COMMIT)`: só envia depois do commit, então um rollback descarta a mensagem. Põe `user_id` igual ao usuário da conexão (`mq_marketing`), `message_id` igual ao `id` do envelope, `type` igual ao tipo e entrega persistente |
+| `MensageriaConfig` | mensagens em JSON com o `ObjectMapper` da API |
+
+Uso típico, dentro do serviço transacional que muda o dado:
+
+```java
+publicador.publicar("marketing.formulario.publicado", 1,
+        Map.of("formularioId", formulario.getId(), "versao", versao.getVersao(), "publicadoEm", versao.getPublicadoEm()));
+```
+
+Todo tipo novo precisa estar em [Docs/contratos/marketing.asyncapi.yaml](../Docs/contratos/marketing.asyncapi.yaml) antes de ser publicado, e `dados` não leva senha, token, segredo nem dado pessoal além do necessário.
+
+**Limite conhecido:** se o RabbitMQ estiver fora do ar no momento do envio, a transação já foi confirmada e o evento se perde; o erro vai para o log com o tipo, o `id` e o tenant, sem os dados. Se algum fluxo não puder perder evento, o caminho é uma tabela de saída (*outbox*) gravada na mesma transação.
 
 ### `compartilhado.documentacao.OpenApiConfig`
 
@@ -180,9 +208,12 @@ O Swagger documenta tudo o que a API tem. O contrato publicado para os outros gr
 
 Toda mudança de banco é uma migration do Flyway em `src/main/resources/db/migration`, com o nome `V<número>__descricao.sql` (dois sublinhados). O Flyway roda sozinho quando a API sobe, conectado como `own_marketing`, que é dono do schema. A aplicação usa o `usr_marketing`, que só pode ler e escrever nas tabelas; ele não cria nem altera tabela.
 
+Cada tarefa de dados do [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md) tem um número de migration fixo (`V2` é a D1, `V3` é a D2 e assim por diante), e os PRs podem ser mergeados fora dessa ordem. Por isso o ambiente local roda com o perfil `dev` ([application-dev.yml](src/main/resources/application-dev.yml)), que liga o `spring.flyway.out-of-order`: se o seu banco já tem a `V5` e chega a `V3`, ela é aplicada em vez de travar a subida. O perfil é ativado pelo `spring-boot:run` (configurado no `pom.xml`) e pelo `docker-compose.yml` da raiz; a imagem publicada na plataforma roda sem ele, e os testes também, porque sobem o banco do zero.
+
 | Migration | O que faz |
 |---|---|
 | `V1__cria_eventos_processados.sql` | tabela `eventos_processados` (`evento_id`, `tipo`, `processado_em`), obrigatória em quem consome eventos. Cada evento consumido grava o `id` aqui, na mesma transação do efeito, para não ser processado duas vezes |
+| `V2__cria_leads.sql` | D1: `leads` (com `temperatura` gerada a partir da `etapa`), `lead_eventos` (com `sequencia` por identidade, usada pelo SSE) e `lead_consentimentos` (só inclusão). Chaves únicas `(tenant_id, visitante_id)`, `(tenant_id, meta_lead_id)` e `token_descadastro`; `CHECK` nos valores fechados do norteador (etapa, origem, faixa, status e tipos) |
 | `V6__cria_qualificacao.sql` | D5: `regras_pontuacao` (`valores` em `jsonb`; cada fonte preenche só o próprio alvo: `formulario_id` e `campo_id` do Landing em `campo_formulario`, `campo_meta` em `campo_meta`, nada em `utm`), `qualificacao_configuracoes` (uma por tenant; `dias_atendimento` em `smallint[]` de 1 a 7; morno abaixo de quente; início antes do fim) e `vendedores_rodizio` (único por `(tenant_id, vendedor_id)`) |
 
 Regras para as próximas tabelas (norteador, seção 3):
@@ -198,8 +229,24 @@ Regras para as próximas tabelas (norteador, seção 3):
 - `EntidadeBase` fornece as sete colunas, gera o UUID da aplicação e preenche datas e auditoria nos callbacks JPA;
 - `TenantFiltro` coloca o `tenant_id` do token em `TenantContexto` durante a requisição;
 - `ResolvedorDeTenant` integra o contexto ao `@TenantId` do Hibernate;
-- entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e herdar a restrição `deleted_at IS NULL` da base;
+- entidades concretas devem declarar seu próprio `@SQLDelete` com o nome da tabela e o `@SQLRestriction("deleted_at IS NULL")`. O Hibernate não herda o `@SQLRestriction` de uma `@MappedSuperclass`: sem ele na entidade, os registros excluídos continuam aparecendo nas consultas;
 - `Paginacao.pedido` limita `tamanho` a 100 e `Pagina` devolve `{itens, pagina, tamanho, total}`.
+
+Os valores fechados do norteador (`meta_ads`, `opt_out`, `landing.contato.informado`...) viram enums Java que implementam `ValorPersistido`. Cada enum tem um `Conversor` (subclasse de `ConversorDeValor`) para gravar o valor do norteador, e não o nome da constante; a entidade usa `@Convert(converter = OEnum.Conversor.class)`.
+
+### Leads (D1)
+
+Pacote `leads`, com as três tabelas da `V2`:
+
+| Classe | O que é |
+|---|---|
+| `Lead` | registro central. `avancarEtapa` nunca rebaixa a etapa (§2); `atualizarContato` não apaga um dado existente com valor vazio; `possuiIdentificadorDeContato` é a regra de promoção do buffer (Meta, e-mail ou telefone); `registrarConsentimento` muda só o estado atual. O `token_descadastro` é gerado na criação (32 bytes aleatórios em base64url). `temperatura` é coluna gerada pelo banco e só de leitura |
+| `LeadEvento` | item da timeline. A `sequencia` vem do banco e é a ordem usada pelo SSE; `etapaAlterada` monta o registro de mudança de etapa |
+| `LeadConsentimento` | evidência de aceite ou revogação, sem métodos de alteração. `doLanding` para os eventos das etapas 1 a 3, `revogacaoPorDescadastro` para o link de descadastro; `repete` evita gravar de novo o mesmo consentimento da etapa 2. O *User-Agent* é cortado em 500 caracteres |
+| `LeadRepository`, `LeadEventoRepository`, `LeadConsentimentoRepository` | Spring Data; a busca por `visitante_id` e por `meta_lead_id` e a timeline em ordem de `sequencia` |
+| `OrigemLead`, `Temperatura`, `StatusAquecimento`, `FaixaQualificacao`, `TipoEventoLead`, `OrigemConsentimento` | valores fechados das colunas |
+
+Fora de requisição (jobs, consumidores de eventos), toda leitura e gravação deve rodar dentro de `TenantContexto.executar(tenant, ...)`: o Hibernate fixa o tenant quando abre a sessão e usa esse valor tanto para preencher `tenant_id` quanto para filtrar as consultas, inclusive o `findById`. Por isso ainda não há busca por `token_descadastro`: a rota pública de descadastro (E7) não tem tenant no token e precisa resolver o tenant antes de consultar.
 
 ### Qualificação (D5)
 
@@ -212,8 +259,6 @@ Pacote `qualificacao`, com as três tabelas da `V6` (norteador §3 e §9.3). O c
 | `VendedorRodizio` | vendedor na escala, só com o UUID do identity. `registrarAtribuicao` move o vendedor para o fim da fila |
 | `FonteRegra` | `campo_formulario`, `campo_meta` ou `utm`, gravado pelo `ConversorDeValor` |
 | `RegraPontuacaoRepository`, `QualificacaoConfiguracaoRepository`, `VendedorRodizioRepository` | Spring Data. `findByAtivoTrueAndFormularioId` traz as regras do formulário de um envio e `findByAtivoTrueAndFonte` as de UTM e do Meta, para o motor da Q1; `findFirstBy` devolve a configuração do tenant atual |
-
-Os valores fechados do norteador viram enums Java que implementam `ValorPersistido`, com um `Conversor` (subclasse de `ConversorDeValor`) para gravar o valor do norteador, e não o nome da constante.
 
 ## Endpoints atuais
 
@@ -234,10 +279,21 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | `rotaAutenticadaSemTokenResponde401ComEnvelope` | rota protegida sem token dá `401` no formato do envelope |
 | `documentacaoOpenApiRespondeSemTokenComAsRotasDoModulo` | `/v3/api-docs` abre sem token e lista `/api/marketing/health` |
 
+`compartilhado.mensageria.PublicadorDeEventosTest` sobe a aplicação com o PostgreSQL e um RabbitMQ do Testcontainers carregado com o mesmo [definitions.json](../infra/rabbitmq/definitions.json) do ambiente local, com os mesmos usuários, permissões e exchanges. O broker confere o `user_id` de verdade. O teste observa as exchanges como `admin`, com filas temporárias:
+
+| Teste | O que confere |
+|---|---|
+| `publicaOEnvelopeEmMarketingEventosDepoisDoCommit` | envelope completo, `user_id = mq_marketing`, routing key, `message_id` e `correlacaoId` vindo do `X-Request-Id` |
+| `nadaSaiQuandoATransacaoFazRollback` | rollback não publica nada |
+| `pedidoAPlataformaVaiParaIdentityEntradaComOUsuarioDoToken` | pedido em `identity.entrada`, e não em `marketing.eventos`, com o `usuarioId` do token |
+| `publicarForaDeTransacaoEhRecusado`, `tipoForaDoPadraoEhRecusado` | as duas proteções do publicador |
+
 `BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
 
 | Teste | O que confere |
 |---|---|
+| `leads.LeadTest` | etapa nunca rebaixa, contato vazio não apaga dado, regra de promoção, token de descadastro, consentimento repetido e corte do *User-Agent* |
+| `leads.LeadRepositoryTest` | a `V2` contra o banco real: sete colunas, `temperatura` gerada (também ao avançar a etapa), isolamento por tenant no `findById` e nas consultas, unicidade de `visitante_id` e `meta_lead_id` por tenant, soft delete, ordem da timeline, histórico de consentimentos e FK do evento para o lead |
 | `qualificacao.QualificacaoTest` | valores padrão das Regras de Negócio e recusa de limites, horários, dias e regras incoerentes |
 | `qualificacao.QualificacaoRepositoryTest` | a `V6` contra o banco real: valores das regras em JSON, filtro de ativas por formulário e por fonte, `CHECK` do alvo de cada fonte, configuração única por tenant com `dias_atendimento` em array, e vendedor único na escala do tenant |
 
