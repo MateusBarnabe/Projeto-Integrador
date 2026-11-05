@@ -7,7 +7,8 @@ O repositório já tem:
 - a API subindo com envelope, segurança por JWT, `/health`, Flyway e Swagger;
 - a entidade base com as sete colunas, o filtro por tenant e a paginação (F2);
 - o publicador de eventos com envio depois do commit (F3);
-- as tabelas de leads, timeline e consentimentos (D1) e as de qualificação (D5);
+- as tabelas de leads, timeline e consentimentos (D1), já ajustadas ao contrato do Landing (D8), e as de qualificação (D5);
+- as variáveis de ambiente com os nomes do compose da plataforma (F8);
 - o front com layout, abas, camada da casca e cliente HTTP;
 - o esqueleto do placeholder do Landing;
 - o ambiente local em Docker.
@@ -32,7 +33,7 @@ Tarefas da mesma onda podem ser feitas **ao mesmo tempo**, por pessoas diferente
 
 | Onda | Tarefas | O que destrava |
 |---|---|---|
-| **0** · sem dependência pendente | F4, F5, F6, F8, D2, D3, D8, N1, Q1, E7, W1, L1, L5, I2 (e D6 assim que X6 for resolvida; W2 assim que X9 for) | filas, clientes HTTP, testes, o ajuste da `V2`, o motor de pontuação, os componentes do front e o placeholder |
+| **0** · sem dependência pendente | F4, F5, F6, D2, D3, N1, Q1, E7, W1, L1, L5, I2 (e D6 assim que X6 for resolvida; W2 assim que X9 for) | filas, clientes HTTP, testes, o motor de pontuação, os componentes do front e o placeholder |
 | **1** | D7, E1, E3, E10, C1, Q2, A2, L2 | os valores iniciais, a etapa 1 do chatbot, o webhook do Meta, o rodízio e a API de leads |
 | **2** | E4, E5, E6, E8, A3, A4, F7, W5, L3 | o envio (etapa 3), a ligação com a oportunidade, a boas-vindas, as configurações e o painel |
 | **3** | E9, E11, W4, W6, L4, I3 | o aquecimento, a leitura pendente, as telas de Configurações e Painel e a entrega na plataforma |
@@ -48,7 +49,7 @@ D3 → D7 → A3 → W4           configurações
 D3 → D7 → E8 → E9           boas-vindas e aquecimento
 ```
 
-**Mais urgentes:** **D8**, porque os três consumidores (E1, E5 e E6) gravam nas colunas que ela cria, e **Q1**, que está em dois caminhos críticos.
+**Mais urgentes:** **F4**, porque os três consumidores (E1, E5 e E6) dependem das filas, e **Q1**, que está em dois caminhos críticos.
 
 ## Divisão sugerida em trilhas
 
@@ -56,7 +57,7 @@ Cada trilha pode ser de uma pessoa ou dupla.
 
 | Trilha | Tarefas | Começa por |
 |---|---|---|
-| **1 · Back: fundação e dados** | F7, F8, D2, D3, D6, D7, D8 | D8 e F8 |
+| **1 · Back: fundação e dados** | F7, D2, D3, D6, D7 | D3 |
 | **2 · Back: entrada de leads e Etapa 1** | F4, F5, F6, E1, E3–E11, C1, N1 | F4, F5 e F6 |
 | **3 · Back: Etapa 2 (qualificação e APIs)** | Q1, Q2, A2–A4 | Q1 |
 | **4 · Front** | W1, W2, W4–W6 | W1 (componentes do Design System) |
@@ -76,7 +77,7 @@ Cada trilha pode ser de uma pessoa ou dupla.
 | **F5** | Cliente HTTP para outros módulos: token de serviço (`clientId = marketing`), `X-Tenant-Id`, timeout de 3 s, endereço por variável de ambiente (`LANDING_BASE_URL`, `CRM_BASE_URL`, `IDENTITY_BASE_URL`), chamando direto pelo nome do container | — | E3, E5, C1, A3 | 6 |
 | **F6** | Infra de testes: RabbitMQ no Testcontainers (já usado na F3) e WireMock para Landing, CRM, identity e Graph API do Meta | — | E1, E3, E5, E6, C1 | 10 |
 | **F7** | Testes do checklist da plataforma: `403` sem permissão, cabeçalho de 32 KB, `404` para lead de outro tenant e `tenantId` do corpo ignorado | A2 | I3 | 10 |
-| **F8** | Variáveis de ambiente com os nomes do `docker-compose.yml` da plataforma (`SERVER_PORT`, `DB_URL`, `DB_APP_USER`, `DB_OWNER_USER`, `RABBITMQ_USER`, `JWKS_URI`, `SVC_CLIENT_ID`...), no `application.yml`, no compose local e nos READMEs. Sem isso, a imagem sobe na plataforma tentando conectar em `localhost` | — | I3 | 1 |
+| **F8** | **[concluída]** Variáveis de ambiente com os nomes do `docker-compose.yml` da plataforma (`SERVER_PORT`, `DB_URL`, `DB_APP_USER`, `DB_OWNER_USER`, `RABBITMQ_USER`, `JWKS_URI`...), no `application.yml`, no compose local e nos READMEs (PR #16) | — | — | 1 |
 
 ### Dados: migrations do Flyway (D)
 
@@ -93,22 +94,22 @@ O número da migration é da tarefa, não da ordem de merge: cada tarefa sai num
 | **D5** | **[concluída]** `V6`: `regras_pontuacao` (com `formulario_id` e `campo_id` do Landing e a fonte `campo_meta`), `qualificacao_configuracoes` e `vendedores_rodizio` | — | — | 3, 9.3 |
 | **D6** | `V7`: `canais_anuncio`, com os segredos do Meta cifrados e nunca devolvidos pela API, sem `mapeamentoCampos` | X6 | E3, A3 | 3, 9.4 |
 | **D7** | Valores iniciais por tenant: modelo de boas-vindas padrão, as regras de pontuação de `utm` da matriz da 9.3 (as de campo dependem dos formulários do tenant), configurações de qualificação e de ciclo de vida. Criados na primeira vez que o tenant usa o módulo | D3 | E8, A3 | 3, 9.3 |
-| **D8** | `V8`: ajusta a `V2` ao contrato do Landing. Em `leads`: `sessao_id` (único por tenant) no lugar de `visitante_id`, `canal`, `envio_lido_em`, `envio_id` único por tenant; sai `formulario_versao`. Em `lead_consentimentos`: `sessao_id`, `texto_termo` no lugar de `versao_termo`, origens `landing.formulario.recebido`, `landing.chatbot.lead_capturado` e `descadastro`; sai `formulario_versao`. Em `lead_eventos`: `respostas_lidas` no lugar de `formulario_atualizado`. Ajusta `Lead`, `LeadConsentimento`, `OrigemConsentimento`, `TipoEventoLead`, os repositórios e os testes | — | E1, E5, E6, E10, A2 | 3 |
+| **D8** | **[concluída]** `V8`: ajusta a `V2` ao contrato do Landing. Em `leads`: `sessao_id` (único por tenant) no lugar de `visitante_id`, `canal`, `envio_lido_em`, `envio_id` único por tenant; sai `formulario_versao`. Em `lead_consentimentos`: `sessao_id`, `texto_termo` no lugar de `versao_termo`, origens `landing.formulario.recebido`, `landing.chatbot.lead_capturado` e `descadastro`; sai `formulario_versao`. Em `lead_eventos`: `respostas_lidas` no lugar de `formulario_atualizado`. Ajusta `Lead`, `LeadConsentimento`, `OrigemConsentimento`, `TipoEventoLead`, os repositórios e os testes | — | — | 3 |
 
 ### Entrada de leads e Etapa 1 (E, C, N)
 
 | ID | Tarefa | Bloqueado por | Bloqueia | § |
 |---|---|---|---|---|
-| **E1** | Consumir `landing.chatbot.lead_capturado` (etapa 1), na chegada: identidade por `sessao_id`, depois e-mail ou telefone normalizados; grava contato, UTM e consentimento; pontua só com as regras de `utm` | F4, F6, D8, Q1 | — | 5 |
+| **E1** | Consumir `landing.chatbot.lead_capturado` (etapa 1), na chegada: identidade por `sessao_id`, depois e-mail ou telefone normalizados; grava contato, UTM e consentimento; pontua só com as regras de `utm` | F4, F6, Q1 | — | 5 |
 | **E2** | **[cancelada]** Drenagem do buffer para os eventos das etapas 0 e 1 do Landing. Os eventos do Landing são processados na chegada; o buffer ficou só para o Meta (E4) | — | — | 4.1 |
 | **E3** | Webhook público do Meta: handshake (`hub.challenge`), validação HMAC com o segredo do tenant, resolução do tenant pelo subdomínio e gravação no buffer | F5, F6, D2, D6, X4 | E4 | 6 |
 | **E4** | Job 4.1, leads do Meta: busca os dados na Graph API, resolve a identidade, grava em `leads` na etapa 0 e pontua com as regras `campo_meta` e `utm` | E3, Q1, X5 | — | 4.1 |
-| **E5** | Consumir `landing.formulario.recebido` (etapa 3), na chegada: identidade por `envio_id`, `sessao_id`, `crm_contato_id` e e-mail/telefone; grava os ids do CRM; lê `GET /api/landing/envios/{id}` (respostas, origem e consentimento); faz o merge de leads duplicados; pontua com as regras do formulário; atribui vendedor; notifica. Com o Landing fora do ar, deixa a leitura pendente | F4, F5, F6, D8, Q1, Q2, N1, X1 (parcial) | E11, I4 | 5 |
-| **E6** | Consumir `crm.oportunidade.criada` (só `origem = landing`): acha o lead por `envio_id = origemModuloId` ou `crm_contato_id`, cria o lead se o evento chegou antes do envio, grava `crm_oportunidade_id` e `handoff_crm` e leva o vendedor como responsável (C1) | F4, F6, D8, C1 (parcial), X1 (parcial) | I4 | 5, 9.6 |
+| **E5** | Consumir `landing.formulario.recebido` (etapa 3), na chegada: identidade por `envio_id`, `sessao_id`, `crm_contato_id` e e-mail/telefone; grava os ids do CRM; lê `GET /api/landing/envios/{id}` (respostas, origem e consentimento); faz o merge de leads duplicados; pontua com as regras do formulário; atribui vendedor; notifica. Com o Landing fora do ar, deixa a leitura pendente | F4, F5, F6, Q1, Q2, N1, X1 (parcial) | E11, I4 | 5 |
+| **E6** | Consumir `crm.oportunidade.criada` (só `origem = landing`): acha o lead por `envio_id = origemModuloId` ou `crm_contato_id`, cria o lead se o evento chegou antes do envio, grava `crm_oportunidade_id` e `handoff_crm` e leva o vendedor como responsável (C1) | F4, F6, C1 (parcial), X1 (parcial) | I4 | 5, 9.6 |
 | **E7** | Descadastro público: `GET /public/marketing/descadastro/{token}` mostra a confirmação, e o `POST` efetiva o opt-out e grava a revogação (com IP e *User-Agent*) em `lead_consentimentos` | — | E8 | 6 |
 | **E8** | Envio de e-mail por SMTP (Mailpit local) e job de boas-vindas (4.5): uma vez por lead, para quem enviou o formulário, sempre com o link de descadastro | D3, D7, E7, X3 (parcial) | E9 | 4.5 |
 | **E9** | Job de aquecimento (4.2): cadência de e-mails para as etapas 0 e 1 com consentimento; confere o opt-out antes de enviar e esgota ao fim da sequência | E8, X11 (parcial) | — | 4.2 |
-| **E10** | Job de anonimização LGPD (4.3): zera os dados pessoais depois do prazo de retenção e nunca apaga a linha | D3, D8 | — | 4.3 |
+| **E10** | Job de anonimização LGPD (4.3): zera os dados pessoais depois do prazo de retenção e nunca apaga a linha | D3 | — | 4.3 |
 | **E11** | Job 4.6, leitura pendente do envio: a cada minuto, relê no Landing os envios que não responderam, pontua e atribui; desiste depois de 10 falhas | E5 | — | 4.6 |
 | **C1** | Cliente do CRM: gravar o responsável da oportunidade, isolado numa classe só, contra a ação que o CRM definir. Hoje só existe o `PUT` completo da oportunidade | F5, F6, X2 | E6 | 6 |
 | **N1** | Pedidos à plataforma em `identity.entrada`: notificação `NOVO_LEAD` e registro na timeline | — | E5, Q2 | 8 |
@@ -120,7 +121,7 @@ O número da migration é da tarefa, não da ordem de merge: cada tarefa sai num
 | **Q1** | Motor de pontuação: soma as regras ativas que valem para o lead (as de campo só do `formulario_id` dele, as de `campo_meta` para o Meta e as de `utm` para todos), cada critério uma vez, valendo a de mais pontos; define a faixa (`mql_quente` ≥ 70, `mql_morno` 40–69, `nutricao` < 40), grava o detalhe e registra a mudança de faixa. Com o teste de um lead de cada faixa | — | E1, E4, E5, Q2, A4 | 9.3 |
 | **Q2** | Rodízio: atribui o vendedor ativo que recebeu há mais tempo; fora do horário comercial, fica "aguardando"; job 4.4 de atribuição pendente; reatribuição manual (`PUT /leads/{id}/vendedor`). Com os testes de 3 leads e 2 vendedores, e de fora do horário | Q1, N1, X7 (parcial) | E5, A4 | 9.3, 4.4 |
 | **A1** | **[cancelada]** API de formulários. O formulário é do Landing | — | — | 9.5 |
-| **A2** | API de leads: lista paginada com filtros (inclusive `canal`), detalhe, `GET /leads/{id}/resumo` e `/leads/resumo?ids=` (sem dado pessoal) e busca global `GET /busca?q=`. O detalhe ganha seções à medida que as outras tarefas ficam prontas | D8 (parcial) | F7, A4, W5 | 9.2, 9.6 |
+| **A2** | API de leads: lista paginada com filtros (inclusive `canal`), detalhe, `GET /leads/{id}/resumo` e `/leads/resumo?ids=` (sem dado pessoal) e busca global `GET /busca?q=`. O detalhe ganha seções à medida que as outras tarefas ficam prontas | — | F7, A4, W5 | 9.2, 9.6 |
 | **A3** | APIs de configuração: canais de anúncio, modelos de mensagem, ciclo de vida, qualificação, regras de pontuação, vendedores do rodízio e `GET /qualificacao/formularios` (formulários do Landing que já trouxeram lead, com o resumo lido no Landing) | F5, D3, D6, D7 | W4 | 9.4 |
 | **A4** | API do painel: `GET /painel` com as agregações (cache Caffeine por tenant), sem visitantes, e SSE em `/painel/eventos` | A2, Q1, Q2, X8 (parcial) | W6 | 9.1 |
 
@@ -157,7 +158,7 @@ O placeholder imita o **contrato publicado do Landing** (`landing.yaml` e `landi
 |---|---|---|---|---|
 | **I1** | **[concluída]** Contratos no infra: `marketing.yaml` 0.2.0 (saúde, busca e resumo do lead) e `marketing.asyncapi.yaml` sem mensagens (PR #29 do infra). Daqui em diante, manter as cópias de `Docs/contratos/` iguais e publicar um evento só quando ele tiver consumidor | — | — | 10 |
 | **I2** | CI: publicar as imagens `marketing` e `marketing-front` no GitHub Container Registry com o workflow reutilizável `publicar-imagem.yml` | — | I3 | 10 |
-| **I3** | Entrega no `infra-integrador-2026`: variáveis de imagem no `.env.example`, seguidas da sessão do checklist (19 itens) com o Grupo 2. Contratos, permissões e menu já estão lá | F7, F8, I2, W2 | — | 10 |
+| **I3** | Entrega no `infra-integrador-2026`: variáveis de imagem no `.env.example`, seguidas da sessão do checklist (19 itens) com o Grupo 2. Contratos, permissões e menu já estão lá | F7, I2, W2 | — | 10 |
 | **I4** | Teste de ponta a ponta no ambiente local: anúncio → formulário no placeholder → empresa, contato e oportunidade no stub do CRM → eventos → lead → pontuação → vendedor → oportunidade ligada → lead visível na tela | E5, E6, L4, W5 | — | — |
 
 ## Dependências externas e decisões em aberto
@@ -187,8 +188,8 @@ Uma seta `A --> B` quer dizer que **A bloqueia B**. As tarefas concluídas e can
 ```mermaid
 flowchart LR
   subgraph Fundacao["Fundação e dados"]
-    F4 & F5 & F6 & F7 & F8
-    D2 & D3 & D6 & D7 & D8
+    F4 & F5 & F6 & F7
+    D2 & D3 & D6 & D7
   end
   subgraph Etapa1["Entrada e Etapa 1"]
     E1 & E3 & E4 & E5 & E6 & E7 & E8 & E9 & E10 & E11 & C1 & N1
@@ -207,12 +208,10 @@ flowchart LR
   F5 --> E3 & E5 & C1 & A3
   F6 --> E1 & E3 & E5 & E6 & C1
   F7 --> I3
-  F8 --> I3
   D2 --> E3 & E4
   D3 --> D7 & E8 & E10 & A3
   D6 --> E3 & A3
   D7 --> E8 & A3
-  D8 --> E1 & E5 & E6 & E10 & A2
   E3 --> E4
   E5 --> E11 & I4
   E6 --> I4
