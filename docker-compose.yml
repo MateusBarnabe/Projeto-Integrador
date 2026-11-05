@@ -80,7 +80,6 @@ services:
   landing:
     build: ./landing-web
     environment:
-      MARKETING_API_URL: http://marketing:8087
       RABBITMQ_URL: amqp://mq_landing:mq_landing@rabbitmq:5672/plataforma
     ports:
       - "8088:8088"

@@ -2,7 +2,7 @@
 
 API do módulo de Marketing (Grupo 4). Recebe os leads, guarda o funil, qualifica, distribui entre vendedores e atende o front do módulo e os outros módulos da plataforma.
 
-> **Estado atual (25/09/2026): alicerce.** A API sobe, conecta no Postgres com os usuários da plataforma, roda o Flyway, responde `/health` com o envelope, recusa rotas sem token com `401` e publica a documentação no Swagger. Ainda não tem nenhuma funcionalidade de negócio. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (05/11/2026): fundação e primeiras tabelas.** A API sobe, conecta no Postgres com os usuários da plataforma, roda o Flyway, responde `/health` com o envelope, recusa rotas sem token com `401` e publica a documentação no Swagger. Já tem o contexto do JWT (F1), a entidade base (F2), o publicador de eventos (F3) e as tabelas de leads (D1) e de qualificação (D5). Ainda não tem rota de negócio nem consumidor de eventos. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|
@@ -109,7 +109,7 @@ marketing-api/
         └── qualificacao/                      regras da qualificação e testes da V6
 ```
 
-**Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `formularios/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (buffer e consumidores). Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
+**Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (consumidores dos eventos do Landing e do CRM, webhook e buffer do Meta). Clientes HTTP de outros módulos (Landing, CRM, identity) ficam em `compartilhado/`. Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
 
 ## Classes
 
@@ -183,11 +183,11 @@ Publicação de mensagens no RabbitMQ, seguindo o Contrato §9.7 e o norteador �
 Uso típico, dentro do serviço transacional que muda o dado:
 
 ```java
-publicador.publicar("marketing.formulario.publicado", 1,
-        Map.of("formularioId", formulario.getId(), "versao", versao.getVersao(), "publicadoEm", versao.getPublicadoEm()));
+publicador.publicar("marketing.lead.qualificado", 1,
+        Map.of("leadId", lead.getId(), "faixa", lead.getFaixaQualificacao().valor(), "pontuacao", lead.getPontuacao()));
 ```
 
-Todo tipo novo precisa estar em [Docs/contratos/marketing.asyncapi.yaml](../Docs/contratos/marketing.asyncapi.yaml) antes de ser publicado, e `dados` não leva senha, token, segredo nem dado pessoal além do necessário.
+Todo tipo novo precisa estar em [Docs/contratos/marketing.asyncapi.yaml](../Docs/contratos/marketing.asyncapi.yaml) antes de ser publicado, e só depois que algum módulo confirmar que consome (hoje o AsyncAPI está sem mensagens). `dados` não leva senha, token, segredo nem dado pessoal além do necessário.
 
 **Limite conhecido:** se o RabbitMQ estiver fora do ar no momento do envio, a transação já foi confirmada e o evento se perde; o erro vai para o log com o tipo, o `id` e o tenant, sem os dados. Se algum fluxo não puder perder evento, o caminho é uma tabela de saída (*outbox*) gravada na mesma transação.
 

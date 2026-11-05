@@ -1,8 +1,8 @@
 # marketing-web
 
-Front do módulo de Marketing (Etapa 2 do projeto). É a área autenticada que a pessoa gestora de marketing usa dentro da plataforma: painel, leads, construtor de formulário e configurações.
+Front do módulo de Marketing (Etapa 2 do projeto). É a área autenticada que a pessoa gestora de marketing usa dentro da plataforma: painel, leads e configurações.
 
-> **Estado atual (25/09/2026): alicerce.** O layout, a navegação por abas, a camada de integração com a casca e o cliente HTTP estão prontos. As quatro áreas mostram só um aviso de "em construção". O Painel já consulta o `/health` da API. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (25/09/2026, revisado em 05/11/2026): alicerce.** O layout, a navegação por abas, a camada de integração com a casca e o cliente HTTP estão prontos. As três áreas mostram só um aviso de "em construção". O Painel já consulta o `/health` da API. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|
@@ -12,7 +12,7 @@ Front do módulo de Marketing (Etapa 2 do projeto). É a área autenticada que a
 | Nome na plataforma | serviço e imagem `marketing-front` |
 | Design | [Design System Centinela](../Docs/DesignSystem/) (tokens `brand-*`, fonte Inter) |
 
-**O que não fica aqui:** a landing page e o formulário que o visitante preenche. Eles são do módulo Landing (Grupo 7) e ficam na página pública. Localmente, quem os simula é o [landing-web](../landing-web/). Aqui fica só o **construtor** dos campos desse formulário.
+**O que não fica aqui:** a landing page, o formulário que o visitante preenche e o editor de formulários e campos. Tudo isso é do módulo Landing (Grupo 7): a página pública e o editor, no back-office do Landing. Localmente, quem simula o Landing é o [landing-web](../landing-web/). Aqui as respostas do formulário aparecem só no detalhe do lead, lidas da API do Landing.
 
 ## Como rodar
 
@@ -87,7 +87,6 @@ marketing-web/
     └── features/                 uma pasta por área do módulo
         ├── painel/               PainelPage.tsx + rotas.tsx
         ├── leads/                LeadsPage.tsx + rotas.tsx
-        ├── formularios/          FormulariosPage.tsx + rotas.tsx
         └── configuracoes/        ConfiguracoesPage.tsx + rotas.tsx
 ```
 
@@ -97,7 +96,7 @@ marketing-web/
 ┌───────────────┬───────────────────────────────────────────────┐
 │ sidebar       │ Marketing                     (faixa brand-950)│
 │ (da casca;    ├───────────────────────────────────────────────┤
-│  no modo      │ Painel · Leads · Formulários · Configurações   │
+│  no modo      │ Painel · Leads · Configurações                 │
 │  sozinho, uma │ (abas)                                         │
 │  imitação só  ├───────────────────────────────────────────────┤
 │  com o item   │                                               │
@@ -140,7 +139,7 @@ Layout de todas as rotas: a faixa fixa "Marketing" (`PageHeader`), as abas (`Aba
 
 ### `rotas.tsx` e `features/<area>/rotas.tsx`
 
-O roteador (`createBrowserRouter`, com `basename` igual ao caminho base) monta o `LayoutModulo` e junta as rotas que cada área exporta (`rotasPainel`, `rotasLeads`, `rotasFormularios`, `rotasConfiguracoes`). A rota `/` redireciona para `/painel`.
+O roteador (`createBrowserRouter`, com `basename` igual ao caminho base) monta o `LayoutModulo` e junta as rotas que cada área exporta (`rotasPainel`, `rotasLeads`, `rotasConfiguracoes`). A rota `/` redireciona para `/painel`.
 
 Cada área exporta as próprias rotas, com caminhos relativos. Assim, se um dia a plataforma virar um front único, as áreas podem ser montadas nele sem reescrever as telas.
 

@@ -56,7 +56,7 @@ Só aponta para o `definitions.json`. O RabbitMQ importa esse arquivo ao subir.
 | usuário `mq_landing` (senha `mq_landing`) | o placeholder do Landing. **Configura** e **escreve** em `landing.*`; **lê** `landing.*` e `marketing.eventos` |
 | exchanges (topic, duráveis) | `marketing.eventos`, `landing.eventos` e `identity.entrada` |
 
-Não há filas aqui: **cada módulo declara as filas que consome**. A fila `marketing.landing-leads` e a DLQ dela serão criadas pela própria API do Marketing (tarefa F4 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
+Não há filas aqui: **cada módulo declara as filas que consome**. As filas `marketing.landing-leads` (eventos do Landing) e `marketing.crm-oportunidades` (`crm.oportunidade.criada`), com as DLQs, serão criadas pela própria API do Marketing (tarefa F4 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)). A exchange `crm.eventos` e o usuário `mq_crm` do stub do CRM entram aqui com a tarefa L5.
 
 Os usuários `mq_*` não têm acesso ao painel web; é normal o login deles no painel falhar. Para conferir uma senha:
 

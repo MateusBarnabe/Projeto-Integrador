@@ -2,7 +2,6 @@ import { Navigate, createBrowserRouter } from 'react-router';
 import { LayoutModulo } from '@/layout/LayoutModulo';
 import { rotasPainel } from '@/features/painel/rotas';
 import { rotasLeads } from '@/features/leads/rotas';
-import { rotasFormularios } from '@/features/formularios/rotas';
 import { rotasConfiguracoes } from '@/features/configuracoes/rotas';
 
 /**
@@ -18,7 +17,6 @@ export const roteador = createBrowserRouter(
         { index: true, element: <Navigate to="/painel" replace /> },
         ...rotasPainel,
         ...rotasLeads,
-        ...rotasFormularios,
         ...rotasConfiguracoes,
       ],
     },
