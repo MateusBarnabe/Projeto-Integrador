@@ -69,15 +69,18 @@ public class OportunidadeDoCrm {
     private final LeadEventoRepository eventos;
     private final NotificacoesDeLead notificacoes;
     private final ResponsavelDaOportunidade responsavel;
+    private final TravasDeLeads travas;
 
     public OportunidadeDoCrm(ConsumoDeEventos consumo, IdentificacaoDeLeads identificacao, GravacaoDeLeads gravacao,
-            LeadEventoRepository eventos, NotificacoesDeLead notificacoes, ResponsavelDaOportunidade responsavel) {
+            LeadEventoRepository eventos, NotificacoesDeLead notificacoes, ResponsavelDaOportunidade responsavel,
+            TravasDeLeads travas) {
         this.consumo = consumo;
         this.identificacao = identificacao;
         this.gravacao = gravacao;
         this.eventos = eventos;
         this.notificacoes = notificacoes;
         this.responsavel = responsavel;
+        this.travas = travas;
     }
 
     /**
@@ -123,6 +126,8 @@ public class OportunidadeDoCrm {
         boolean ligou;
         if (achado.isPresent()) {
             lead = achado.get().lead();
+            // O envio (E5) e o job 4.6 podem estar gravando o mesmo lead: trava e relê antes de mudar
+            travas.travar(lead);
             anterior = lead.getCrmOportunidadeId();
             // Só completa: a empresa e o contato do lead são os do envio (E5), que manda neles
             lead.vincularCrm(lead.getCrmEmpresaId() == null ? dados.empresaId() : null,
