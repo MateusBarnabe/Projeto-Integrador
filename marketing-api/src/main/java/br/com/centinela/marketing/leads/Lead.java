@@ -538,4 +538,164 @@ public class Lead extends EntidadeBase {
     public boolean isAnonimizado() {
         return anonimizado;
     }
+
+    // --- E5/E11: leitura do envio, leitura pendente (job 4.6) e junção de duplicados -------------
+    // Colunas da V10. A leitura de GET /api/landing/envios/{id} que falha fica pendente; as falhas
+    // seguidas são contadas e, no limite, a leitura é abandonada (§4.6). A junção (§5, passo 3.4)
+    // leva para o lead que fica os dados do outro, que é marcado como excluído.
+
+    private static final int TAMANHO_MAXIMO_URL = 2048;
+
+    /** Falhas seguidas ao ler o envio no Landing; volta a zero na leitura e num envio novo. */
+    @Column(name = "leitura_envio_falhas", nullable = false)
+    private short leituraEnvioFalhas;
+
+    /** Quando a leitura do envio foi abandonada: o detalhe mostra "respostas indisponíveis". */
+    @Column(name = "leitura_envio_desistida_em")
+    private OffsetDateTime leituraEnvioDesistidaEm;
+
+    /**
+     * {@link #vincularEnvio} do {@code landing.formulario.recebido}: um envio diferente do atual
+     * recomeça a contagem de falhas da leitura.
+     */
+    public void vincularEnvioDoFormulario(UUID envioId, UUID formularioId, CanalLead canal) {
+        boolean outroEnvio = !Objects.equals(envioId, this.envioId);
+        vincularEnvio(envioId, formularioId, canal);
+        if (outroEnvio) {
+            zerarFalhasDeLeitura();
+        }
+    }
+
+    /** {@link #registrarRespostas} da leitura bem-sucedida, que zera a contagem de falhas. */
+    public void registrarLeituraDoEnvio(List<Map<String, Object>> respostas, boolean anonimizadoNoLanding,
+            OffsetDateTime lidoEm) {
+        registrarRespostas(respostas, anonimizadoNoLanding, lidoEm);
+        zerarFalhasDeLeitura();
+    }
+
+    /**
+     * Conta uma falha da leitura pendente do envio e, ao chegar a {@code limite}, abandona a leitura.
+     *
+     * @return {@code true} se a leitura foi abandonada agora
+     */
+    public boolean registrarFalhaNaLeituraDoEnvio(int limite, OffsetDateTime agora) {
+        if (!leituraDoEnvioPendente() || leituraEnvioDesistidaEm != null) {
+            return false;
+        }
+        leituraEnvioFalhas = (short) Math.min(leituraEnvioFalhas + 1, Short.MAX_VALUE);
+        if (leituraEnvioFalhas < limite) {
+            return false;
+        }
+        leituraEnvioDesistidaEm = Objects.requireNonNull(agora, "agora");
+        return true;
+    }
+
+    /** A leitura do envio continua pendente, mas o job 4.6 desistiu dela. */
+    public boolean leituraDoEnvioAbandonada() {
+        return leituraDoEnvioPendente() && leituraEnvioDesistidaEm != null;
+    }
+
+    /**
+     * Página de entrada e toques da origem do envio (§3): vazio não apaga; o primeiro toque só recua
+     * e o último só avança.
+     */
+    public void registrarToques(String paginaEntrada, OffsetDateTime primeiro, OffsetDateTime ultimo) {
+        this.landingPageUrl = limitar(preencher(this.landingPageUrl, paginaEntrada), TAMANHO_MAXIMO_URL);
+        if (primeiro != null && (firstTouch == null || primeiro.isBefore(firstTouch))) {
+            firstTouch = primeiro;
+        }
+        if (ultimo != null && (lastTouch == null || ultimo.isAfter(lastTouch))) {
+            lastTouch = ultimo;
+        }
+    }
+
+    /** Identificadores únicos por tenant que o lead juntado a outro deixa livres para o que fica. */
+    public record IdentificadoresLiberados(UUID sessaoId, UUID envioId, String metaLeadId) {
+    }
+
+    /**
+     * Primeira metade da junção: tira deste lead os identificadores únicos por tenant (sessão, envio,
+     * Meta) e o marca como excluído. Grave-o antes de o outro lead receber os identificadores
+     * ({@link #absorver}), porque a unicidade vale também para as linhas excluídas.
+     */
+    public IdentificadoresLiberados liberarParaJuncao() {
+        if (getId() == null) {
+            throw new IllegalStateException("Lead ainda não gravado.");
+        }
+        IdentificadoresLiberados liberados = new IdentificadoresLiberados(sessaoId, envioId, metaLeadId);
+        sessaoId = null;
+        envioId = null;
+        metaLeadId = null;
+        marcarExcluida();
+        return liberados;
+    }
+
+    /**
+     * Segunda metade da junção: este lead, o mais antigo, fica com o que o outro tinha e ele não. O
+     * que este já tem prevalece; o envio do outro só vem se este não tiver envio, com as respostas
+     * lidas. Opt-out do outro vale para este. Etapa, pontuação e consentimentos ficam com quem chama.
+     */
+    public void absorver(Lead juntado, IdentificadoresLiberados liberados) {
+        Objects.requireNonNull(juntado, "juntado");
+        Objects.requireNonNull(liberados, "liberados");
+        sessaoId = sessaoId != null ? sessaoId : liberados.sessaoId();
+        metaLeadId = completar(metaLeadId, liberados.metaLeadId());
+        if (envioId == null && liberados.envioId() != null) {
+            envioId = liberados.envioId();
+            formularioId = juntado.formularioId;
+            canal = juntado.canal;
+            dadosFormulario = juntado.dadosFormulario;
+            envioLidoEm = juntado.envioLidoEm;
+            leituraEnvioFalhas = juntado.leituraEnvioFalhas;
+            leituraEnvioDesistidaEm = juntado.leituraEnvioDesistidaEm;
+        }
+        formularioId = formularioId != null ? formularioId : juntado.formularioId;
+        canal = canal != null ? canal : juntado.canal;
+        completarContato(juntado.nome, juntado.email, juntado.telefone, juntado.whatsapp);
+        completarUtm(juntado.utmSource, juntado.utmMedium, juntado.utmCampaign, juntado.utmTerm,
+                juntado.utmContent);
+        landingPageUrl = completar(landingPageUrl, juntado.landingPageUrl);
+        registrarToques(null, juntado.firstTouch, juntado.lastTouch);
+        crmEmpresaId = crmEmpresaId != null ? crmEmpresaId : juntado.crmEmpresaId;
+        crmContatoId = crmContatoId != null ? crmContatoId : juntado.crmContatoId;
+        crmOportunidadeId = crmOportunidadeId != null ? crmOportunidadeId : juntado.crmOportunidadeId;
+        if (vendedorId == null && juntado.vendedorId != null) {
+            vendedorId = juntado.vendedorId;
+            vendedorAtribuidoEm = juntado.vendedorAtribuidoEm;
+        }
+        boasVindasEnviadaEm = maisAntigo(boasVindasEnviadaEm, juntado.boasVindasEnviadaEm);
+        ultimaComunicacaoEm = maisRecente(ultimaComunicacaoEm, juntado.ultimaComunicacaoEm);
+        tentativasAquecimento = Math.max(tentativasAquecimento, juntado.tentativasAquecimento);
+        if (juntado.statusAquecimento == StatusAquecimento.OPT_OUT && statusAquecimento != StatusAquecimento.OPT_OUT) {
+            statusAquecimento = StatusAquecimento.OPT_OUT;
+            optOutEm = juntado.optOutEm;
+        }
+    }
+
+    private void zerarFalhasDeLeitura() {
+        leituraEnvioFalhas = 0;
+        leituraEnvioDesistidaEm = null;
+    }
+
+    private static String limitar(String valor, int tamanho) {
+        return valor == null || valor.length() <= tamanho ? valor : valor.substring(0, tamanho);
+    }
+
+    private static OffsetDateTime maisAntigo(OffsetDateTime a, OffsetDateTime b) {
+        return a == null ? b : b == null || !b.isBefore(a) ? a : b;
+    }
+
+    private static OffsetDateTime maisRecente(OffsetDateTime a, OffsetDateTime b) {
+        return a == null ? b : b == null || !b.isAfter(a) ? a : b;
+    }
+
+    public int getLeituraEnvioFalhas() {
+        return leituraEnvioFalhas;
+    }
+
+    public OffsetDateTime getLeituraEnvioDesistidaEm() {
+        return leituraEnvioDesistidaEm;
+    }
+
+    // --- fim de E5/E11 ---------------------------------------------------------------------------
 }

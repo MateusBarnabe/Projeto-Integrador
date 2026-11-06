@@ -35,13 +35,15 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
 
     /**
      * Respostas do envio, como foram lidas do Landing ({@code dados_formulario}). {@code situacao}:
-     * {@code sem_envio}, {@code aguardando_landing} (leitura pendente, job 4.6) ou {@code lidas}.
+     * {@code sem_envio}, {@code aguardando_landing} (leitura pendente, job 4.6), {@code indisponiveis}
+     * (o job 4.6 desistiu depois de 10 falhas) ou {@code lidas}.
      */
     public record Respostas(UUID formularioId, UUID envioId, String situacao, OffsetDateTime lidasEm,
             List<Map<String, Object>> itens) {
 
         static final String SEM_ENVIO = "sem_envio";
         static final String AGUARDANDO_LANDING = "aguardando_landing";
+        static final String INDISPONIVEIS = "indisponiveis";
         static final String LIDAS = "lidas";
     }
 
@@ -102,6 +104,7 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
 
     private static Respostas respostas(Lead lead, boolean anonimizado) {
         String situacao = lead.getEnvioId() == null ? Respostas.SEM_ENVIO
+                : lead.leituraDoEnvioAbandonada() ? Respostas.INDISPONIVEIS
                 : lead.leituraDoEnvioPendente() ? Respostas.AGUARDANDO_LANDING : Respostas.LIDAS;
         List<Map<String, Object>> itens = anonimizado || lead.getDadosFormulario() == null
                 ? List.of() : lead.getDadosFormulario();

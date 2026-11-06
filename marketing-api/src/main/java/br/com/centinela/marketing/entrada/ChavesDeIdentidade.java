@@ -10,8 +10,9 @@ import java.util.UUID;
  * <ul>
  * <li>Meta (E4): {@code metaLeadId}, e-mail, telefone;</li>
  * <li>chatbot (E1): {@code sessaoId}, e-mail, telefone;</li>
- * <li>envio (E5): {@code envioId}, {@code sessaoId} (quando o Landing mandar), {@code crmContatoId};
- * o e-mail e o telefone do envio entram depois, no merge;</li>
+ * <li>envio (E5): {@code envioId}, {@code sessaoId} (quando o Landing mandar), {@code crmContatoId} e,
+ * com o envio lido na chegada, o e-mail e o telefone dele; os outros leads de mesmo contato entram no
+ * merge ({@link IdentificacaoDeLeads#mesmoContato});</li>
  * <li>oportunidade (E6): {@code envioId} ({@code origemModuloId}), {@code crmContatoId}.</li>
  * </ul>
  *

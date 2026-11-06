@@ -16,8 +16,7 @@ import br.com.centinela.marketing.compartilhado.mensageria.TopologiaDeConsumo;
  *
  * <ul>
  * <li>{@code landing.chatbot.lead_capturado} → {@link CapturaDoChatbot} (etapa 1, E1);</li>
- * <li>{@code landing.formulario.recebido} → ainda sem fluxo: é a E5 (etapa 3). Até lá, é só marcado como
- * processado, sem ir para a DLQ.</li>
+ * <li>{@code landing.formulario.recebido} → {@link EnvioDoFormulario} (etapa 3, E5).</li>
  * </ul>
  *
  * Envelope, remetente, tenant, idempotência e transação são do {@link ConsumoDeEventos}.
@@ -33,10 +32,13 @@ public class ConsumidorDeLeadsDoLanding {
 
     private final ConsumoDeEventos consumo;
     private final CapturaDoChatbot capturaDoChatbot;
+    private final EnvioDoFormulario envioDoFormulario;
 
-    public ConsumidorDeLeadsDoLanding(ConsumoDeEventos consumo, CapturaDoChatbot capturaDoChatbot) {
+    public ConsumidorDeLeadsDoLanding(ConsumoDeEventos consumo, CapturaDoChatbot capturaDoChatbot,
+            EnvioDoFormulario envioDoFormulario) {
         this.consumo = consumo;
         this.capturaDoChatbot = capturaDoChatbot;
+        this.envioDoFormulario = envioDoFormulario;
     }
 
     @RabbitListener(id = "marketing.landing-leads", queues = TopologiaDeConsumo.FILA_LANDING_LEADS,
@@ -49,10 +51,7 @@ public class ConsumidorDeLeadsDoLanding {
     void despachar(EventoRecebido evento) {
         switch (evento.tipo()) {
             case TopologiaDeConsumo.LANDING_CHATBOT_LEAD_CAPTURADO -> capturaDoChatbot.processar(evento);
-            // E5: trocar por envioDoFormulario.processar(evento)
-            case TopologiaDeConsumo.LANDING_FORMULARIO_RECEBIDO -> LOG.info(
-                    "Evento {} ainda sem processamento (E5); marcado como processado (id {})", evento.tipo(),
-                    evento.id());
+            case TopologiaDeConsumo.LANDING_FORMULARIO_RECEBIDO -> envioDoFormulario.processar(evento);
             // A fila só é ligada às duas chaves acima; um tipo novo do Landing não trava a fila
             default -> LOG.warn("Tipo {} sem consumidor em {}; ignorado (id {})", evento.tipo(),
                     TopologiaDeConsumo.FILA_LANDING_LEADS, evento.id());

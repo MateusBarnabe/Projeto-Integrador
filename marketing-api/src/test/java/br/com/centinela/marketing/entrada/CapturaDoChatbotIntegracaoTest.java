@@ -286,23 +286,6 @@ class CapturaDoChatbotIntegracaoTest extends IntegracaoDeTeste {
     }
 
     @Test
-    void formularioRecebidoAindaSemProcessamentoNaoVaiParaADlq() throws Exception {
-        Map<String, Object> dados = new LinkedHashMap<>();
-        dados.put("envioId", UUID.randomUUID().toString());
-        dados.put("formularioId", formulario.toString());
-        dados.put("empresaId", null);
-        dados.put("contatoId", null);
-        dados.put("canal", "formulario");
-        Map<String, Object> envelope = envelope(TopologiaDeConsumo.LANDING_FORMULARIO_RECEBIDO, tenant, dados);
-
-        processar(envelope);
-
-        assertThat(processados(envelope)).isEqualTo(1);
-        assertThat(leadsDoTenant(tenant)).isZero();
-        assertThat(idsNaDlq()).doesNotContain((String) envelope.get("id"));
-    }
-
-    @Test
     void capturaSemContatoUtilizavelVaiParaADlq() throws Exception {
         Map<String, Object> envelope = captura(tenant, UUID.randomUUID(), "sem-arroba", "123", null);
 
