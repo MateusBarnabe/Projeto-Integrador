@@ -16,13 +16,13 @@ O contrato que ele imita:
 - `contratos/landing.yaml` e `contratos/landing.asyncapi.yaml` do `infra-integrador-2026`: o contrato publicado pelo Grupo 7;
 - [Docs/contratos/landing-requisitos.md](../Docs/contratos/landing-requisitos.md): o que consumimos e o que ainda pedimos a eles.
 
-> **Estado atual (25/09/2026, revisado em 05/11/2026): esqueleto.** A página de exemplo e o `/api/landing/health` funcionam. O formulário, os eventos, a gravação dos envios e o stub do CRM ainda não existem (tarefas L1 a L5 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
+> **Estado atual (05/11/2026): L1 feita.** A página guarda a primeira e a última origem e mostra o formulário de exemplo com o aceite de consentimento; o envio é validado e gravado em memória. Os eventos, a leitura dos envios e o stub do CRM ainda não existem (tarefas L2 a L5 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
 
 | | |
 |---|---|
 | Stack | página em React 19 + Vite 8 + Tailwind v4; servidor Node 24 + Express 5 rodando `.ts` direto, sem build |
 | Portas | `3008` (Vite, só em desenvolvimento) e `8088` (servidor Node) |
-| Rotas | `/api/landing/**` |
+| Rotas | `/api/landing/**` e a superfície pública `/public/landing/**` |
 | Regras | não precisa seguir o Design System nem o checklist da plataforma; é ferramenta de teste e deve continuar pequeno |
 
 ## Como rodar
@@ -32,7 +32,11 @@ npm install
 npm run dev          # página em http://localhost:3008 e servidor em http://localhost:8088
 ```
 
-Da raiz do repositório: `npm run dev:landing`. Em desenvolvimento, o Vite repassa `/api/landing` para o servidor Node.
+Da raiz do repositório: `npm run dev:landing`. Em desenvolvimento, o Vite repassa `/api/landing` e `/public/landing` para o servidor Node.
+
+Para simular a chegada por um anúncio, abra a página com os parâmetros na URL, por exemplo
+`http://localhost:3008/?utm_source=instagram&utm_medium=cpc&utm_campaign=black-friday-2026&fbclid=abc123`.
+O rodapé mostra a primeira e a última origem guardadas e tem um botão para esquecê-las.
 
 | Script | O que faz |
 |---|---|
@@ -56,7 +60,7 @@ Em container, roda **um processo só**: o servidor Node entrega a página (o bui
 |---|---|---|
 | `PORTA` | `8088` | porta do servidor Node |
 | `RABBITMQ_URL` | `amqp://mq_landing:mq_landing@localhost:5672/plataforma` | RabbitMQ; conecta como `mq_landing`, porque o `user_id` das mensagens precisa bater com o usuário |
-| `SERVIDOR_PROXY_ALVO` | `http://localhost:8088` | para onde o Vite repassa `/api/landing` em desenvolvimento |
+| `SERVIDOR_PROXY_ALVO` | `http://localhost:8088` | para onde o Vite repassa `/api/landing` e `/public/landing` em desenvolvimento |
 
 ## Estrutura de pastas
 
@@ -64,16 +68,22 @@ Em container, roda **um processo só**: o servidor Node entrega a página (o bui
 landing-web/
 ├── Dockerfile                  build da página + imagem só com o servidor Node
 ├── index.html                  página base (div #raiz)
-├── vite.config.ts              porta 3008 e proxy de /api/landing
+├── vite.config.ts              porta 3008 e proxy de /api/landing e /public/landing
 ├── tsconfig.json               tipos da página (src/)
 ├── server/                     o "back-end do Grupo 7" de mentira
-│   ├── index.ts                servidor Express: rotas /api/landing e entrega do build
+│   ├── index.ts                servidor Express: rotas /api/landing, /public/landing e entrega do build
+│   ├── formulario.ts           o formulário de exemplo (tenant Empresa A), fixo no código
+│   ├── validacao.ts            validação das respostas por tipo de campo e normalização da origem
+│   ├── envios.ts               envios gravados, em memória
 │   ├── config.ts               configuração por variável de ambiente
 │   ├── envelope.ts             envelope padrão {success, data, message, errors}
 │   └── tsconfig.json           tipos do servidor (Node)
 └── src/                        a landing page de um tenant de teste
     ├── main.tsx                renderiza o App
-    ├── App.tsx                 página da "Empresa A" com o botão "Fale conosco"
+    ├── App.tsx                 página da "Empresa A" com o botão "Fale conosco" e o rodapé de origem
+    ├── FormularioExemplo.tsx   formulário renderizado a partir do schema público, com o consentimento
+    ├── origem.ts               primeira e última origem (UTM, fbclid, gclid, referenciador, página de entrada)
+    ├── api.ts                  chamadas à superfície pública e tipos do contrato
     ├── AvisoPlaceholder.tsx    faixa amarela avisando que é placeholder, com o estado do servidor
     └── index.css               Tailwind e as mesmas cores da marca
 ```
@@ -85,9 +95,17 @@ landing-web/
 Servidor Express. Hoje tem:
 
 - `GET /api/landing/health`: `200` com `{"status": "UP"}` no envelope;
+- `GET /public/landing/formularios/{chavePublica}`: schema público do formulário (`FormularioPublico` do `landing.yaml`), sem `mapeamentoCrm`;
+- `POST /public/landing/formularios/{chavePublica}/envios`: corpo `EnvioPublico` (`respostas` como mapa `campoId → valor`, `consentimento.aceito`, `paginaSlug`, `origem {primeira, ultima}`). Sem aceite responde `400 CONSENTIMENTO_OBRIGATORIO`; campo inválido, `400` com `CAMPO_OBRIGATORIO`, `EMAIL_INVALIDO`, `TELEFONE_INVALIDO` ou `OPCAO_INVALIDA`. Grava o envio com o texto do termo vigente e a data do aceite, e responde só a `mensagemSucesso` (a superfície pública não devolve o id do envio). Com `paginaSlug = empresa-a-consultoria` o canal é `landing_page`; sem ele, `formulario`;
 - entrega da página: se `dist/` existir, como no container, serve os arquivos e manda qualquer outra rota para o `index.html`. Em desenvolvimento, quem entrega a página é o Vite.
 
-É aqui que vão entrar a publicação dos eventos no RabbitMQ, a gravação dos envios, o `GET /api/landing/envios/{id}` e o `GET /api/landing/formularios/{id}/resumo`.
+### `server/formulario.ts`
+
+O formulário de exemplo: chave pública `fk_empresaA01`, id `a0000000-0000-4000-8000-0000000000f1`, do tenant Empresa A (`a0000000-0000-4000-8000-00000000000a`, o mesmo do identity em modo dev), com oito campos (nome, e-mail, telefone, empresa, porte, interesses, prazo e mensagem), o texto de consentimento e a landing page de teste (`empresa-a-consultoria`). O formulário é do Landing: o Marketing nunca o define.
+
+### `server/envios.ts` e `server/validacao.ts`
+
+Os envios ficam num `Map` em memória e somem quando o servidor reinicia. O consentimento guarda o texto e a data do aceite, como o `ConsentimentoRegistrado` do contrato; IP e *User-Agent* não são guardados nem logados. A origem é reduzida aos campos do `ToqueOrigem` do contrato: o `fbclid` e o `gclid` não têm campo próprio lá e chegam dentro da `paginaEntrada`.
 
 ### `server/config.ts`
 
@@ -99,7 +117,15 @@ Tipo `Resposta<T>` e as funções `ok(data)` e `erro(mensagem, erros?)`, no mesm
 
 ### `src/App.tsx`
 
-Landing page de um tenant de teste ("Empresa A · Consultoria"): chamada principal, botão **Fale conosco** e três cartões de benefícios. O botão abre o espaço onde o formulário vai aparecer. Hoje esse espaço mostra só um texto explicando que ali entra o formulário de exemplo do placeholder.
+Landing page de um tenant de teste ("Empresa A · Consultoria"): chamada principal, botão **Fale conosco**, que abre o formulário de exemplo, e três cartões de benefícios. No rodapé, a primeira e a última origem guardadas.
+
+### `src/origem.ts`
+
+Guarda no `localStorage` a primeira e a última origem do visitante (UTM, `fbclid`, `gclid`, referenciador e página de entrada), como o `form.js` do Landing. A primeira nunca muda; a última só é trocada por uma visita com campanha ou vinda de outro site, para uma volta direta não apagar o anúncio que trouxe a pessoa.
+
+### `src/FormularioExemplo.tsx`
+
+Lê o schema público e renderiza os campos por tipo, com a caixa de aceite mostrando o texto do termo. Envia as respostas, o aceite, o slug da página e a origem, e mostra os erros devolvidos por campo.
 
 ### `src/AvisoPlaceholder.tsx`
 
@@ -109,7 +135,7 @@ Faixa amarela no topo: "Placeholder do Landing (Grupo 7) para testes locais do G
 
 Detalhes e dependências em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md), tarefas L1 a L5:
 
-1. **Página e UTM (L1):** guardar a primeira e a última origem (UTM, `fbclid`, `gclid`, referenciador e página de entrada) e mostrar um formulário de exemplo, com o aceite de consentimento.
+1. ~~**Página e UTM (L1)**~~: feita.
 2. **Eventos (L2):** publicar em `landing.eventos`, com o envelope da §9.7, `moduloOrigem: "landing"` e `user_id = mq_landing`, os dois eventos do `landing.asyncapi.yaml`:
 
    | Quando | Evento | Etapa no Marketing |
