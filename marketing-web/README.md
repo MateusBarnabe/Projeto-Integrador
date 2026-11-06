@@ -2,7 +2,7 @@
 
 Front do módulo de Marketing (Etapa 2 do projeto). É a área autenticada que a pessoa gestora de marketing usa dentro da plataforma: painel, leads e configurações.
 
-> **Estado atual (25/09/2026, revisado em 05/11/2026): alicerce.** O layout, a navegação por abas, a camada de integração com a casca e o cliente HTTP estão prontos. As três áreas mostram só um aviso de "em construção". O Painel já consulta o `/health` da API. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (06/11/2026): alicerce e componentes.** O layout, a navegação por abas, a camada de integração com a casca, o cliente HTTP e os componentes do Design System (W1, com tema escuro) estão prontos. As três áreas ainda mostram só um aviso de "em construção"; o Painel já consulta o `/health` da API. A API de leads (A2) já responde, então a tela de Leads (W5) é a próxima. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|

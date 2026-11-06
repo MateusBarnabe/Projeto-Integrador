@@ -2,7 +2,7 @@
 
 API do módulo de Marketing (Grupo 4). Recebe os leads, guarda o funil, qualifica, distribui entre vendedores e atende o front do módulo e os outros módulos da plataforma.
 
-> **Estado atual (05/11/2026): fundação e primeiras tabelas.** A API sobe, conecta no Postgres com os usuários da plataforma, roda o Flyway, responde `/health` com o envelope, recusa rotas sem token com `401` e publica a documentação no Swagger. Já tem o contexto do JWT (F1), a entidade base (F2), o publicador de eventos (F3), as tabelas de leads (D1, ajustadas ao contrato do Landing na D8) e de qualificação (D5) e as variáveis de ambiente da plataforma (F8). Ainda não tem rota de negócio nem consumidor de eventos. O que falta está em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (06/11/2026): jornada do lead pronta no back.** Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API já consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. Faltam as tabelas de e-mail e as configurações (D3, D7, A3), o painel (A4), o Meta (E3, E4), o descadastro e os e-mails (E7 a E10). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|
@@ -69,7 +69,13 @@ Todo endereço e credencial vem de variável de ambiente (Contrato §9.1). **Os 
 | `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_VHOST` | `localhost`, `5672`, `plataforma` | endereço do RabbitMQ |
 | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | `mq_marketing` | usuário do módulo no RabbitMQ |
 | `JWKS_URI` | `http://localhost:8081/api/identity/.well-known/jwks.json` | chaves públicas do identity para validar o JWT |
+| `IDENTITY_BASE_URL` | `http://identity:8081` | identity, para o token de serviço e o `tenants/resolver` (vem do compose da plataforma) |
+| `LANDING_BASE_URL` | `http://landing:8088` | Landing, para ler o envio e o resumo do formulário. Ainda não está no compose da plataforma (X14) |
+| `CRM_BASE_URL` | `http://crm:8082` | CRM. Ainda não está no compose da plataforma (X14) |
+| `SVC_CLIENT_ID`, `SVC_CLIENT_SECRET` | `marketing`, vazio | token de serviço; o compose da plataforma preenche o segredo com o `SVC_MARKETING_SEGREDO` do `.env`. Sem ele, a API sobe e as chamadas a outros módulos falham com `NAO_CONFIGURADO` |
 | `SWAGGER_HABILITADO` | `true` | `false` desliga o Swagger UI e o `/v3/api-docs` |
+
+No perfil `dev` ([application-dev.yml](src/main/resources/application-dev.yml)), os três endereços apontam para `localhost`. Propriedades do módulo, sem variável de ambiente própria: `marketing.rodizio.atribuicao-pendente.intervalo` e `marketing.entrada.leitura-pendente.intervalo` (padrão `PT1M`, os jobs 4.4 e 4.6), `marketing.rodizio.fuso-horario` (padrão `America/Sao_Paulo`, para o horário comercial) e `marketing.consumo.landing-leads.auto-startup` e `marketing.consumo.crm-oportunidades.auto-startup` (padrão `true`; os testes que leem as filas direto desligam os consumidores).
 
 ## Estrutura de pastas
 
@@ -83,32 +89,34 @@ marketing-api/
     │   ├── java/br/com/centinela/marketing/
     │   │   ├── MarketingApplication.java      ponto de entrada
     │   │   ├── compartilhado/                 o que todas as áreas usam
+    │   │   │   ├── agendamento/               liga o @Scheduled dos jobs
+    │   │   │   ├── dados/                     entidade base, conversores e paginação (F2)
     │   │   │   ├── documentacao/OpenApiConfig.java
-    │   │   │   ├── mensageria/                envelope e publicação de eventos (F3)
-    │   │   │   ├── seguranca/SegurancaConfig.java
+    │   │   │   ├── http/                      cliente HTTP para Landing, CRM e identity, com token de serviço (F5)
+    │   │   │   ├── mensageria/                publicação (F3) e consumo idempotente com DLQ (F4)
+    │   │   │   ├── plataforma/                pedidos em identity.entrada: notificação e timeline (N1)
+    │   │   │   ├── seguranca/                 JWT, permissões e SegurancaConfig (F1)
+    │   │   │   ├── tenant/                    TenantContexto e TenantFiltro
     │   │   │   └── web/                       envelope, erros e X-Request-Id
-    │   │   │       ├── Resposta.java
-    │   │   │       ├── ErroCampo.java
-    │   │   │       ├── TratadorDeErros.java
-    │   │   │       └── RequestIdFilter.java
-    │   │   ├── leads/                         lead, timeline e consentimentos (D1)
-    │   │   ├── qualificacao/                  regras de pontuação, faixas e rodízio (D5)
+    │   │   ├── crm/                           ponto para levar o vendedor ao CRM (C1, pendente)
+    │   │   ├── entrada/                       consumidores do Landing e do CRM, identidade, junção e job 4.6 (E1, E5, E6, E11)
+    │   │   ├── leads/                         lead, timeline e consentimentos (D1, D8)
+    │   │   │   └── api/                       API de leads: lista, detalhe, resumo e busca (A2)
+    │   │   ├── notificacoes/                  NOVO_LEAD e registro na timeline (N1)
+    │   │   ├── qualificacao/                  regras, faixas e motor de pontuação (D5, Q1)
+    │   │   ├── rodizio/                       rodízio, job 4.4 e reatribuição manual (Q2)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
-    │       ├── application-dev.yml            perfil dev (Flyway fora de ordem)
-    │       └── db/migration/                  migrations do Flyway
-    │           ├── V1__cria_eventos_processados.sql
-    │           ├── V2__cria_leads.sql
-    │           ├── V6__cria_qualificacao.sql
-    │           └── V8__ajusta_leads_ao_contrato_do_landing.sql
+    │       ├── application-dev.yml            perfil dev (Flyway fora de ordem, endereços em localhost)
+    │       └── db/migration/                  migrations do Flyway (V1, V2, V6, V8, V9, V10)
     └── test/java/br/com/centinela/marketing/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
-        ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
-        ├── compartilhado/mensageria/          testes do publicador (Testcontainers com RabbitMQ)
-        ├── compartilhado/teste/               base de integração e WireMock dos outros módulos (F6)
-        ├── leads/                             regras do lead e testes da V2
-        └── qualificacao/                      regras da qualificação e testes da V6
+        ├── compartilhado/                     dados, http, mensageria, segurança e a base de integração (F6)
+        ├── entrada/                           consumo do chatbot, do envio, da oportunidade e job 4.6
+        ├── leads/                             regras do lead, repositórios e a API (leads/api)
+        ├── notificacoes/, rodizio/            pedidos à plataforma e rodízio
+        └── qualificacao/                      regras da qualificação e motor de pontuação
 ```
 
 **Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (consumidores dos eventos do Landing e do CRM, webhook e buffer do Meta). Clientes HTTP de outros módulos (Landing, CRM, identity) ficam em `compartilhado/`. Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
@@ -218,6 +226,8 @@ Cada tarefa de dados do [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md) tem um núme
 | `V2__cria_leads.sql` | D1: `leads` (com `temperatura` gerada a partir da `etapa`), `lead_eventos` (com `sequencia` por identidade, usada pelo SSE) e `lead_consentimentos` (só inclusão). Chaves únicas `(tenant_id, meta_lead_id)` e `token_descadastro`; `CHECK` nos valores fechados do norteador (etapa, origem, faixa, status e tipos). Parte do desenho dela foi trocada pela `V8` |
 | `V6__cria_qualificacao.sql` | D5: `regras_pontuacao` (`valores` em `jsonb`; cada fonte preenche só o próprio alvo: `formulario_id` e `campo_id` do Landing em `campo_formulario`, `campo_meta` em `campo_meta`, nada em `utm`), `qualificacao_configuracoes` (uma por tenant; `dias_atendimento` em `smallint[]` de 1 a 7; morno abaixo de quente; início antes do fim) e `vendedores_rodizio` (único por `(tenant_id, vendedor_id)`) |
 | `V8__ajusta_leads_ao_contrato_do_landing.sql` | D8: ajusta a `V2` ao contrato do Landing. Em `leads`, sai `visitante_id` e `formulario_versao` e entram `sessao_id` (único por tenant), `canal` (`formulario`, `landing_page`, `embed`, `chatbot`) e `envio_lido_em`; `envio_id` passa a ser único por tenant; índices da leitura pendente e do contato do CRM. Em `lead_eventos`, `respostas_lidas` no lugar de `formulario_atualizado`. Em `lead_consentimentos`, `texto_termo` (`text`) no lugar de `versao_termo`, `sessao_id` novo, sai `formulario_versao` e as origens passam a ser `landing.formulario.recebido`, `landing.chatbot.lead_capturado` e `descadastro` |
+| `V9__indice_leads_aguardando_vendedor.sql` | Q2: índice parcial `(tenant_id, qualificado_em, id)` dos leads MQL sem vendedor, ativos e não anonimizados. "Aguardando vendedor" é derivado, sem coluna |
+| `V10__leitura_pendente_do_envio.sql` | E5/E11: `leitura_envio_falhas` e `leitura_envio_desistida_em` em `leads`, o índice da leitura pendente que sabe da desistência (no lugar do da `V8`) e os tipos `leads_unidos` e `respostas_indisponiveis` em `lead_eventos` |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -263,14 +273,45 @@ Pacote `qualificacao`, com as três tabelas da `V6` (norteador §3 e §9.3). O c
 | `FonteRegra` | `campo_formulario`, `campo_meta` ou `utm`, gravado pelo `ConversorDeValor` |
 | `RegraPontuacaoRepository`, `QualificacaoConfiguracaoRepository`, `VendedorRodizioRepository` | Spring Data. `findByAtivoTrueAndFormularioId` traz as regras do formulário de um envio e `findByAtivoTrueAndFonte` as de UTM e do Meta, para o motor da Q1; `findFirstBy` devolve a configuração do tenant atual |
 
+### Pontuação (Q1)
+
+`MotorDePontuacao.calcular` é o cálculo puro (sem banco) e `PontuacaoDeLeads.pontuar(lead)` o serviço que os consumidores e jobs chamam: lê do próprio lead o formulário, as respostas e a UTM, soma as regras ativas (cada critério uma vez, pela de mais pontos), define a faixa pelos limites do tenant, grava `pontuacao_detalhe` e registra `qualificacao_alterada`. O formato das condições de `utm` está no norteador, 9.3.
+
+### Entrada do lead (E1, E5, E6, E11)
+
+Pacote `entrada`, que segue a seção 5 do norteador. Os consumidores usam `ConsumoDeEventos.consumir(...)`.
+
+| Classe | O que é |
+|---|---|
+| `ConsumidorDeLeadsDoLanding` | fila `marketing.landing-leads`; despacha por `tipo` para `CapturaDoChatbot` (etapa 1) ou `EnvioDoFormulario` (etapa 3) |
+| `ConsumidorDeOportunidadesDoCrm`, `OportunidadeDoCrm` | fila `marketing.crm-oportunidades`; liga o lead à oportunidade (`handoff_crm`) ou cria o lead pendente quando a oportunidade chega antes do envio |
+| `NormalizacaoDeContato`, `ChavesDeIdentidade`, `IdentificacaoDeLeads` | normaliza e-mail e telefone e acha o lead por Meta, envio, sessão, contato do CRM, e-mail e telefone, nessa ordem |
+| `GravacaoDeLeads`, `RegistroDeConsentimentos`, `Procedencia` | cria o lead, avança a etapa (nunca recua) e grava consentimentos sem duplicar, registrando na timeline de onde veio |
+| `LeituraDoEnvio`, `JuncaoDeLeads`, `TravasDeLeads` | lê o envio no Landing e aplica no lead; junta duplicados no mais antigo; trava e relê a linha do lead antes de mudar |
+| `LeituraPendenteDoEnvio` | job 4.6: relê os envios pendentes, até 50 por tenant, e desiste depois de 10 falhas |
+
+### Rodízio e notificações (Q2, N1)
+
+`RodizioDeVendedores.atribuir(lead)` escolhe o vendedor ativo que recebeu há mais tempo (só MQL com contato), grava, registra `vendedor_atribuido` e notifica; fora do horário comercial devolve "aguardando". `AtribuicaoPendente` é o job 4.4. `VendedorDoLeadController` é a reatribuição manual. `NotificacoesDeLead` monta `NOVO_LEAD` e o registro na timeline e publica por `PedidosAPlataforma`; sem vendedor, `DestinatarioSemVendedor` decide (hoje, não notifica). Em `crm/`, `ResponsavelDaOportunidade` é o ponto onde a C1 vai levar o vendedor ao CRM; a implementação atual só registra a pendência.
+
+### API de leads (A2)
+
+Pacote `leads/api`: `LeadsController`, as consultas em `LeadConsultas` e os DTOs do detalhe, da lista, do resumo e da busca. Os parâmetros da lista estão no norteador, seção 6.
+
 ## Endpoints atuais
 
-| Método | Rota | Token | Resposta |
+| Método | Rota | Permissão | Resposta |
 |---|---|---|---|
-| GET | `/api/marketing/health` | não | `200` `{"status":"UP"}` ou `503` |
-| qualquer | outra rota em `/api/marketing/**` | sim | sem token: `401` com envelope |
+| GET | `/api/marketing/health` | nenhuma | `200` `{"status":"UP"}` ou `503` |
+| GET | `/api/marketing/leads` | `marketing.lead.ver` | lista paginada com filtros e ordenação |
+| GET | `/api/marketing/leads/{id}` | `marketing.lead.ver` | detalhe em seções; outro tenant dá `404` |
+| GET | `/api/marketing/leads/{id}/resumo` | `marketing.lead.ver_resumo` | resumo sem dado pessoal, no formato do `marketing.yaml` |
+| GET | `/api/marketing/leads/resumo?ids=` | `marketing.lead.ver_resumo` | até 100 resumos |
+| PUT | `/api/marketing/leads/{id}/vendedor` | `marketing.qualificacao.editar` | reatribuição manual do vendedor |
+| GET | `/api/marketing/busca?q=` | `marketing.lead.ver` | busca global, até 5 itens |
+| qualquer | outra rota em `/api/marketing/**` | — | sem token: `401` com envelope |
 
-Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 dos próximos passos.
+Os outros endpoints previstos estão na seção 6 do norteador e nas tarefas A3 e A4 dos próximos passos.
 
 ## Testes
 
@@ -313,6 +354,21 @@ class ConsumoDoEnvioTest extends IntegracaoDeTeste {
 ```
 
 `ModulosSimuladosTest` confere os simuladores sem Docker; `InfraDeTesteTest` confere a base (URLs no ambiente do Spring e RabbitMQ). `PublicadorDeEventosTest` já usa a base.
+
+### Testes da jornada do lead
+
+Todos sobre a `IntegracaoDeTeste`, publicando os eventos reais no RabbitMQ do Testcontainers:
+
+| Classe | O que confere |
+|---|---|
+| `ConsumoDeEventosIntegracaoTest`, `ConsumoDeEventosTest` | idempotência, retentativa, DLQ depois de 3 falhas e remetente errado (F4) |
+| `ClienteDeModuloTest` | token de serviço, timeout, `401` com nova tentativa e falhas classificadas, sem segredo no log (F5) |
+| `MotorDePontuacaoTest`, `PontuacaoDeLeadsTest` | regras, desempate e um lead de cada faixa (Q1) |
+| `CapturaDoChatbotIntegracaoTest`, `NormalizacaoDeContatoTest` | captura do chatbot e normalização do contato (E1) |
+| `EnvioDoFormularioIntegracaoTest`, `LeituraPendenteDoEnvioIntegracaoTest` | envio com leitura do Landing (WireMock), junção, Landing fora do ar e job 4.6 (E5, E11) |
+| `OportunidadeDoCrmIntegracaoTest` | ligação com a oportunidade e lead criado antes do envio (E6) |
+| `RodizioDeVendedoresTest`, `HorarioDeAtendimentoTest`, `NotificacoesDeLeadTest` | rodízio com 3 leads e 2 vendedores, fora do horário, job 4.4 e as mensagens à plataforma (Q2, N1) |
+| `LeadsApiTest` | filtros, paginação, `403`, `404` de outro tenant, resumo sem dado pessoal e busca (A2) |
 
 `BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
 

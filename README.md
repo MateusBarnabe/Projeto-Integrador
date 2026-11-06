@@ -20,7 +20,7 @@ O módulo roda dentro da plataforma do Grupo 2 (`infra-integrador-2026`) e conve
 └── PROXIMOS-PASSOS.md tarefas, dependências entre elas e divisão do trabalho
 ```
 
-Cada pasta tem um README com a estrutura, os arquivos e as classes: [marketing-api](marketing-api/README.md), [marketing-web](marketing-web/README.md), [landing-web](landing-web/README.md) e [infra](infra/README.md). O que falta fazer, em que ordem e o que bloqueia o quê está em [PROXIMOS-PASSOS.md](PROXIMOS-PASSOS.md).
+Cada pasta tem um README com a estrutura, os arquivos e as classes: [marketing-api](marketing-api/README.md), [marketing-web](marketing-web/README.md), [landing-web](landing-web/README.md), [crm-stub](crm-stub/README.md) e [infra](infra/README.md). O que falta fazer, em que ordem e o que bloqueia o quê está em [PROXIMOS-PASSOS.md](PROXIMOS-PASSOS.md).
 
 | App | O que é | Porta | Imagem na plataforma |
 |---|---|---|---|
