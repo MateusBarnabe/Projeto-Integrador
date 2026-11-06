@@ -93,5 +93,17 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # Stub do CRM (crm-stub): empresas, contatos e oportunidades em memória e o evento
+  # crm.oportunidade.criada. Nome de serviço e porta do CRM real: http://crm:8082
+  crm:
+    build: ./crm-stub
+    environment:
+      RABBITMQ_URL: amqp://mq_crm:mq_crm@rabbitmq:5672/plataforma
+    ports:
+      - "8082:8082"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres-dados:

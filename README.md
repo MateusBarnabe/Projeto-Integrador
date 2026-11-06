@@ -11,6 +11,7 @@ O módulo roda dentro da plataforma do Grupo 2 (`infra-integrador-2026`) e conve
 ├── marketing-api/     API do módulo: Java 21, Spring Boot 3.5, Maven, Flyway, Spring AMQP
 ├── marketing-web/     front do módulo integrado na plataforma (Etapa 2): React, Vite, Tailwind v4
 ├── landing-web/       placeholder do Landing (Etapa 1): landing page, formulário público e servidor Node
+├── crm-stub/          stub do CRM: empresas, contatos e oportunidades em memória e crm.oportunidade.criada
 ├── infra/             scripts do Postgres e definições do RabbitMQ usados pelo docker-compose
 ├── scripts/           atalhos usados pelo package.json da raiz
 ├── Docs/              documentação do módulo
@@ -26,6 +27,7 @@ Cada pasta tem um README com a estrutura, os arquivos e as classes: [marketing-a
 | `marketing-api` | API `/api/marketing/**` e rotas públicas `/public/marketing/**` | 8087 | `marketing` |
 | `marketing-web` | Front que a casca abre em `/modulos/marketing/` | 3007 | `marketing-front` |
 | `landing-web` | Página do tenant (Vite na 3008 em desenvolvimento) e API `/api/landing/**` | 8088 | não vai para a plataforma |
+| `crm-stub` | Stub do CRM: `POST /api/crm/empresas`, `/contatos` e `/oportunidades` ([README](crm-stub/README.md)) | 8082 | não vai para a plataforma |
 
 O `landing-web` **não é nosso módulo**: é um placeholder que imita o contrato publicado pelo Grupo 7 (`landing.yaml` e `landing.asyncapi.yaml` do infra; o que consumimos está em [landing-requisitos.md](Docs/contratos/landing-requisitos.md)). Ele serve para testar a jornada inteira localmente, do anúncio à oportunidade no CRM. Ele usa o nome de serviço e a porta do Landing real (`landing:8088`), então a troca pelo módulo do Grupo 7 é só de configuração, sem mudar o código do Marketing.
 
@@ -71,6 +73,7 @@ Cada um separado:
 | `npm run dev:api` | `./mvnw spring-boot:run` (`mvnw.cmd` no Windows) | http://localhost:8087 |
 | `npm run dev:web` | `npm run dev` | http://localhost:3007/modulos/marketing/ |
 | `npm run dev:landing` | `npm run dev` | http://localhost:3008 (servidor na 8088) |
+| `npm run dev:crm` | `npm run dev` | http://localhost:8082/api/crm/health |
 
 Em desenvolvimento, o Vite repassa `/api/marketing` para a API (8087) e `/api/landing` para o servidor do placeholder (8088).
 
