@@ -160,19 +160,28 @@ app.post('/public/landing/formularios/:chavePublica/sessoes/:sessaoId/concluir',
 });
 
 // ── Rotas lidas pelo Marketing (token de serviço + X-Tenant-Id, direto em landing:8088) ─────
-// O placeholder ainda não confere o token (pendência X10, tarefa L3): só exige o X-Tenant-Id.
+// Decisão X10: exige `Authorization: Bearer <token>` e `X-Tenant-Id`, mas não confere a
+// assinatura do token (é placeholder local; o Landing real valida pelo JWKS do identity).
 
 const naoEncontrado = (campo: string) =>
   erro('Registro não encontrado.', [{ campo, codigo: 'NAO_ENCONTRADO', detalhe: 'Não existe neste tenant.' }]);
 
+const naoAutenticado = (campo: string, detalhe: string) =>
+  erro('Não autenticado.', [{ campo, codigo: 'NAO_AUTENTICADO', detalhe }]);
+
+/** Tenant da chamada de serviço; sem token Bearer ou sem `X-Tenant-Id`, responde `401` e devolve `undefined`. */
 function tenantDaRequisicao(req: Request, res: Response): string | undefined {
+  const token = /^Bearer\s+(\S+)$/i.exec(req.header('Authorization') ?? '')?.[1];
+  if (!token) {
+    res.status(401).json(naoAutenticado('Authorization', 'Chamada de serviço precisa do cabeçalho Authorization: Bearer <token>.'));
+    return undefined;
+  }
   const tenant = req.header('X-Tenant-Id');
   if (!tenant) {
-    res.status(401).json(erro('Não autenticado.', [
-      { campo: 'X-Tenant-Id', codigo: 'NAO_AUTENTICADO', detalhe: 'Chamada de serviço precisa do cabeçalho X-Tenant-Id.' },
-    ]));
+    res.status(401).json(naoAutenticado('X-Tenant-Id', 'Chamada de serviço precisa do cabeçalho X-Tenant-Id.'));
+    return undefined;
   }
-  return tenant;
+  return tenant.toLowerCase();
 }
 
 /** `GET /api/landing/envios/{id}` (`landing.envio.ver`): envio de outro tenant responde 404. */

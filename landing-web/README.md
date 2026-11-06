@@ -16,7 +16,7 @@ O contrato que ele imita:
 - `contratos/landing.yaml` e `contratos/landing.asyncapi.yaml` do `infra-integrador-2026`: o contrato publicado pelo Grupo 7;
 - [Docs/contratos/landing-requisitos.md](../Docs/contratos/landing-requisitos.md): o que consumimos e o que ainda pedimos a eles.
 
-> **Estado atual (05/11/2026): L1 e L2 feitas.** A página guarda a primeira e a última origem e mostra o formulário de exemplo e um chatbot de exemplo, com o aceite de consentimento. Os envios ficam em memória, os dois eventos `landing.*` são publicados em `landing.eventos` e as duas rotas lidas pelo Marketing já respondem, sem conferir o token (X10). Faltam a decisão X10 (L3) e o stub do CRM com a chamada antes do evento (L4 e L5, em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
+> **Estado atual (06/11/2026): L1, L2 e L3 feitas.** A página guarda a primeira e a última origem e mostra o formulário de exemplo e um chatbot de exemplo, com o aceite de consentimento. Os envios ficam em memória, os dois eventos `landing.*` são publicados em `landing.eventos` e as duas rotas lidas pelo Marketing respondem no formato do `landing.yaml`, exigindo `Authorization: Bearer` e `X-Tenant-Id` (decisão X10). Falta a chamada ao stub do CRM antes do evento (L4, em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
 
 | | |
 |---|---|
@@ -111,7 +111,7 @@ O formulário de exemplo: chave pública `fk_empresaA01`, id `a0000000-0000-4000
 
 ### `server/envios.ts` e `server/validacao.ts`
 
-Os envios ficam num `Map` em memória e somem quando o servidor reinicia. O consentimento guarda o texto e a data do aceite, como o `ConsentimentoRegistrado` do contrato; IP e *User-Agent* não são guardados nem logados. A origem é reduzida aos campos do `ToqueOrigem` do contrato: o `fbclid` e o `gclid` não têm campo próprio lá e chegam dentro da `paginaEntrada`.
+Os envios ficam num `Map` em memória e somem quando o servidor reinicia (decisão X10: é ferramenta de teste; para reproduzir um cenário, basta enviar de novo). O consentimento guarda o texto e a data do aceite, como o `ConsentimentoRegistrado` do contrato; IP e *User-Agent* não são guardados nem logados. A origem é reduzida aos campos do `ToqueOrigem` do contrato: o `fbclid` e o `gclid` não têm campo próprio lá e chegam dentro da `paginaEntrada`.
 
 ### `server/chatbot.ts`
 
@@ -137,11 +137,20 @@ A etapa do funil não vai no evento: quem decide é o Marketing.
 | `GET /api/landing/envios/{id}` | `Envio` do `landing.yaml`: `nome`, `email`, `canal`, `paginaId`, `recebidoEm`, `anonimizado`, `respostas[] {campoId, rotulo, tipo, valor}` na ordem dos campos, `origem {primeira, ultima}`, `consentimento {aceito, texto, aceitoEm}`, `empresaId`, `contatoId` |
 | `GET /api/landing/formularios/{id}/resumo` | `Formulario`: nome, status, modo, texto do termo e `campos[] {id, ordem, rotulo, tipo, obrigatorio, placeholder, opcoes}`, sem chave pública nem `mapeamentoCrm` |
 
-As duas exigem o cabeçalho `X-Tenant-Id` (sem ele, `401`) e respondem `404` para registro de outro tenant. **O token de serviço ainda não é conferido** (X10). O id do envio sai no evento e no log do servidor (`Envio <id> gravado ...`).
+As duas são as únicas que aceitam token de serviço no Landing real (`clientId` `marketing`, chamada direta em `landing:8088`, §9.2). Aqui, pela **decisão X10**:
+
+- exigem `Authorization: Bearer <token>` e `X-Tenant-Id`; sem um ou outro, `401` no envelope, com `NAO_AUTENTICADO` no campo que faltou;
+- **não conferem a assinatura, a validade nem as permissões do token**: qualquer valor serve. Quem valida pelo JWKS do identity é o Landing real; o placeholder só garante que o Marketing manda o cabeçalho;
+- o tenant vem do `X-Tenant-Id`, e registro de outro tenant responde `404`.
+
+O id do envio sai no evento e no log do servidor (`Envio <id> gravado ...`).
 
 ```bash
-curl -H 'X-Tenant-Id: a0000000-0000-4000-8000-00000000000a' http://localhost:8088/api/landing/envios/<envioId>
+curl -H 'Authorization: Bearer qualquer' -H 'X-Tenant-Id: a0000000-0000-4000-8000-00000000000a' \
+  http://localhost:8088/api/landing/envios/<envioId>
 ```
+
+Diferenças conhecidas em relação ao `landing.yaml`: o `Formulario` do resumo não traz `criadoPor`/`atualizadoPor` (o formulário de exemplo não tem autor) nem `chavePublica` (a rota não devolve a chave de embed); `403` nunca acontece, porque as permissões do token não são lidas.
 
 ### `server/config.ts`
 
@@ -176,7 +185,7 @@ Faixa amarela no topo: "Placeholder do Landing (Grupo 7) para testes locais do G
 Detalhes e dependências em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md), tarefas L1 a L5:
 
 1. ~~**Página e UTM (L1)**~~ e ~~**Eventos (L2)**~~: feitas.
-2. **Envios (L3):** as duas rotas já respondem no formato do `landing.yaml`, com os envios em memória. Falta decidir a X10: guardar em memória ou em arquivo, e conferir ou não o token de serviço do `marketing`.
+2. ~~**Envios (L3)**~~: feita. Envios em memória; as duas rotas exigem Bearer e `X-Tenant-Id`, sem conferir a assinatura (X10).
 3. **CRM (L4 e L5):** no envio, antes do evento, criar empresa, contato e oportunidade no stub do CRM, com `origem: landing` e `origemModuloId` igual ao `envioId`. O stub publica `crm.oportunidade.criada` em `crm.eventos`.
 
 **Regras de desacoplamento:** o Marketing nunca importa código daqui, e este app nunca lê o schema `marketing`. Os dois conversam só por RabbitMQ e HTTP, como o Landing real faria. Se o Grupo 7 mudar um nome ou formato, atualize primeiro o contrato em `Docs/contratos/`, depois este placeholder e o consumidor do Marketing.

@@ -1,6 +1,6 @@
 /*
- * Envios recebidos pelo placeholder. Ficam em memória: somem quando o servidor reinicia
- * (onde guardar de vez é a pendência X10, da tarefa L3).
+ * Envios recebidos pelo placeholder. Ficam em memória e somem quando o servidor reinicia
+ * (decisão X10: é ferramenta de teste local; o Landing real guarda no schema dele).
  */
 import { randomUUID } from 'node:crypto';
 import { contatoDasRespostas, type Formulario } from './formulario.ts';
