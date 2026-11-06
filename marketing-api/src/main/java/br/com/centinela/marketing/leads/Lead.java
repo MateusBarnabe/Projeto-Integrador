@@ -275,6 +275,21 @@ public class Lead extends EntidadeBase {
         this.consentimentoEm = Objects.requireNonNull(registradoEm, "registradoEm");
     }
 
+    /**
+     * Grava o resultado do motor de pontuação (§9.3): a soma, a faixa, as regras que pontuaram e a
+     * data do cálculo. Quem registra a mudança de faixa na timeline é o motor.
+     */
+    public void registrarPontuacao(int pontuacao, FaixaQualificacao faixa, List<Map<String, Object>> detalhe,
+            OffsetDateTime calculadoEm) {
+        if (pontuacao < 0) {
+            throw new IllegalArgumentException("Pontuação não pode ser negativa: " + pontuacao);
+        }
+        this.pontuacao = pontuacao;
+        this.faixaQualificacao = Objects.requireNonNull(faixa, "faixa");
+        this.pontuacaoDetalhe = detalhe == null ? List.of() : List.copyOf(detalhe);
+        this.qualificadoEm = Objects.requireNonNull(calculadoEm, "calculadoEm");
+    }
+
     /** Só é lead quem tem um identificador de contato: Meta, e-mail ou telefone (§3). */
     public boolean possuiIdentificadorDeContato() {
         return temTexto(metaLeadId) || temTexto(email) || temTexto(telefone);
