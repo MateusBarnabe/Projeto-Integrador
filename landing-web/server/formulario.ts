@@ -55,10 +55,13 @@ export const PAGINA_EXEMPLO = {
   slug: 'empresa-a-consultoria',
 };
 
-function campo(n: number, dados: Omit<Campo, 'id' | 'ordem' | 'placeholder' | 'opcoes'> & Partial<Campo>): Campo {
+/**
+ * O id é fixo pelo número `n` (não muda quando um campo entra no meio); a `ordem` é a posição na
+ * lista, preenchida em `FORMULARIO_EXEMPLO`.
+ */
+function campo(n: number, dados: Omit<Campo, 'id' | 'ordem' | 'placeholder' | 'opcoes'> & Partial<Campo>): Omit<Campo, 'ordem'> {
   return {
     id: `a0000000-0000-4000-8000-00000000c00${n}`,
-    ordem: n,
     placeholder: null,
     opcoes: null,
     ...dados,
@@ -82,6 +85,15 @@ export const FORMULARIO_EXEMPLO: Formulario = {
     campo(2, { rotulo: 'E-mail', tipo: 'EMAIL', obrigatorio: true, placeholder: 'voce@empresa.com.br', mapeamentoCrm: 'contato.email', textoPergunta: 'Qual é o seu melhor e-mail?' }),
     campo(3, { rotulo: 'Telefone (WhatsApp)', tipo: 'TELEFONE', obrigatorio: false, placeholder: '62999998888', mapeamentoCrm: 'contato.telefone', textoPergunta: 'Tem um telefone ou WhatsApp para contato?' }),
     campo(4, { rotulo: 'Empresa', tipo: 'TEXTO', obrigatorio: true, placeholder: 'Nome da empresa', mapeamentoCrm: 'empresa.nome', textoPergunta: 'Em qual empresa você trabalha?' }),
+    // Opcional: com ele, o CRM reaproveita a empresa (409 EMPRESA_DUPLICADA); sem ele, cada envio cria uma
+    campo(9, {
+      rotulo: 'CNPJ da empresa',
+      tipo: 'CNPJ',
+      obrigatorio: false,
+      placeholder: '00.000.000/0000-00',
+      mapeamentoCrm: 'empresa.cnpj',
+      textoPergunta: 'Sabe o CNPJ da empresa? (se não souber, pode pular)',
+    }),
     campo(5, {
       rotulo: 'Quantos funcionários a empresa tem?',
       tipo: 'LISTA_OPCOES',
@@ -107,7 +119,7 @@ export const FORMULARIO_EXEMPLO: Formulario = {
       textoPergunta: 'E quando pretende começar?',
     }),
     campo(8, { rotulo: 'Mensagem', tipo: 'TEXTO_LONGO', obrigatorio: false, mapeamentoCrm: null, textoPergunta: 'Quer deixar alguma mensagem?' }),
-  ],
+  ].map((c, i) => ({ ...c, ordem: i + 1 })),
   criadoEm: '2026-11-05T12:00:00Z',
   atualizadoEm: '2026-11-05T12:00:00Z',
 };

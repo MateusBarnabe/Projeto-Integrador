@@ -87,11 +87,14 @@ services:
     build: ./landing-web
     environment:
       RABBITMQ_URL: amqp://mq_landing:mq_landing@rabbitmq:5672/plataforma
+      CRM_BASE_URL: http://crm:8082
     ports:
       - "8088:8088"
     depends_on:
       rabbitmq:
         condition: service_healthy
+      crm:
+        condition: service_started
 
   # Stub do CRM (crm-stub): empresas, contatos e oportunidades em memória e o evento
   # crm.oportunidade.criada. Nome de serviço e porta do CRM real: http://crm:8082

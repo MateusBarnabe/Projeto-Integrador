@@ -41,7 +41,7 @@ export function gravarEnvio(
     respostas: dados.respostas,
     origem: dados.origem,
     consentimento: { aceito: true, texto: formulario.textoConsentimento, aceitoEm: dados.aceitoEm ?? agora },
-    // preenchidos pela chamada ao stub do CRM (tarefa L4)
+    // preenchidos depois, pela chamada ao CRM (registrarIdsDoCrm); ficam nulos se o CRM não responder
     empresaId: null,
     contatoId: null,
     recebidoEm: agora,
@@ -51,6 +51,12 @@ export function gravarEnvio(
   // só ids e canal: nada de resposta, contato, IP ou User-Agent em log
   console.log(`Envio ${envio.id} gravado (formulário ${envio.formularioId}, canal ${envio.canal}, tenant ${envio.tenantId})`);
   return envio;
+}
+
+/** Guarda no envio a empresa e o contato que o CRM criou ou reaproveitou. */
+export function registrarIdsDoCrm(envio: EnvioGravado, ids: { empresaId: string | null; contatoId: string | null }) {
+  envio.empresaId = ids.empresaId;
+  envio.contatoId = ids.contatoId;
 }
 
 export function buscarEnvio(id: string): EnvioGravado | undefined {
