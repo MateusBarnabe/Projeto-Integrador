@@ -59,6 +59,11 @@ services:
       DB_OWNER_PASSWORD: ${MARKETING_OWNER_SENHA:-own_marketing}
       RABBITMQ_HOST: rabbitmq
       JWKS_URI: ${JWKS_URI:-http://host.docker.internal:8081/api/identity/.well-known/jwks.json}
+      # Chamadas a outros módulos com token de serviço (o identity real vem do infra)
+      IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:-http://host.docker.internal:8081}
+      LANDING_BASE_URL: http://landing:8088
+      CRM_BASE_URL: ${CRM_BASE_URL:-http://crm:8082}
+      SVC_CLIENT_SECRET: ${SVC_MARKETING_SEGREDO:-}
     ports:
       - "8087:8087"
     depends_on:

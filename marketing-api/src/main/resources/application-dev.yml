@@ -7,3 +7,11 @@ spring:
   # versão menor que chegou depois. Na plataforma e nos testes o banco sobe do zero, sem isso.
   flyway:
     out-of-order: true
+
+# Rodando no host (spring-boot:run), os outros módulos respondem em localhost. O docker-compose da
+# raiz passa os nomes de container pelas mesmas variáveis.
+marketing:
+  integracao:
+    identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8081}
+    landing-base-url: ${LANDING_BASE_URL:http://localhost:8088}
+    crm-base-url: ${CRM_BASE_URL:http://localhost:8082}
