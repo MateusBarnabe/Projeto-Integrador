@@ -145,15 +145,26 @@ Cada área exporta as próprias rotas, com caminhos relativos. Assim, se um dia 
 
 ### `components/ui/index.tsx`
 
-Componentes base com **os mesmos nomes e a mesma API do Design System** (`Docs/DesignSystem/design-systemfinal.md`). Por enquanto existem três:
+Componentes base com **os mesmos nomes e a mesma API do Design System** (`Docs/DesignSystem/design-systemfinal.md`, seção 3). A implementação segue a da casca (`plataforma-integrador-2026-2`, `casca/src/components/ui/index.tsx`). Todos usam os tokens do tema e funcionam no claro e no escuro.
 
 | Componente | Uso |
 |---|---|
 | `Button` | variantes `primary`, `secondary`, `outline`, `ghost`, `danger`; tamanhos `sm` e `md` |
-| `Badge` | selo arredondado; cores `green`, `red`, `blue`, `indigo`, `yellow`, `gray`, `purple` |
+| `Badge` | selo arredondado; cores `green`, `red`, `blue`, `indigo`, `yellow`, `gray`, `purple`, `orange` |
+| `statusBadge(status, rotulo?)` | `Badge` com a cor do status (mapa do CRM + status do Marketing: faixas, temperatura, e-mails, boas-vindas) |
 | `PageHeader` | faixa `brand-950` com título, subtítulo e ações; hoje usada pelo layout para a faixa "Marketing" |
+| `Modal` | `open`, `onClose`, `title`, `subtitle`, `size` (`sm` 448 · `md` 576 · `lg` 672 · `xl` 896 · `full` 1152), `footer`, `noPad` (detalhe; clicar fora fecha). Esc fecha, foco preso e devolvido, `data-autofocus` escolhe o primeiro foco |
+| `Input`, `Select`, `Textarea` | campos nativos estilizados; `invalid` marca erro. Dentro de um `FormField`, recebem rótulo, erro/dica e "obrigatório" sozinhos |
+| `FormSection` | `number`, `title`; grade de 2 colunas (1 no celular) |
+| `FormField` | `label`, `required`, `colSpan` (1 ou 2), `error`, `hint`, `htmlFor`; um controle por campo |
+| `SearchBar` | `Input` de busca com lupa; `className` no contêiner (ex.: `flex-1`) |
+| `FilterBar` | faixa de filtros; `label` nomeia o grupo |
+| `ViewToggle` | `value` (`list` ou `cards`) e `onChange` |
+| `Pagination` | `pagina` (começa em 0, como a API), `tamanho`, `total`, `onChange` |
+| `DetailSection` / `DetailField` | detalhe em lista de definição; `DetailField` com `label`, `colSpan`, valor vazio vira "—" |
+| `Stepper` | `steps` (rótulos) e `current` (começa em 0) |
 
-Os outros componentes do Design System (`Modal`, `Input`, `Select`, `Textarea`, `FormSection`, `FormField`, `SearchBar`, `FilterBar`, `Pagination`, `ViewToggle`, `DetailField`, `DetailSection`, `Stepper`, `statusBadge`) são a tarefa W1. Antes de criar um componente, veja se ele já existe no Design System e use o mesmo nome.
+Antes de criar um componente, veja se ele já existe no Design System e use o mesmo nome.
 
 ### `components/StatusApi.tsx` e `components/EmConstrucao.tsx`
 
@@ -163,6 +174,8 @@ Os outros componentes do Design System (`Modal`, `Input`, `Select`, `Textarea`, 
 ### `index.css`
 
 Importa o Tailwind v4 e define os tokens do Design System no `@theme` (`--color-brand-950` a `--color-brand-50` e a fonte Inter). Assim as classes `bg-brand-950`, `text-brand-700` etc. existem. **Nunca use cor em hex nos componentes**: use os tokens.
+
+Também define os neutros que mudam com o tema (`bg-fundo`, `bg-superficie`, `bg-superficie-2`, `text-texto`, `text-texto-2`, `text-texto-3`, `text-titulo`, `border-borda`, `border-borda-forte`), com os mesmos valores do `ui/plataforma.css` do `infra-integrador-2026`, e a variante `dark:`, que segue o `data-tema="escuro"` aplicado pela camada `plataforma/`. Use os neutros no lugar de `bg-white`, `text-gray-700` e `border-gray-200`.
 
 ## Como adicionar uma tela nova
 
