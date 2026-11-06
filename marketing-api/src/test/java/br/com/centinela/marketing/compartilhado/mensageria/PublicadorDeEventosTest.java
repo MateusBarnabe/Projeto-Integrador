@@ -20,59 +20,25 @@ import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.MountableFile;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.centinela.marketing.compartilhado.teste.IntegracaoDeTeste;
 import br.com.centinela.marketing.compartilhado.tenant.TenantContexto;
 import br.com.centinela.marketing.compartilhado.web.RequestIdFilter;
 
 /**
  * Publica contra um RabbitMQ com os mesmos usuários, permissões e exchanges da plataforma
- * (infra/rabbitmq/definitions.json). O broker confere o {@code user_id} de verdade: se ele não
- * bater com o usuário da conexão, a publicação é recusada. Sem Docker, os testes são pulados.
+ * (infra/rabbitmq/definitions.json), pela base {@link IntegracaoDeTeste}. O broker confere o
+ * {@code user_id} de verdade: se ele não bater com o usuário da conexão, a publicação é recusada.
+ * Sem Docker, os testes são pulados.
  */
-@Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest
-class PublicadorDeEventosTest {
-
-    @Container
-    @SuppressWarnings("resource")
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
-            .withDatabaseName("plataforma")
-            .withCopyFileToContainer(
-                    MountableFile.forHostPath("../infra/postgres/init/01-marketing.sh", 0755),
-                    "/docker-entrypoint-initdb.d/01-marketing.sh");
-
-    @Container
-    @SuppressWarnings("resource")
-    static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine")
-            .withCopyFileToContainer(MountableFile.forHostPath("../infra/rabbitmq/definitions.json"),
-                    "/etc/rabbitmq/definitions.json")
-            .withRabbitMQConfig(MountableFile.forHostPath("../infra/rabbitmq/rabbitmq.conf"));
-
-    @DynamicPropertySource
-    static void infraestrutura(DynamicPropertyRegistry registro) {
-        registro.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registro.add("spring.datasource.username", () -> "usr_marketing");
-        registro.add("spring.datasource.password", () -> "usr_marketing");
-        registro.add("spring.flyway.user", () -> "own_marketing");
-        registro.add("spring.flyway.password", () -> "own_marketing");
-        registro.add("spring.rabbitmq.host", RABBIT::getHost);
-        registro.add("spring.rabbitmq.port", RABBIT::getAmqpPort);
-    }
+class PublicadorDeEventosTest extends IntegracaoDeTeste {
 
     private static final UUID TENANT = UUID.fromString("a0000000-0000-4000-8000-00000000000a");
     private static final UUID USUARIO = UUID.fromString("10000000-0000-4000-8000-000000000001");
@@ -94,10 +60,7 @@ class PublicadorDeEventosTest {
     /** O teste observa as exchanges como admin, com filas temporárias ligadas a tudo. */
     @BeforeEach
     void observarExchanges() {
-        conexaoAdmin = new CachingConnectionFactory(RABBIT.getHost(), RABBIT.getAmqpPort());
-        conexaoAdmin.setUsername("admin");
-        conexaoAdmin.setPassword("admin");
-        conexaoAdmin.setVirtualHost("plataforma");
+        conexaoAdmin = conexaoRabbitAdmin();
         RabbitAdmin admin = new RabbitAdmin(conexaoAdmin);
         filaEventos = new AnonymousQueue();
         filaPlataforma = new AnonymousQueue();

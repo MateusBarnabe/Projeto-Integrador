@@ -46,7 +46,7 @@ Não é preciso instalar o Maven: o wrapper baixa a versão certa. Precisa do JD
 ./mvnw verify               # ou, na raiz: npm run test:api
 ```
 
-Os testes sobem um PostgreSQL de verdade com o Testcontainers, rodando o mesmo script de usuários e schema da plataforma ([infra/postgres/init](../infra/postgres/init/01-marketing.sh)). Precisam do Docker ligado; sem ele, são pulados.
+Os testes sobem um PostgreSQL e um RabbitMQ de verdade com o Testcontainers, rodando os mesmos scripts da plataforma ([infra/postgres/init](../infra/postgres/init/01-marketing.sh) e [infra/rabbitmq](../infra/rabbitmq/definitions.json)), e simulam Landing, CRM, identity e Graph API do Meta com o WireMock (ver [Testes](#testes-1)). Os que usam container precisam do Docker ligado; sem ele, são pulados.
 
 ### Imagem Docker
 
@@ -106,6 +106,7 @@ marketing-api/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
         ├── compartilhado/dados/BancoDeTeste.java   base dos testes de repositório
         ├── compartilhado/mensageria/          testes do publicador (Testcontainers com RabbitMQ)
+        ├── compartilhado/teste/               base de integração e WireMock dos outros módulos (F6)
         ├── leads/                             regras do lead e testes da V2
         └── qualificacao/                      regras da qualificação e testes da V6
 ```
@@ -289,6 +290,29 @@ Os endpoints previstos estão na seção 6 do norteador e nas tarefas A1 a A4 do
 | `nadaSaiQuandoATransacaoFazRollback` | rollback não publica nada |
 | `pedidoAPlataformaVaiParaIdentityEntradaComOUsuarioDoToken` | pedido em `identity.entrada`, e não em `marketing.eventos`, com o `usuarioId` do token |
 | `publicarForaDeTransacaoEhRecusado`, `tipoForaDoPadraoEhRecusado` | as duas proteções do publicador |
+
+### Infra de testes de integração (F6)
+
+Pacote de teste `compartilhado.teste`, para os testes que sobem a aplicação inteira (consumidores, clientes HTTP, webhook):
+
+| Classe | O que é |
+|---|---|
+| `IntegracaoDeTeste` | base `@SpringBootTest` com PostgreSQL e RabbitMQ do Testcontainers (mesmos scripts de `infra/`), únicos por JVM, e os simuladores abaixo. Zera os stubs antes de cada teste. `conexaoRabbitAdmin()` dá uma conexão `admin` para observar exchanges e publicar os eventos do Landing e do CRM |
+| `ModulosSimulados` | um WireMock por destino: `LANDING`, `CRM`, `IDENTITY` e `META_GRAPH`. As URLs entram no Spring como `LANDING_BASE_URL`, `CRM_BASE_URL`, `IDENTITY_BASE_URL` e `META_GRAPH_BASE_URL`, junto com `SVC_CLIENT_ID`/`SVC_CLIENT_SECRET`. Já vem com o stub do token de serviço (`POST /api/identity/auth/token-servico` devolve `TOKEN_SERVICO`); `stubTenantResolvido`, `stubLeadDoMeta` e `comTokenDeServico(stub, tenant)` (exige `Authorization` e `X-Tenant-Id`) cobrem o resto |
+| `Envelopes` | respostas no envelope `{success, data, message, errors}`: `ok(data)`, `ok(201, data)`, `okJson("{...}")`, `pagina(itens, pagina, tamanho, total)` e `erro(422, mensagem, erros...)` |
+
+```java
+class ConsumoDoEnvioTest extends IntegracaoDeTeste {
+    @Test
+    void leOEnvioNoLanding() {
+        LANDING.stubFor(comTokenDeServico(get(urlPathEqualTo("/api/landing/envios/" + envio)), tenant)
+                .willReturn(Envelopes.ok(Map.of("id", envio, "respostas", List.of()))));
+        // publica landing.formulario.recebido com conexaoRabbitAdmin() e confere o lead
+    }
+}
+```
+
+`ModulosSimuladosTest` confere os simuladores sem Docker; `InfraDeTesteTest` confere a base (URLs no ambiente do Spring e RabbitMQ). `PublicadorDeEventosTest` já usa a base.
 
 `BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
 
