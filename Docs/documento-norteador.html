@@ -381,7 +381,7 @@
 <li><code>FOREIGN KEY</code> só dentro do schema <code>marketing</code>. Referências a outros módulos guardam apenas o UUID (§7.1, §10.5).</li>
 </ul></div>
 <h3 class="table-heading"><code>leads</code></h3>
-<p>Registro central do lead. Existe quando há um identificador de contato: leads do Meta (etapa 0), capturas do chatbot (etapa 1) e envios do Landing (etapa 3).</p>
+<p>Registro central do lead. Existe quando há um identificador de contato: leads do Meta (etapa 0), capturas do chatbot (etapa 1) e envios do Landing (etapa 3). A única exceção é transitória: o lead criado por <code>crm.oportunidade.criada</code> antes do envio, ou pelo envio com o Landing fora do ar, fica sem contato até a leitura do envio (seção 5, passos 3 e 4). Sem contato, ele não entra no rodízio.</p>
 <table>
 <thead><tr><th>Coluna</th><th>Tipo</th><th>Observação</th></tr></thead>
 <tbody>
@@ -399,6 +399,8 @@
 <tr><td>formulario_id</td><td>uuid, nullable</td><td><code>formularioId</code> do evento; é o id do formulário no Landing. Sem FK</td></tr>
 <tr><td>dados_formulario</td><td>jsonb</td><td>cópia das respostas lidas em <code>GET /api/landing/envios/{envioId}</code> (<code>campoId</code>, <code>rotulo</code>, <code>tipo</code>, <code>valor</code>), como registro histórico do que o lead respondeu</td></tr>
 <tr><td>envio_lido_em <span class="tag tag-novo">Novo</span></td><td>timestamptz, nullable</td><td>quando as respostas foram lidas no Landing. Nulo com <code>envio_id</code> preenchido quer dizer leitura pendente (job 4.6)</td></tr>
+<tr><td>leitura_envio_falhas <span class="tag tag-novo">Novo</span></td><td>int, default 0</td><td>falhas seguidas ao ler o envio no Landing (4.6). Zera quando a leitura dá certo</td></tr>
+<tr><td>leitura_envio_desistida_em <span class="tag tag-novo">Novo</span></td><td>timestamptz, nullable</td><td>quando o job 4.6 desistiu, depois de 10 falhas. O detalhe mostra "respostas indisponíveis no Landing"</td></tr>
 <tr><td>consentimento_marketing</td><td>boolean, default false</td><td>o lead aceitou ser contatado (LGPD). Sem ele, o job 4.2 não envia. É o estado atual; a evidência de cada aceite e revogação fica em <code>lead_consentimentos</code></td></tr>
 <tr><td>consentimento_em</td><td>timestamptz, nullable</td><td>quando o consentimento atual foi aceito no Landing (<code>aceitoEm</code>)</td></tr>
 <tr><td>boas_vindas_enviada_em</td><td>timestamptz, nullable</td><td>quando o e-mail de boas-vindas saiu (4.5). Garante um envio só por lead</td></tr>
@@ -427,7 +429,8 @@
     WHEN etapa = 3 THEN 'quente'
   END
 ) STORED</code></pre>
-<div class="callout"><p><strong>Ajuste da <code>V2</code> na <code>V8</code> <span class="tag tag-novo">Novo</span>.</strong> As colunas acima são o resultado da <code>V2</code> com a <code>V8</code> (tarefa D8 do PROXIMOS-PASSOS), que tirou <code>visitante_id</code> e <code>formulario_versao</code>, criou <code>sessao_id</code>, <code>canal</code> e <code>envio_lido_em</code> e trocou os valores antigos de origem do consentimento e de tipo de evento, sem editar a <code>V2</code>.</p></div>
+<div class="callout"><p><strong>Ajuste da <code>V2</code> na <code>V8</code> <span class="tag tag-novo">Novo</span>.</strong> As colunas acima são o resultado da <code>V2</code> com a <code>V8</code> (tarefa D8 do PROXIMOS-PASSOS), que tirou <code>visitante_id</code> e <code>formulario_versao</code>, criou <code>sessao_id</code>, <code>canal</code> e <code>envio_lido_em</code> e trocou os valores antigos de origem do consentimento e de tipo de evento, sem editar a <code>V2</code>. A <code>V9</code> (Q2) criou o índice parcial dos leads aguardando vendedor, e a <code>V10</code> (E5/E11) criou <code>leitura_envio_falhas</code>, <code>leitura_envio_desistida_em</code>, o índice da leitura pendente e os tipos de evento <code>leads_unidos</code> e <code>respostas_indisponiveis</code>.</p></div>
+<div class="callout"><p><strong>Normalização do contato <span class="tag tag-novo">Novo</span>.</strong> E-mail e telefone são comparados e gravados normalizados (<code>entrada/NormalizacaoDeContato</code>): o e-mail sem espaços e em minúsculas, válido só com um <code>@</code> e texto dos dois lados; o telefone só com dígitos, em E.164 sem o <code>+</code>. Com <code>+</code> na frente, os dígitos ficam como vieram; sem ele, os zeros à esquerda saem e um número de 10 ou 11 dígitos ganha o <code>55</code>. Fora de 8 a 15 dígitos, o valor é descartado.</p></div>
 <div class="callout pend"><p><strong>Fronteira com Contato do CRM <span class="tag tag-pend">Pendente · Grupo 6</span>.</strong> O CRM é o dono de empresas e contatos (§10), e o Mapa proíbe copiar a tabela de outro grupo. Até o envio, o lead não existe no CRM, e <code>leads</code> guarda os dados de contato de quem ainda <em>não</em> é contato (lead do Meta e captura do chatbot). No envio, o Landing cria o contato e o lead passa a apontar para ele por <code>crm_contato_id</code>. Precisamos confirmar com o Grupo 6 que essa leitura atende à regra do dono único (seção 11).</p></div>
 <h3 class="table-heading"><code>lead_eventos</code> (antes <code>lead_events</code>)</h3>
 <p>Timeline e auditoria da progressão do lead, exigidas pelo Prompt Mestre em todo módulo.</p>
@@ -437,7 +440,7 @@
 <tr><td>id / tenant_id</td><td>uuid</td><td>PK / not null, indexado</td></tr>
 <tr><td>sequencia</td><td>bigint GENERATED ALWAYS AS IDENTITY, UNIQUE</td><td>ordem global, usada como <code>id</code> das mensagens SSE (9.1)</td></tr>
 <tr><td>lead_id</td><td>uuid</td><td>FK para <code>leads.id</code>, no mesmo schema</td></tr>
-<tr><td>tipo_evento</td><td>varchar</td><td><code>etapa_alterada</code>, <code>respostas_lidas</code>, <code>comunicacao_enviada</code>, <code>consentimento_registrado</code>, <code>qualificacao_alterada</code>, <code>vendedor_atribuido</code>, <code>handoff_crm</code>, <code>descadastrado</code>, <code>anonimizado</code>. <code>respostas_lidas</code> substitui <code>formulario_atualizado</code> (D8); <code>handoff_crm</code> marca a ligação com a oportunidade</td></tr>
+<tr><td>tipo_evento</td><td>varchar</td><td><code>etapa_alterada</code>, <code>respostas_lidas</code>, <code>comunicacao_enviada</code>, <code>consentimento_registrado</code>, <code>qualificacao_alterada</code>, <code>vendedor_atribuido</code>, <code>handoff_crm</code>, <code>leads_unidos</code>, <code>respostas_indisponiveis</code>, <code>descadastrado</code>, <code>anonimizado</code>. <code>respostas_lidas</code> substitui <code>formulario_atualizado</code> (D8); <code>handoff_crm</code> marca a ligação com a oportunidade; <code>leads_unidos</code> registra a junção de dois leads nos dois lados (seção 5, passo 3); <code>respostas_indisponiveis</code> marca a desistência da leitura (4.6)</td></tr>
 <tr><td>etapa_anterior / etapa_nova</td><td>smallint, nullable</td><td></td></tr>
 <tr><td>payload</td><td>jsonb</td><td>detalhes do evento, sem dado pessoal além do necessário</td></tr>
 <tr><td>colunas obrigatórias</td><td>§7.2</td><td></td></tr>
@@ -623,7 +626,7 @@
 <h3 class="table-heading">4.4 Atribuição pendente e transbordo <span class="tag tag-etapa">Etapa 2</span></h3>
 <p>Roda a cada minuto, só para tenants com <code>rodizio_ativo = true</code>.</p>
 <ol>
-<li><strong>Atribuição pendente:</strong> leads MQL sem vendedor, que chegaram fora do horário comercial, recebem vendedor pelo rodízio (9.3) no início do próximo horário de atendimento. Se o lead já tem oportunidade, o vendedor vai para o CRM como responsável (9.6)</li>
+<li><strong>Atribuição pendente:</strong> leads MQL sem vendedor, que chegaram fora do horário comercial, recebem vendedor pelo rodízio (9.3) no início do próximo horário de atendimento. Se o lead já tem oportunidade, o vendedor vai para o CRM como responsável (9.6) <span class="tag tag-pend">Pendente · Grupo 6</span>. Os leads são puxados em lote, os mais antigos primeiro, com <code>FOR UPDATE SKIP LOCKED</code>, para duas execuções não pegarem o mesmo lead; o "aguardando vendedor" é derivado (MQL, sem vendedor, ativo e não anonimizado), com um índice parcial na <code>V9</code></li>
 <li><strong>Transbordo <span class="tag tag-pend">Pendente · Grupo 6</span>:</strong> se o vendedor não fez o primeiro contato em <code>minutos_transbordo</code>, o lead passa ao próximo vendedor do rodízio. Quem registra o primeiro contato é o CRM; sem essa informação, este passo fica desligado (seção 11)</li>
 </ol>
 <h3 class="table-heading">4.5 Confirmação de boas-vindas</h3>
@@ -636,12 +639,12 @@
 </ol>
 <p>Lead do Meta Ads e captura do chatbot não recebem: não houve envio a confirmar. O segundo gatilho da revisão anterior (MQL antes de enviar, na etapa 2) volta quando a etapa 2 tiver fonte. O horário comercial não se aplica: a janela de não perturbe do RN03 vale só para WhatsApp.</p>
 <h3 class="table-heading">4.6 Leitura pendente do envio <span class="tag tag-novo">Novo</span></h3>
-<p>Roda a cada minuto. Pega leads com <code>envio_id</code> preenchido e <code>envio_lido_em</code> nulo, ou seja, que chegaram enquanto o Landing não respondeu (seção 5, passo 3.3).</p>
+<p>Roda a cada minuto. Pega leads com <code>envio_id</code> preenchido, <code>envio_lido_em</code> nulo e <code>leitura_envio_desistida_em</code> nulo, ou seja, que chegaram enquanto o Landing não respondeu (seção 5, passo 3.3) ou que a oportunidade criou antes do envio (passo 4.2). Vai tenant por tenant, até 50 leads por tenant, os de menos falhas primeiro; cada lead numa transação própria, travado com <code>FOR UPDATE SKIP LOCKED</code>.</p>
 <ol>
 <li>Lê <code>GET /api/landing/envios/{envioId}</code> com token de serviço, timeout de 3 s</li>
-<li>Grava contato, respostas, origem e consentimento, como no consumo do evento, e marca <code>envio_lido_em</code></li>
+<li>Aplica o mesmo fluxo do consumo do envio (<code>entrada/LeituraDoEnvio</code>): grava contato, <code>formulario_id</code>, <code>canal</code>, respostas, origem e consentimento, junta os duplicados e marca <code>envio_lido_em</code></li>
 <li>Calcula a pontuação e, se o lead virou MQL sem vendedor, atribui pelo rodízio</li>
-<li>Depois de 10 falhas seguidas do mesmo lead, para de tentar e o detalhe mostra "respostas indisponíveis no Landing"</li>
+<li>Cada falha soma em <code>leitura_envio_falhas</code>. Depois de 10 falhas seguidas do mesmo lead, grava <code>leitura_envio_desistida_em</code> e <code>respostas_indisponiveis</code> (só o <code>envioId</code>, o número de falhas e o motivo), pontua com o que o lead tem e para de tentar; o detalhe mostra "respostas indisponíveis no Landing". Com um minuto entre as tentativas, são cerca de 10 minutos de Landing fora do ar (seção 11)</li>
 </ol>
 </section>
 
@@ -654,30 +657,32 @@
 <li><strong>Etapa 1, chatbot:</strong> <code>landing.chatbot.lead_capturado</code> chega na fila <code>marketing.landing-leads</code> e é processado na hora:
 <ol>
 <li>procura o lead por <code>sessao_id</code>; senão, por e-mail ou telefone normalizados; senão, cria um lead novo (<code>origem = landing_page</code>, <code>canal = chatbot</code>);</li>
-<li>grava contato, <code>formulario_id</code>, UTM do evento e o consentimento, e sobe para a etapa 1 se o lead estava abaixo;</li>
+<li>grava contato, <code>formulario_id</code>, UTM do evento e o consentimento, e sobe para a etapa 1 se o lead estava abaixo. Se o lead já passou da etapa 1 (a captura chegou depois do envio), só completa os campos de contato e UTM que estão vazios, sem mexer em canal e formulário. Achado por e-mail ou telefone, o lead fica com a sessão mais recente (seção 11);</li>
 <li>calcula a pontuação com as regras de <code>utm</code> (ainda não há respostas) e registra em <code>lead_eventos</code></li>
-</ol></li>
+</ol>
+<p>Evento com <code>versao</code> diferente de 1, sem campo obrigatório, com <code>aceito</code> diferente de <code>true</code> ou sem e-mail ou telefone utilizável vai direto para a <code>.dlq</code></p></li>
 <li><strong>Etapa 3, envio:</strong> <code>landing.formulario.recebido</code> chega na mesma fila e é processado na hora:
 <ol>
-<li>procura o lead por <code>envio_id</code> (pode já existir, se <code>crm.oportunidade.criada</code> chegou antes); senão, por <code>sessao_id</code>, quando o Landing passar a mandar no evento <span class="tag tag-pend">Pendente · Grupo 7</span>; senão, por <code>crm_contato_id</code>; senão, cria um lead novo;</li>
+<li>lê o envio no Landing antes de travar qualquer lead (passo 3); procura o lead por <code>envio_id</code> (pode já existir, se <code>crm.oportunidade.criada</code> chegou antes); senão, por <code>sessao_id</code>, quando o Landing passar a mandar no evento <span class="tag tag-pend">Pendente · Grupo 7</span>; senão, por <code>crm_contato_id</code>; senão, se a leitura deu certo, pelo e-mail ou telefone do envio; senão, cria um lead novo. O lead achado é travado e relido antes de mudar;</li>
 <li>grava <code>envio_id</code>, <code>formulario_id</code>, <code>canal</code>, <code>crm_empresa_id</code> e <code>crm_contato_id</code> e sobe para a etapa 3;</li>
-<li>lê <code>GET /api/landing/envios/{envioId}</code>: contato, respostas (<code>dados_formulario</code>), origem (UTM e toques) e consentimento, e marca <code>envio_lido_em</code>. Se o Landing não responder em 3 s, o lead fica gravado com a leitura pendente, e o job 4.6 tenta de novo;</li>
-<li>com as respostas lidas, faz o merge com outro lead de mesmo e-mail ou telefone, se houver (o mais antigo fica, o outro é marcado como excluído e a timeline registra a junção);</li>
+<li>lê <code>GET /api/landing/envios/{envioId}</code>: contato (o telefone vem da primeira resposta de tipo <code>TELEFONE</code>, porque o <code>Envio</code> não tem esse campo), respostas (<code>dados_formulario</code>), origem (UTM e toques) e consentimento, marca <code>envio_lido_em</code> e registra <code>respostas_lidas</code>. Se o Landing não responder em 3 s ou devolver erro, o lead fica gravado com a leitura pendente (<code>leitura_envio_falhas = 1</code>), a mensagem não vai para a <code>.dlq</code> e o job 4.6 tenta de novo;</li>
+<li>com as respostas lidas, faz o merge com todo lead do tenant de mesmo e-mail ou telefone (<code>entrada/JuncaoDeLeads</code>). O mais antigo (por <code>created_at</code>, depois id) fica e recebe do outro o que ainda não tem: sessão, envio e respostas, ids do CRM e da oportunidade, vendedor, contato, UTM e toques, boas-vindas; o opt-out sempre passa. A etapa sobe à maior das duas, nunca desce. Os consentimentos são copiados sem repetir linha. O outro é marcado como excluído, com <code>sessao_id</code>, <code>envio_id</code> e <code>meta_lead_id</code> limpos (os únicos valem também para excluídos), e os dois recebem <code>leads_unidos</code> na timeline, só com ids;</li>
 <li>calcula a pontuação e a faixa e, se for MQL sem vendedor, atribui pelo rodízio (9.3);</li>
-<li>registra em <code>lead_eventos</code>, notifica o vendedor (seção 8) e envia o evento SSE do painel.</li>
+<li>registra em <code>lead_eventos</code>, notifica o vendedor (seção 8) e envia o evento SSE do painel. Quem notifica é o rodízio, ao atribuir; lead que já tinha vendedor não é notificado de novo.</li>
 </ol></li>
 </ol>
 <p>A confirmação de boas-vindas sai pelo job 4.5, em até 1 ou 2 minutos</p>
 <ol>
 <li><strong>Oportunidade:</strong> <code>crm.oportunidade.criada</code> chega na fila <code>marketing.crm-oportunidades</code>. Só interessa a de <code>origem = landing</code>:
 <ol>
-<li>procura o lead por <code>envio_id = origemModuloId</code> <span class="tag tag-pend">Pendente · Grupo 7</span>; senão, por <code>crm_contato_id</code>;</li>
-<li>se não achar, o evento chegou antes do envio: cria o lead na etapa 3 com <code>envio_id</code> e os ids do CRM, e o <code>landing.formulario.recebido</code> completa depois;</li>
-<li>grava <code>crm_oportunidade_id</code> e <code>handoff_crm</code> em <code>lead_eventos</code>;</li>
-<li>se o lead já tem vendedor, grava o vendedor como responsável da oportunidade no CRM <span class="tag tag-pend">Pendente · Grupo 6</span></li>
-</ol></li>
+<li>procura o lead por <code>envio_id = origemModuloId</code> <span class="tag tag-pend">Pendente · Grupo 7</span>; senão, por <code>crm_contato_id</code>. <code>origemModuloId</code> é texto no <code>crm.asyncapi.yaml</code>, então só vale como <code>envioId</code> quando é um UUID. Sem envio nem contato, o evento é ignorado. O lead achado é travado e relido antes de mudar;</li>
+<li>se não achar, o evento chegou antes do envio (localmente, é a ordem de sempre): cria o lead na etapa 3, <code>origem = landing_page</code>, com <code>envio_id</code> e os ids do CRM, sem contato, canal nem formulário e com a leitura pendente. O <code>landing.formulario.recebido</code> ou o job 4.6 completam depois;</li>
+<li>grava <code>crm_oportunidade_id</code>, completa os ids do CRM que faltarem (sem sobrescrever) e registra <code>handoff_crm</code> em <code>lead_eventos</code>; pede o registro na timeline da empresa (seção 8). Uma oportunidade nova do mesmo lead substitui a anterior, e o <code>handoff_crm</code> guarda <code>oportunidadeAnteriorId</code>;</li>
+<li>se o lead já tem vendedor, grava o vendedor como responsável da oportunidade no CRM <span class="tag tag-pend">Pendente · Grupo 6</span>. Hoje o ponto <code>crm/ResponsavelDaOportunidade</code> só registra a pendência, e o <code>handoff_crm</code> guarda <code>responsavelNoCrm</code> (<code>sem_vendedor</code>, <code>pendente</code> ou <code>gravado</code>)</li>
 </ol>
-<p><strong>Consentimento:</strong> nas etapas 1 e 3, o aceite é registrado em <code>lead_consentimentos</code> quando muda (seção 3): na etapa 1, com os dados do evento; na etapa 3, na leitura do envio.</p>
+<p>Evento com <code>versao</code> diferente de 1 ou sem <code>oportunidadeId</code> ou <code>empresaId</code> vai para a <code>.dlq</code>; <code>origem</code> diferente de <code>landing</code> é marcada como processada e ignorada</p></li>
+</ol>
+<p><strong>Consentimento:</strong> nas etapas 1 e 3, o aceite é registrado em <code>lead_consentimentos</code> quando muda (seção 3): na etapa 1, com os dados do evento; na etapa 3, na leitura do envio. O aceite repetido é conferido contra todas as linhas do lead, não só a última, para um aceite antigo que chega atrasado depois de uma revogação não ser gravado de novo; o estado atual do lead só muda quando o registro novo é o mais recente.</p>
 <p>Todo consumo é idempotente (<code>eventos_processados</code>) e a etapa nunca volta para trás, mesmo que os eventos cheguem fora de ordem. Depois do commit de cada passo, o módulo pode publicar evento em <code>marketing.eventos</code> e pedir notificação ou registro na timeline (seção 8).</p>
 </section>
 
@@ -723,6 +728,8 @@
 <tr><td>GET</td><td><code>/api/marketing/health</code></td><td>nenhuma</td><td><code>200</code> com o serviço de pé e conectado ao banco (§8.5)</td></tr>
 </tbody></table>
 <p>Saíram <code>GET/POST /api/marketing/formularios</code> e <code>GET/PUT /api/marketing/formularios/{id}</code>: o formulário é do Landing.</p>
+<p><strong>Parâmetros da lista de leads (A2):</strong> <code>pagina</code> começa em 0 e <code>tamanho</code> padrão é 20. <code>ordenar=campo,asc|desc</code> aceita <code>criadoEm</code> (padrão, desc), <code>atualizadoEm</code>, <code>nome</code>, <code>etapa</code>, <code>pontuacao</code> e <code>qualificadoEm</code>, com nulos por último. <code>etapa</code>, <code>faixa</code>, <code>origem</code> e <code>canal</code> aceitam vários valores separados por vírgula. <code>periodo</code> é <code>7d</code>, <code>30d</code>, <code>90d</code> (de 1 a 366 dias) ou um intervalo <code>AAAA-MM-DD,AAAA-MM-DD</code> em UTC, sobre a data de entrada do lead. <code>q</code> procura no nome e no e-mail e não acha anonimizados. Filtro inválido ou id malformado responde <code>400</code> com o erro por campo. Lead anonimizado sai sem nome, e-mail, telefone, respostas, IP e <em>User-Agent</em>; o <code>token_descadastro</code> não sai em rota nenhuma.</p>
+<p><strong>Token de serviço:</strong> nas rotas que o aceitam (resumo do lead, 9.6), o tenant vem do <code>X-Tenant-Id</code> (§9.2); sem ele, ou com valor que não é UUID, a resposta é <code>400</code>. Com token de usuário, o cabeçalho é ignorado.</p>
 <h3 class="table-heading">Busca global</h3>
 <p>Todo módulo com registro que o usuário procura pelo nome expõe <code>GET /api/{modulo}/busca?q=</code> (§8.6): <code>q</code> com pelo menos 2 caracteres, no máximo 5 itens, sem paginação. Leads anonimizados não aparecem.</p>
 <pre><code>GET /api/marketing/busca?q=maria
@@ -907,7 +914,7 @@ permissoes:
 <table>
 <thead><tr><th>Mensagem</th><th>Uso no marketing</th><th>Condição</th></tr></thead>
 <tbody>
-<tr><td><code>identity.notificacao.criar</code></td><td>avisar o vendedor atribuído quando recebe um lead MQL, com a categoria <code>NOVO_LEAD</code> e <code>rota: "/leads/{id}"</code>. Lead na etapa 3 vai como prioritário</td><td>acesso do vendedor à tela do lead e destinatário quando não há vendedor estão em aberto (seção 11)</td></tr>
+<tr><td><code>identity.notificacao.criar</code></td><td>avisar o vendedor atribuído quando recebe um lead MQL, com a categoria <code>NOVO_LEAD</code> e <code>rota: "/leads/{id}"</code>. Lead na etapa 3 vai como prioritário</td><td>acesso do vendedor à tela do lead e destinatário quando não há vendedor estão em aberto (seção 11). Até lá, sem vendedor não há notificação (ponto único <code>notificacoes/DestinatarioSemVendedor</code>)</td></tr>
 <tr><td><code>identity.timeline.registrar</code></td><td>registrar a ligação com a oportunidade na timeline da empresa</td><td>exige <code>empresaId</code>, que só existe depois do envio</td></tr>
 <tr><td><code>identity.email.enviar</code></td><td>não se aplica ao aquecimento</td><td>só e-mail transacional (4.2)</td></tr>
 </tbody></table>
@@ -1217,6 +1224,9 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <tr><td>Listar usuários com perfil VENDEDOR e seus nomes no identity (escala do rodízio e painel)</td><td>Grupo 2</td><td>A pedir</td></tr>
 <tr><td><code>LANDING_BASE_URL</code> e <code>CRM_BASE_URL</code> no serviço <code>marketing</code> do compose da plataforma (seção 6). Até lá valem os padrões com os nomes dos containers</td><td>Grupo 2</td><td>A pedir</td></tr>
 <tr><td>Campos para <code>fbclid</code> e <code>gclid</code> no <code>ToqueOrigem</code> do envio. Hoje eles só chegam dentro de <code>paginaEntrada</code>, e o Marketing teria de extraí-los da URL</td><td>Grupo 7</td><td>A pedir</td></tr>
+<tr><td><code>servicos</code> em <code>marketing.lead.ver_resumo</code>, para outros módulos lerem o resumo do lead com token de serviço (9.6). A API já aceita; falta declarar nas quatro cópias da permissão e no infra, e saber quem consome</td><td>Grupo 4, Grupo 2</td><td>A definir</td></tr>
+<tr><td>Qual sessão o lead guarda quando a captura do chatbot o acha por e-mail ou telefone: hoje fica a mais recente, e a sessão antiga deixa de achá-lo</td><td>Grupo 4</td><td>Proposta a confirmar</td></tr>
+<tr><td>Desistência da leitura do envio depois de 10 falhas (cerca de 10 minutos de Landing fora do ar): avaliar uma espera crescente entre as tentativas</td><td>Grupo 4</td><td>A avaliar</td></tr>
 <tr><td>Onde guardar as respostas do formulário instantâneo do Meta: sem elas, uma nova pontuação do lead (por exemplo, quando ele envia um formulário do Landing) deixa de somar as regras <code>campo_meta</code></td><td>Grupo 4</td><td>A definir na E4</td></tr>
 <tr><td>SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao <code>marketing</code>, e o provedor fora do desenvolvimento depende dos professores (P6)</td><td>Grupo 2, professores</td><td>A pedir</td></tr>
 <tr><td>SSE pelo gateway: a conexão longa sobrevive à regra de <code>504</code> em 3 s?</td><td>Grupo 2</td><td>A confirmar</td></tr>
@@ -1244,6 +1254,15 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <section id="sec-12">
 <h1><span class="sec-num">12</span>Registro de alterações</h1>
 <hr class="rule">
+<h3 class="table-heading">06/11/2026 · fase 2: lead qualificado e ligado ao CRM</h3>
+<ul>
+<li><strong>Entrada do lead (E1, E5, E6, E11):</strong> a captura do chatbot, o envio do formulário e a oportunidade do CRM são consumidos na chegada, com identidade, normalização do contato (seção 3), junção de duplicados e travas de linha descritas na seção 5. O lead criado pela oportunidade antes do envio fica sem contato até a leitura (exceção transitória na seção 3). O job 4.6 ganhou lote, ordem e desistência, com <code>leitura_envio_falhas</code> e <code>leitura_envio_desistida_em</code> (<code>V10</code>)</li>
+<li><strong>Rodízio (Q2) e notificações (N1):</strong> atribuição com o job 4.4 em lote e <code>FOR UPDATE SKIP LOCKED</code> (índice parcial na <code>V9</code>); notificação <code>NOVO_LEAD</code> e registro na timeline pedidos à plataforma; sem vendedor, não há notificação até a decisão da seção 11. Levar o vendedor ao CRM continua pendente do Grupo 6, num ponto único para a C1</li>
+<li><strong>API de leads (A2):</strong> parâmetros da lista, <code>400</code> para filtro inválido, lead anonimizado sem dado pessoal e <code>X-Tenant-Id</code> obrigatório com token de serviço (seção 6)</li>
+<li><strong>Placeholder (L3, L4):</strong> as rotas lidas pelo Marketing exigem Bearer e <code>X-Tenant-Id</code>, sem validar a assinatura; o envio cria empresa, contato e oportunidade no stub do CRM antes de publicar o evento, e o formulário de exemplo ganhou o campo opcional CNPJ</li>
+<li><code>lead_eventos</code> ganhou <code>leads_unidos</code> e <code>respostas_indisponiveis</code></li>
+<li>Pendências novas na seção 11: <code>servicos</code> em <code>marketing.lead.ver_resumo</code>, a sessão que o lead guarda e a desistência da leitura do envio</li>
+</ul>
 <h3 class="table-heading">06/11/2026 · fundação da fase 1: consumo, clientes HTTP, testes, pontuação, front e placeholders</h3>
 <ul>
 <li><strong>Consumo (F4):</strong> a API declara <code>marketing.landing-leads</code> e <code>marketing.crm-oportunidades</code>, cada uma com <code>.dlq</code> pela exchange <code>marketing.dlx</code>, e confere envelope, remetente e <code>user_id = mq_&lt;moduloOrigem&gt;</code> antes do efeito (seção 8). O <code>mq_marketing</code> local passa a ler qualquer <code>*.eventos</code>, como na plataforma</li>
