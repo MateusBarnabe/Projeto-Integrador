@@ -22,6 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Linha 2.x = Spring Boot 3 (a 3.x é para o Spring Boot 4) -->
         <springdoc.version>2.9.1</springdoc.version>
+        <wiremock.version>3.13.1</wiremock.version>
     </properties>
 
     <dependencies>
@@ -106,6 +107,13 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testes: WireMock simula Landing, CRM, identity e Graph API do Meta (checklist §15) -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>${wiremock.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

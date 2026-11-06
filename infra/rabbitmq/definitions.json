@@ -17,6 +17,12 @@
       "password_hash": "q6KWaOW/abKXsjiiti21tuyqkF1csdDzyUa6DGhvlh2SnEx1",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "mq_crm",
+      "password_hash": "slJmEz+TkrAJmiW2W5MN4xa03REnTsKXkF2TWHRTHqf35y/O",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [{ "name": "plataforma" }],
@@ -27,7 +33,7 @@
       "vhost": "plataforma",
       "configure": "^marketing\\..*",
       "write": "^(marketing\\..*|identity\\.entrada)$",
-      "read": "^(marketing\\..*|landing\\.eventos)$"
+      "read": "^(marketing\\..*|[a-z]+\\.eventos)$"
     },
     {
       "user": "mq_landing",
@@ -35,11 +41,19 @@
       "configure": "^landing\\..*",
       "write": "^landing\\..*",
       "read": "^(landing\\..*|marketing\\.eventos)$"
+    },
+    {
+      "user": "mq_crm",
+      "vhost": "plataforma",
+      "configure": "^crm\\..*",
+      "write": "^crm\\..*",
+      "read": "^crm\\..*"
     }
   ],
   "exchanges": [
     { "name": "marketing.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
     { "name": "landing.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
+    { "name": "crm.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
     { "name": "identity.entrada", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} }
   ]
 }

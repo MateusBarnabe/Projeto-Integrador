@@ -12,6 +12,7 @@ import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
 import br.com.centinela.marketing.compartilhado.dados.EntidadeBase;
+import br.com.centinela.marketing.leads.FaixaQualificacao;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -69,6 +70,14 @@ public class QualificacaoConfiguracao extends EntidadeBase {
         }
         this.limiteMqlQuente = limiteMqlQuente;
         this.limiteMqlMorno = limiteMqlMorno;
+    }
+
+    /** Faixa de uma pontuação: a partir do limite quente é MQL quente; a partir do morno, MQL morno; abaixo, nutrição. */
+    public FaixaQualificacao faixaPara(int pontuacao) {
+        if (pontuacao >= limiteMqlQuente) {
+            return FaixaQualificacao.MQL_QUENTE;
+        }
+        return pontuacao >= limiteMqlMorno ? FaixaQualificacao.MQL_MORNO : FaixaQualificacao.NUTRICAO;
     }
 
     public void definirAtendimento(LocalTime inicio, LocalTime fim, Set<DayOfWeek> dias) {

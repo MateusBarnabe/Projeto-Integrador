@@ -3,13 +3,14 @@
   "private": true,
   "description": "Atalhos para rodar os apps do monorepo. Cada app também roda sozinho de dentro da própria pasta.",
   "scripts": {
-    "instalar": "npm install && npm install --prefix marketing-web && npm install --prefix landing-web",
+    "instalar": "npm install && npm install --prefix marketing-web && npm install --prefix landing-web && npm install --prefix crm-stub",
     "infra": "docker compose up -d postgres rabbitmq mailpit",
     "infra:parar": "docker compose stop postgres rabbitmq mailpit",
-    "dev": "concurrently -k -n api,web,landing -c blue,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:landing\"",
+    "dev": "concurrently -k -n api,web,landing,crm -c blue,green,magenta,yellow \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:landing\" \"npm:dev:crm\"",
     "dev:api": "node scripts/api.mjs spring-boot:run",
     "dev:web": "npm run dev --prefix marketing-web",
     "dev:landing": "npm run dev --prefix landing-web",
+    "dev:crm": "npm run dev --prefix crm-stub",
     "build": "node scripts/api.mjs -q package -DskipTests && npm run build --prefix marketing-web && npm run build --prefix landing-web",
     "test:api": "node scripts/api.mjs verify"
   },

@@ -1,0 +1,21 @@
+{
+  "name": "crm-stub",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Stub do módulo CRM (Grupo 6) para o ambiente local: empresas, contatos e oportunidades em memória e o evento crm.oportunidade.criada",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "amqplib": "2.2.0",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "typescript": "~5.9.3"
+  }
+}

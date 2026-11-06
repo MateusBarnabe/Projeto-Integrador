@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { BarChart3, MessageCircle, ShieldCheck, Target } from 'lucide-react';
 import { AvisoPlaceholder } from './AvisoPlaceholder';
+import { ChatbotExemplo } from './ChatbotExemplo';
+import { FormularioExemplo } from './FormularioExemplo';
+import { esquecerOrigem, registrarVisita, type Origem, type ToqueOrigem } from './origem';
 
 const BENEFICIOS = [
   { icone: Target, titulo: 'Diagnóstico', texto: 'Entendemos o momento da sua empresa antes de propor qualquer coisa.' },
@@ -10,10 +13,12 @@ const BENEFICIOS = [
 
 /**
  * Landing page de teste de um tenant (Empresa A). É onde o visitante chega pelo anúncio,
- * clica em "Fale conosco" e preenche o formulário cujos campos vêm do módulo de Marketing.
+ * clica em "Fale conosco" e preenche o formulário de exemplo, que é do Landing (nada vem do Marketing).
  */
 export function App() {
   const [formularioAberto, setFormularioAberto] = useState(false);
+  // guarda a primeira e a última origem uma vez, na chegada
+  const [origem] = useState(registrarVisita);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -50,12 +55,47 @@ export function App() {
 
       {formularioAberto && (
         <section className="mx-auto w-full max-w-xl px-6 pb-16">
-          <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
-            Aqui entra o formulário de exemplo do placeholder. O formulário é do Landing: o
-            Marketing só recebe o evento do envio e lê as respostas em GET /api/landing/envios/&#123;id&#125;.
-          </div>
+          <FormularioExemplo origem={origem} />
         </section>
       )}
+
+      <PainelOrigem origem={origem} />
+      <ChatbotExemplo origem={origem} />
     </div>
+  );
+}
+
+/** Rodapé de teste: mostra a origem que vai no envio e permite recomeçar a jornada. */
+function PainelOrigem({ origem }: { origem: Origem }) {
+  const resumo = (t: ToqueOrigem) =>
+    [
+      t.utmSource && `utm_source=${t.utmSource}`,
+      t.utmMedium && `utm_medium=${t.utmMedium}`,
+      t.utmCampaign && `utm_campaign=${t.utmCampaign}`,
+      t.utmTerm && `utm_term=${t.utmTerm}`,
+      t.utmContent && `utm_content=${t.utmContent}`,
+      t.fbclid && `fbclid=${t.fbclid}`,
+      t.gclid && `gclid=${t.gclid}`,
+      t.referenciador && `referenciador=${t.referenciador}`,
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'acesso direto';
+
+  return (
+    <footer className="mt-auto border-t border-gray-100 bg-gray-50 px-6 py-4 text-xs text-gray-500">
+      <div className="mx-auto flex max-w-5xl flex-col gap-1">
+        <span>Primeira origem: {resumo(origem.primeira)}</span>
+        <span>Última origem: {resumo(origem.ultima)}</span>
+        <button
+          onClick={() => {
+            esquecerOrigem();
+            window.location.reload();
+          }}
+          className="self-start text-brand-800 underline"
+        >
+          Esquecer a origem guardada
+        </button>
+      </div>
+    </footer>
   );
 }

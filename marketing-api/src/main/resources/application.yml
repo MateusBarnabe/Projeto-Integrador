@@ -45,6 +45,16 @@ spring:
     username: ${RABBITMQ_USER:mq_marketing}
     password: ${RABBITMQ_PASSWORD:mq_marketing}
     virtual-host: ${RABBITMQ_VHOST:plataforma}
+    # Consumo (F4): 3 tentativas e, esgotadas, rejeita sem voltar à fila → <fila>.dlq (§9.7)
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
 
   # JWKS do identity (§4.2), no caminho que o compose da plataforma usa
   security:
@@ -61,6 +71,19 @@ springdoc:
   swagger-ui:
     enabled: ${SWAGGER_HABILITADO:true}
   paths-to-match: /api/marketing/**, /public/marketing/**
+
+# Chamadas a outros módulos (§9.1, §9.2, §9.6): direto pelo nome do container, nunca pelo gateway,
+# com token de serviço (clientId = marketing) e X-Tenant-Id, timeout de 3 s. Os padrões são os
+# endereços da rede do compose da plataforma; o IDENTITY_BASE_URL e o SVC_* vêm de lá.
+marketing:
+  integracao:
+    timeout: 3s
+    identity-base-url: ${IDENTITY_BASE_URL:http://identity:8081}
+    landing-base-url: ${LANDING_BASE_URL:http://landing:8088}
+    crm-base-url: ${CRM_BASE_URL:http://crm:8082}
+    servico:
+      client-id: ${SVC_CLIENT_ID:marketing}
+      client-secret: ${SVC_CLIENT_SECRET:}
 
 logging:
   pattern:

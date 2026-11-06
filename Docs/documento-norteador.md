@@ -1,6 +1,6 @@
 # Documento Norteador — Módulo de Marketing (Grupo 4)
 
-Código `marketing` · Schema `marketing` · Projeto Integrador 2026 · Grupo 4 · Revisão de 05/11/2026
+Código `marketing` · Schema `marketing` · Projeto Integrador 2026 · Grupo 4 · Revisão de 06/11/2026
 
 *Documento norteador — incrementado conforme o projeto avança · Alinhado ao Contrato de Integração v0.7 e aos contratos publicados do Landing e do CRM*
 
@@ -77,7 +77,7 @@ O módulo roda dentro da plataforma do Grupo 2 e herda dela nomes, portas, crede
 | Rotas públicas | `/public/marketing/**`, sem token, com rate limit no gateway | §12.6 |
 | Banco | schema `marketing`; `own_marketing` roda o Flyway, `usr_marketing` roda a aplicação | §7.1 |
 | RabbitMQ | usuário `mq_marketing`; publica só em `marketing.eventos` e `identity.entrada`; lê qualquer `*.eventos` para ligar as próprias filas | §9.7, §13.3 |
-| Token de serviço | `clientId = marketing`, segredo em `SVC_MARKETING_SEGREDO` | §9.2 |
+| Token de serviço | `clientId = marketing` (`SVC_CLIENT_ID`), segredo em `SVC_CLIENT_SECRET`, que o compose da plataforma preenche com o `SVC_MARKETING_SEGREDO` do `.env` | §9.2 |
 | Variáveis de ambiente | as do `docker-compose.yml` da plataforma: `SERVER_PORT`, `DB_URL`, `DB_APP_USER`/`DB_APP_PASSWORD`, `DB_OWNER_USER`/`DB_OWNER_PASSWORD`, `RABBITMQ_HOST`/`PORT`/`VHOST`/`USER`/`PASSWORD`, `JWKS_URI`, `IDENTITY_BASE_URL`, `SVC_CLIENT_ID`/`SVC_CLIENT_SECRET` | compose do infra |
 | Stack | Java 21, Spring Boot 3.x, Maven, Flyway, Spring AMQP; React + Vite + TypeScript, Tailwind v4 | §13.1 |
 | Imagens | `ghcr.io/{conta}/marketing` e `marketing-front`, publicadas a cada merge com `:latest` e `:sha-{commit}` | §14.3 |
@@ -170,9 +170,9 @@ Registro central do lead. Existe quando há um identificador de contato: leads d
 | meta_lead_id | varchar, nullable | `leadgen_id` do Meta, para dedupe de reentrega do webhook. **UNIQUE (tenant_id, meta_lead_id)** |
 | crm_empresa_id / crm_contato_id | uuid, nullable | `empresaId` e `contatoId` de `landing.formulario.recebido`. Só o UUID, nunca FK entre schemas |
 | crm_oportunidade_id | uuid, nullable | `oportunidadeId` de `crm.oportunidade.criada` (9.6). Só o UUID |
-| pontuacao **[Etapa 2]** | int, nullable | soma das regras de pontuação (9.3). Nula enquanto nada pontuou |
+| pontuacao **[Etapa 2]** | int, nullable | soma das regras de pontuação (9.3). Nula até o primeiro cálculo; um lead calculado sem nenhuma regra que bata fica com 0 |
 | faixa_qualificacao **[Etapa 2]** | varchar, nullable | `mql_quente`, `mql_morno`, `nutricao` |
-| pontuacao_detalhe **[Etapa 2]** | jsonb | regras que somaram pontos, para o detalhe do lead explicar a nota |
+| pontuacao_detalhe **[Etapa 2]** | jsonb | regras que somaram pontos, para o detalhe do lead explicar a nota: uma entrada por critério, com `regraId`, `criterio`, `fonte`, `pontos` e `campoId` ou `campoMeta`. Não guarda a resposta do lead |
 | qualificado_em **[Etapa 2]** | timestamptz, nullable | último cálculo da pontuação |
 | vendedor_id **[Etapa 2]** | uuid, nullable | usuário do identity atribuído pelo rodízio (9.3). Só o UUID |
 | vendedor_atribuido_em **[Etapa 2]** | timestamptz, nullable | base do transbordo |
@@ -553,8 +553,20 @@ GET /api/marketing/busca?q=maria
 | `GET http://landing:8088/api/landing/formularios/{id}/resumo` | nome e campos de um formulário, para a tela de regras (9.4) | `landing.formulario.ver_resumo`, já com `servicos: [marketing]` |
 | `GET /api/identity/tenants/resolver?subdominio=` | tenant do webhook do Meta | `identity.tenant.ver`, já concedida |
 | gravar o responsável de uma oportunidade no CRM | levar o vendedor do rodízio ao CRM (9.6) | **[Pendente · Grupo 6]** |
+| `GET {META_GRAPH_BASE_URL}/v{x}/{leadgen_id}` | dados do lead do formulário instantâneo (4.1) | token da página do Meta (seção 11) |
 
-Todas com token de serviço e `X-Tenant-Id`, direto pelo nome do container, com o host vindo de variável de ambiente (`LANDING_BASE_URL`, `CRM_BASE_URL`, `IDENTITY_BASE_URL`) e timeout de 3 s (§9.1, §9.2, §9.6).
+Todas com token de serviço e `X-Tenant-Id`, direto pelo nome do container, com o host vindo de variável de ambiente e timeout de 3 s (§9.1, §9.2, §9.6). O cliente fica em `compartilhado/http` (`ClientesDeModulos`):
+
+| Variável | Padrão | Observação |
+|---|---|---|
+| `IDENTITY_BASE_URL` | `http://identity:8081` | já vem do compose da plataforma |
+| `LANDING_BASE_URL` | `http://landing:8088` | **[Pendente · Grupo 2]** pedir no compose do `marketing` |
+| `CRM_BASE_URL` | `http://crm:8082` | **[Pendente · Grupo 2]** pedir no compose do `marketing` |
+| `META_GRAPH_BASE_URL` | `https://graph.facebook.com` | só a partir da E4; nos testes aponta para o WireMock |
+
+- O token de serviço (`POST /api/identity/auth/token-servico`) fica em memória e é renovado 60 s antes de vencer. Se o destino responder `401`, o cliente pede outro token e repete a chamada uma vez
+- Toda falha vira `FalhaNaChamadaDeModulo`, com o motivo (`INDISPONIVEL`, `NAO_ENCONTRADO`, `NAO_AUTENTICADO`, `SEM_PERMISSAO`, `REJEITADA`, `RESPOSTA_INVALIDA`, `NAO_CONFIGURADO`). Cada rota trata a falha e mostra o que conseguiu; a que não tratar responde `503` com o código `INTEGRACAO_<MOTIVO>`
+- Token, segredo e corpo da resposta nunca vão para o log nem para a mensagem da exceção
 
 ### Handoff para o CRM
 
@@ -712,7 +724,9 @@ Saiu `marketing.formulario.publicado`, que não existe mais.
 
 ### Consumo
 
-Cada fila tem a sua DLQ (`.dlq`), para mensagens que falharam três vezes. As filas e as ligações são declaradas pela própria API do Marketing (o `mq_marketing` configura `marketing.*` e lê qualquer `*.eventos`).
+Cada fila tem a sua DLQ (`.dlq`), para mensagens que falharam três vezes, encaminhada pela exchange `marketing.dlx`, como no `exemplo-modulo`. As filas, as ligações e a `marketing.dlx` são declaradas pela própria API do Marketing (`TopologiaDeConsumo`); as exchanges dos outros módulos não. O `mq_marketing` configura `marketing.*` e lê qualquer `*.eventos`, igual ao `init.sh` da plataforma.
+
+Antes do efeito, a base de consumo (`ConsumoDeEventos`) confere o envelope da §9.7 completo, o `moduloOrigem` esperado para a fila, o prefixo do `tipo` e a propriedade `user_id = mq_<moduloOrigem>`. Envelope inválido ou remetente que não confere vai direto para a `.dlq`, sem novas tentativas. O tenant do envelope entra no contexto antes da transação. O log da falha traz só fila, id, tipo e motivo, nunca o corpo.
 
 | Fila | Ligada a | Chaves |
 |---|---|---|
@@ -744,7 +758,7 @@ Todo consumo é idempotente: grava o `id` em `eventos_processados` na mesma tran
 - Envia `modulo:altura` a cada mudança de conteúdo, `modulo:navegar` com rota relativa (`/leads/9f1c`) e `modulo:token-expirado` ao receber `401`
 - Token só em memória, nunca em `localStorage`
 - O servidor do front envia `Content-Security-Policy: frame-ancestors 'self'` e nunca `X-Frame-Options: DENY` (§12.8)
-- Tema: [Design System Centinela](DesignSystem/design-systemfinal.md) sobre Tailwind v4, com `lucide-react` e a fonte Inter. Ele substitui o shadcn/ui. Usar os tokens do Design System (`bg-brand-950`, `bg-brand-800`, `text-brand-300`...) em vez de hex e aplicar `data-tema` recebido da casca
+- Tema: [Design System Centinela](DesignSystem/design-systemfinal.md) sobre Tailwind v4, com `lucide-react` e a fonte Inter. Ele substitui o shadcn/ui. Usar os tokens do Design System (`bg-brand-950`, `bg-brand-800`, `text-brand-300`...) em vez de hex e aplicar `data-tema` recebido da casca. Os neutros (`bg-superficie`, `text-texto`, `border-borda`...) e a variante `dark:`, ligada a `data-tema="escuro"`, seguem os valores do `ui/plataforma.css`, para o módulo acompanhar o tema escuro da casca
 
 > **Front independente da casca.** A integração com a casca está a cargo de outro grupo, e a decisão pode mudar (iframe, micro-frontend ou front único). Por isso o front do Marketing concentra tudo o que depende da casca numa camada só, `plataforma/`: sessão e token, navegação, altura, tema e aviso de token expirado. As telas não falam com `window.parent` nem com `postMessage`; usam essa camada. Caminho base e endereço da API vêm de configuração (`import.meta.env`), não fixos no código. Cada área (painel, leads, configurações) fica em `src/features/<area>/`, com as próprias rotas, e pode ser montada em outro app sem reescrita. Sozinho, o módulo abre com um layout de desenvolvimento e login de teste; embutido, sem sidebar nem header, que são da casca.
 
@@ -870,10 +884,12 @@ As regras de negócio completas estão em [Regras de Negócio](Regras%20de%20Neg
 - **Como calcula:** soma os `pontos` de cada regra ativa de `regras_pontuacao` que bate:
   - `campo_formulario`: só as regras do `formulario_id` do lead; compara a resposta de mesmo `campoId` com `valores`
   - `campo_meta`: compara a resposta da pergunta de nome `campo_meta` com `valores`
-  - `utm`: compara a UTM do lead
-  - cada critério conta uma vez, pela regra de mais pontos
-- **Faixa:** `pontuacao >= limite_mql_quente` é `mql_quente`; `>= limite_mql_morno` é `mql_morno`; abaixo disso, `nutricao`
-- **O que grava:** `pontuacao`, `faixa_qualificacao`, `pontuacao_detalhe` e `qualificado_em`. Quando a faixa muda, registra `qualificacao_alterada` em `lead_eventos` e envia `lead_qualificado` pelo SSE
+  - `utm`: compara a UTM do lead. Cada condição de `valores` é um objeto que bate quando todas as chaves batem; as chaves são `source`, `medium`, `campaign`, `term` e `content` (com ou sem o prefixo `utm_`), e uma chave aceita uma lista (`{"medium": ["display", "social"]}`). `{"direto": true}` exige as cinco UTMs vazias; lead do Meta sem UTM não conta como direto, porque veio de anúncio. Condição vazia ou com chave desconhecida não pontua
+  - cada critério conta uma vez, pela regra de mais pontos (no empate, a de menor id). Critérios com o mesmo nome, sem diferença de maiúsculas, acentos e espaços, são o mesmo critério, mesmo vindos de fontes diferentes
+  - as respostas são comparadas sem diferença de maiúsculas, acentos e espaços nas pontas; na múltipla escolha, basta uma opção bater
+- **Faixa:** `pontuacao >= limite_mql_quente` é `mql_quente`; `>= limite_mql_morno` é `mql_morno`; abaixo disso, `nutricao`. Sem linha em `qualificacao_configuracoes`, valem 70 e 40
+- **O que grava:** `pontuacao`, `faixa_qualificacao`, `pontuacao_detalhe` e `qualificado_em`. Quando a faixa muda, inclusive no primeiro cálculo, registra `qualificacao_alterada` em `lead_eventos` (com `faixaAnterior`, `faixaNova`, `pontuacaoAnterior` e `pontuacao`) e envia `lead_qualificado` pelo SSE
+- **Onde está:** `PontuacaoDeLeads.pontuar(lead)` (e `pontuar(lead, respostasMeta)` para o Meta), chamada pelos consumidores e jobs. O motor lê do próprio lead o formulário, as respostas e a UTM; não chama o Landing
 
 **Matriz inicial** (Regras de Negócio, 7.1):
 
@@ -1009,7 +1025,9 @@ O módulo está integrado quando passa nos 19 itens do checklist (§15), verific
 | 15 | suíte com Testcontainers (PostgreSQL e RabbitMQ) e WireMock para Landing, CRM, identity e Graph API do Meta; os eventos do Landing e do CRM são publicados pelo próprio teste no RabbitMQ do Testcontainers; nenhum outro módulo no ar |
 | 17, 18 | eventos com envelope e `user_id = mq_marketing`, descritos no AsyncAPI; consumidor testado com a mesma mensagem entregue duas vezes |
 
-O `exemplo-modulo` já cobre os itens 2 a 6, 9, 10, 15 e 18 com testes automatizados. Copiá-los e adaptar as rotas é o caminho mais curto. Para desenvolver contra o Landing e o CRM antes de eles existirem, use um stub do Prism a partir de `contratos/landing.yaml` e `contratos/crm.yaml` (sem tirar o `-m false`). O identity nunca é stub: use a imagem real e os usuários de `docs/usuarios-de-teste.md`.
+O `exemplo-modulo` já cobre os itens 2 a 6, 9, 10, 15 e 18 com testes automatizados. Copiá-los e adaptar as rotas é o caminho mais curto. Nos testes automatizados, o Landing, o CRM, o identity e a Graph API são WireMock (`IntegracaoDeTeste` e `ModulosSimulados`, em `compartilhado/teste`). Para desenvolver contra o Landing e o CRM antes de eles existirem, o repositório tem placeholders próprios no lugar do Prism: o `landing-web` (página, formulário de exemplo, chatbot e os dois eventos) e o `crm-stub` (serviço `crm` na porta 8082, como o CRM real, com empresas, contatos e oportunidades em memória e o evento `crm.oportunidade.criada`). O identity nunca é stub: use a imagem real e os usuários de `docs/usuarios-de-teste.md`.
+
+O CI (`.github/workflows/ci.yml`) roda o `./mvnw verify` e o build do front em todo PR e, no push na `main`, publica as imagens pelo `publicar-imagem.yml` da plataforma.
 
 Além do checklist, a Etapa 2 precisa de testes próprios: a pontuação com a matriz inicial da 9.3 (um lead de cada faixa), só com as regras do formulário do envio; o rodízio com três leads MQL e dois vendedores ativos; a atribuição fora do horário comercial; e a ligação com a oportunidade com `crm.oportunidade.criada` chegando antes e depois de `landing.formulario.recebido`.
 
@@ -1019,7 +1037,7 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 
 - `contratos/marketing.yaml` (OpenAPI 3.1) e `contratos/marketing.asyncapi.yaml` (AsyncAPI 3.0): **já no infra**, versão 0.2.0, sem formulários. O AsyncAPI está sem mensagens até algum evento ter consumidor
 - `permissoes/marketing.yaml` e `modulos/marketing.json` (seção 7): **já no infra**
-- `IMAGEM_MARKETING` e `IMAGEM_MARKETING_FRONT` com a conta do grupo, em `.env.example`
+- `IMAGEM_MARKETING=ghcr.io/mateusbarnabe/marketing:latest` e `IMAGEM_MARKETING_FRONT=ghcr.io/mateusbarnabe/marketing-front:latest`, em `.env.example`. Os dois pacotes precisam estar públicos no GitHub para o staging baixá-los sem login
 - `contratos/marketing.views.md`: só se o Grupo 3 pedir *views* `vw_pub_*` para relatórios
 
 ---
@@ -1040,6 +1058,9 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | Primeiro contato do vendedor, para o transbordo do rodízio (evento ou consulta no CRM) | Grupo 6 | A pedir |
 | Disponibilidade do vendedor ("Online/Disponível"): se existir no CRM, como o Marketing consulta | Grupo 6 | A confirmar |
 | Listar usuários com perfil VENDEDOR e seus nomes no identity (escala do rodízio e painel) | Grupo 2 | A pedir |
+| `LANDING_BASE_URL` e `CRM_BASE_URL` no serviço `marketing` do compose da plataforma (seção 6). Até lá valem os padrões com os nomes dos containers | Grupo 2 | A pedir |
+| Campos para `fbclid` e `gclid` no `ToqueOrigem` do envio. Hoje eles só chegam dentro de `paginaEntrada`, e o Marketing teria de extraí-los da URL | Grupo 7 | A pedir |
+| Onde guardar as respostas do formulário instantâneo do Meta: sem elas, uma nova pontuação do lead (por exemplo, quando ele envia um formulário do Landing) deixa de somar as regras `campo_meta` | Grupo 4 | A definir na E4 |
 | SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao `marketing`, e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
 | SSE pelo gateway: a conexão longa sobrevive à regra de `504` em 3 s? | Grupo 2 | A confirmar |
 | Rate limit de 120 req/min por IP em `/public/**` pode barrar rajadas do webhook do Meta | Grupo 2 | A confirmar |
@@ -1064,6 +1085,17 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 ---
 
 ## 12. Registro de alterações
+
+### 06/11/2026 · fundação da fase 1: consumo, clientes HTTP, testes, pontuação, front e placeholders
+
+- **Consumo (F4):** a API declara `marketing.landing-leads` e `marketing.crm-oportunidades`, cada uma com `.dlq` pela exchange `marketing.dlx`, e confere envelope, remetente e `user_id = mq_<moduloOrigem>` antes do efeito (seção 8). O `mq_marketing` local passa a ler qualquer `*.eventos`, como na plataforma
+- **Chamadas a outros módulos (F5):** cliente com token de serviço em cache, uma nova tentativa depois de `401`, `503` com `INTEGRACAO_<MOTIVO>` quando a falha não é tratada e as variáveis `LANDING_BASE_URL`, `CRM_BASE_URL` e `META_GRAPH_BASE_URL` (seção 6). Na seção 1, o segredo do token passa a constar como `SVC_CLIENT_SECRET`
+- **Testes (F6):** base comum com Postgres e RabbitMQ no Testcontainers e WireMock para Landing, CRM, identity e Graph API (seção 10)
+- **Pontuação (Q1):** formato das condições de `utm`, desempate, comparação das respostas, registro de `qualificacao_alterada` também no primeiro cálculo (9.3) e formato de `pontuacao_detalhe`, sem as respostas do lead (seção 3)
+- **Front (W1):** os 14 componentes do Design System que faltavam e o tema escuro, com os neutros e o `dark:` do `ui/plataforma.css` ao lado dos tokens `brand-*`. Revisa a decisão de 25/09, que usava só os tokens do Design System (seção 9)
+- **Placeholders (L1, L2, L5):** o `landing-web` publica os dois eventos do Landing e já responde à leitura do envio; o stub do CRM é próprio (`crm-stub`, serviço `crm` na 8082), no lugar do Prism, com o usuário `mq_crm` e a exchange `crm.eventos` no RabbitMQ local (seção 10)
+- **CI (I2):** `.github/workflows/ci.yml` testa a API e o front e publica `ghcr.io/mateusbarnabe/marketing` e `marketing-front` (seção 10)
+- Pendências novas na seção 11: as variáveis de endereço no compose da plataforma, `fbclid` e `gclid` no envio e onde guardar as respostas do Meta
 
 ### 05/11/2026 · Landing dono dos formulários e oportunidade criada pelo Landing
 

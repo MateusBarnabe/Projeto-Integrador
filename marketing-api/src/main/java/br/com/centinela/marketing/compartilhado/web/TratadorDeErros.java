@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import br.com.centinela.marketing.compartilhado.http.FalhaNaChamadaDeModulo;
+
 /**
  * Converte exceções em respostas com o envelope padrão e os códigos da §8.4 do Contrato.
  */
@@ -48,6 +50,18 @@ public class TratadorDeErros {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Resposta<Void>> semPermissao(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Resposta.erro("Sem permissão para esta ação."));
+    }
+
+    /**
+     * Rede de segurança para falha de outro módulo que a rota não tratou: responde {@code 503} com
+     * envelope em vez de {@code 500} (Contrato §9.6). O ideal é a rota mostrar o que conseguiu.
+     */
+    @ExceptionHandler(FalhaNaChamadaDeModulo.class)
+    public ResponseEntity<Resposta<Void>> moduloIndisponivel(FalhaNaChamadaDeModulo ex) {
+        log.warn(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Resposta.erro(
+                "O módulo " + ex.modulo().codigo() + " não respondeu como esperado. Tente de novo em instantes.",
+                List.of(new ErroCampo(null, "INTEGRACAO_" + ex.motivo().name(), null))));
     }
 
     @ExceptionHandler(Exception.class)
