@@ -49,6 +49,50 @@ class LeadTest {
     }
 
     @Test
+    void completarContatoSoPreencheOQueFalta() {
+        Lead lead = new Lead(OrigemLead.LANDING_PAGE, 3);
+        lead.atualizarContato("Ana", "ana@exemplo.com", null, null);
+
+        lead.completarContato("Outra", "outra@exemplo.com", "5562999998888", " ");
+
+        assertThat(lead.getNome()).isEqualTo("Ana");
+        assertThat(lead.getEmail()).isEqualTo("ana@exemplo.com");
+        assertThat(lead.getTelefone()).isEqualTo("5562999998888");
+        assertThat(lead.getWhatsapp()).isNull();
+    }
+
+    @Test
+    void utmPreenchidaSubstituiVaziaNuncaApagaECompletarSoPreencheOQueFalta() {
+        Lead lead = new Lead(OrigemLead.LANDING_PAGE, 1);
+        lead.atualizarUtm("google", "cpc", "black-friday", null, null);
+
+        lead.atualizarUtm("instagram", "", null, null, " ");
+        assertThat(lead.getUtmSource()).isEqualTo("instagram");
+        assertThat(lead.getUtmMedium()).isEqualTo("cpc");
+        assertThat(lead.getUtmCampaign()).isEqualTo("black-friday");
+        assertThat(lead.getUtmContent()).isNull();
+
+        lead.completarUtm("facebook", "social", "natal", "termo", null);
+        assertThat(lead.getUtmSource()).isEqualTo("instagram");
+        assertThat(lead.getUtmMedium()).isEqualTo("cpc");
+        assertThat(lead.getUtmCampaign()).isEqualTo("black-friday");
+        assertThat(lead.getUtmTerm()).isEqualTo("termo");
+    }
+
+    @Test
+    void formularioECanalSemEnvioNaoApagamComNulo() {
+        Lead lead = new Lead(OrigemLead.LANDING_PAGE, 1);
+        UUID formulario = UUID.randomUUID();
+
+        lead.vincularFormulario(formulario, CanalLead.CHATBOT);
+        lead.vincularFormulario(null, null);
+
+        assertThat(lead.getFormularioId()).isEqualTo(formulario);
+        assertThat(lead.getCanal()).isEqualTo(CanalLead.CHATBOT);
+        assertThat(lead.leituraDoEnvioPendente()).as("sem envio").isFalse();
+    }
+
+    @Test
     void soViraLeadQuemTemMetaEmailOuTelefone() {
         Lead semContato = new Lead(OrigemLead.LANDING_PAGE, 0);
         semContato.atualizarContato("Sem contato", null, null, "11988887777");

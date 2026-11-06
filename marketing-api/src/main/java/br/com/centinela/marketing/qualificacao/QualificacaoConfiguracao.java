@@ -6,10 +6,12 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
 
+import org.hibernate.annotations.JdbcType;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
+import org.hibernate.type.descriptor.jdbc.LocalTimeJdbcType;
 
 import br.com.centinela.marketing.compartilhado.dados.EntidadeBase;
 import br.com.centinela.marketing.leads.FaixaQualificacao;
@@ -36,9 +38,13 @@ public class QualificacaoConfiguracao extends EntidadeBase {
     @Column(name = "rodizio_ativo", nullable = false)
     private boolean rodizioAtivo;
 
+    // Hora local do tenant, sem fuso: sem o LocalTimeJdbcType, o hibernate.jdbc.time_zone (UTC) deslocaria
+    // o valor pelo fuso da JVM ao gravar (08:00 em UTC-3 virava 11:00 no banco)
+    @JdbcType(LocalTimeJdbcType.class)
     @Column(name = "horario_comercial_inicio", nullable = false)
     private LocalTime horarioComercialInicio;
 
+    @JdbcType(LocalTimeJdbcType.class)
     @Column(name = "horario_comercial_fim", nullable = false)
     private LocalTime horarioComercialFim;
 

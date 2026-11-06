@@ -52,7 +52,11 @@ import br.com.centinela.marketing.compartilhado.web.RequestIdFilter;
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(properties = {
         "spring.rabbitmq.listener.simple.retry.initial-interval=50ms",
-        "spring.rabbitmq.listener.simple.retry.max-interval=100ms" })
+        "spring.rabbitmq.listener.simple.retry.max-interval=100ms",
+        // O consumidor de teste é o único na fila do Landing (sem o da E1 disputando as mensagens)
+        "marketing.consumo.landing-leads.auto-startup=false",
+        // O teste lê a fila do CRM direto (sem o consumidor da E6)
+        "marketing.consumo.crm-oportunidades.auto-startup=false" })
 @DirtiesContext // o contexto tem um listener; parado o broker, ele não pode ficar no cache
 @ExtendWith(OutputCaptureExtension.class)
 class ConsumoDeEventosIntegracaoTest {

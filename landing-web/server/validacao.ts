@@ -11,6 +11,19 @@ function vazio(valor: unknown): boolean {
   return valor === undefined || valor === null || valor === '' || (Array.isArray(valor) && valor.length === 0);
 }
 
+/** 14 dígitos com os dois dígitos verificadores certos (ex. de teste: 11222333000181). */
+function cnpjValido(digitos: string): boolean {
+  if (!/^\d{14}$/.test(digitos) || /^(\d)\1{13}$/.test(digitos)) return false;
+  const verificador = (base: string) => {
+    const soma = [...base].reduce((total, d, i) => total + Number(d) * (((base.length - i - 1) % 8) + 2), 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const primeiro = verificador(digitos.slice(0, 12));
+  const segundo = verificador(digitos.slice(0, 12) + primeiro);
+  return digitos.endsWith(`${primeiro}${segundo}`);
+}
+
 /** Valida um valor para o tipo do campo. Devolve o valor normalizado ou o erro. */
 export function validarValor(campo: Campo, valor: unknown): { valor: Valor } | { erro: Erro } {
   const falha = (codigo: string, detalhe: string) => ({ erro: { campo: campo.id, codigo, detalhe } });
@@ -28,6 +41,11 @@ export function validarValor(campo: Campo, valor: unknown): { valor: Valor } | {
       // Só dígitos, com DDD (formato do contrato: 62999998888)
       const digitos = String(valor).replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
       return /^\d{10,11}$/.test(digitos) ? { valor: digitos } : falha('TELEFONE_INVALIDO', 'Informe o telefone com DDD.');
+    }
+    case 'CNPJ': {
+      // Só dígitos, como o CRM espera (crm.yaml: ^[0-9]{14}$)
+      const digitos = String(valor).replace(/\D/g, '');
+      return cnpjValido(digitos) ? { valor: digitos } : falha('CNPJ_INVALIDO', 'Informe um CNPJ válido.');
     }
     case 'LISTA_OPCOES':
       return campo.opcoes?.includes(String(valor))

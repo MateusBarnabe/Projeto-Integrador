@@ -16,7 +16,7 @@ O contrato que ele imita:
 - `contratos/landing.yaml` e `contratos/landing.asyncapi.yaml` do `infra-integrador-2026`: o contrato publicado pelo Grupo 7;
 - [Docs/contratos/landing-requisitos.md](../Docs/contratos/landing-requisitos.md): o que consumimos e o que ainda pedimos a eles.
 
-> **Estado atual (05/11/2026): L1 e L2 feitas.** A página guarda a primeira e a última origem e mostra o formulário de exemplo e um chatbot de exemplo, com o aceite de consentimento. Os envios ficam em memória, os dois eventos `landing.*` são publicados em `landing.eventos` e as duas rotas lidas pelo Marketing já respondem, sem conferir o token (X10). Faltam a decisão X10 (L3) e o stub do CRM com a chamada antes do evento (L4 e L5, em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)).
+> **Estado atual (06/11/2026): L1 a L4 feitas.** A página guarda a primeira e a última origem e mostra o formulário de exemplo e um chatbot de exemplo, com o aceite de consentimento. Os envios ficam em memória; no envio, o placeholder cria ou reaproveita empresa e contato e cria a oportunidade no stub do CRM ([`crm-stub/`](../crm-stub/)) e só então publica `landing.formulario.recebido`, com `empresaId` e `contatoId`. As duas rotas lidas pelo Marketing respondem no formato do `landing.yaml`, exigindo `Authorization: Bearer` e `X-Tenant-Id` (decisão X10). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|
@@ -52,7 +52,7 @@ O rodapé mostra a primeira e a última origem guardadas e tem um botão para es
 docker compose up -d --build landing    # na raiz
 ```
 
-Em container, roda **um processo só**: o servidor Node entrega a página (o build em `dist/`) e a API na porta `8088`. Abra http://localhost:8088.
+Em container, roda **um processo só**: o servidor Node entrega a página (o build em `dist/`) e a API na porta `8088`. Abra http://localhost:8088. O compose sobe junto o stub do CRM (`crm`), que o placeholder chama em `http://crm:8082`. Fora do Docker, rode o stub com `npm run dev:crm` na raiz; sem ele, o envio funciona do mesmo jeito, só sem os ids do CRM.
 
 ## Variáveis de ambiente
 
@@ -60,6 +60,7 @@ Em container, roda **um processo só**: o servidor Node entrega a página (o bui
 |---|---|---|
 | `PORTA` | `8088` | porta do servidor Node |
 | `RABBITMQ_URL` | `amqp://mq_landing:mq_landing@localhost:5672/plataforma` | RabbitMQ; conecta como `mq_landing`, porque o `user_id` das mensagens precisa bater com o usuário |
+| `CRM_BASE_URL` | `http://localhost:8082` | API do CRM (o stub local ou o real), chamada direto, sem gateway; no `docker-compose.yml`, `http://crm:8082` |
 | `SERVIDOR_PROXY_ALVO` | `http://localhost:8088` | para onde o Vite repassa `/api/landing` e `/public/landing` em desenvolvimento |
 
 ## Estrutura de pastas
@@ -75,6 +76,7 @@ landing-web/
 │   ├── formulario.ts           o formulário de exemplo (tenant Empresa A), fixo no código
 │   ├── validacao.ts            validação das respostas por tipo de campo e normalização da origem
 │   ├── envios.ts               envios gravados, em memória, e o formato `Envio` do contrato
+│   ├── crm.ts                  empresa, contato e oportunidade no CRM, antes do evento
 │   ├── chatbot.ts              sessões do chatbot de exemplo
 │   ├── eventos.ts              os dois eventos landing.*
 │   ├── mensageria.ts           conexão com o RabbitMQ e envelope da §9.7
@@ -100,18 +102,34 @@ Servidor Express. Hoje tem:
 
 - `GET /api/landing/health`: `200` com `{"status": "UP"}` no envelope;
 - `GET /public/landing/formularios/{chavePublica}`: schema público do formulário (`FormularioPublico` do `landing.yaml`), sem `mapeamentoCrm`;
-- `POST /public/landing/formularios/{chavePublica}/envios`: corpo `EnvioPublico` (`respostas` como mapa `campoId → valor`, `consentimento.aceito`, `paginaSlug`, `origem {primeira, ultima}`). Sem aceite responde `400 CONSENTIMENTO_OBRIGATORIO`; campo inválido, `400` com `CAMPO_OBRIGATORIO`, `EMAIL_INVALIDO`, `TELEFONE_INVALIDO` ou `OPCAO_INVALIDA`. Grava o envio com o texto do termo vigente e a data do aceite, e responde só a `mensagemSucesso` (a superfície pública não devolve o id do envio). Com `paginaSlug = empresa-a-consultoria` o canal é `landing_page`; sem ele, `formulario`. Depois de gravar, publica `landing.formulario.recebido`;
+- `POST /public/landing/formularios/{chavePublica}/envios`: corpo `EnvioPublico` (`respostas` como mapa `campoId → valor`, `consentimento.aceito`, `paginaSlug`, `origem {primeira, ultima}`). Sem aceite responde `400 CONSENTIMENTO_OBRIGATORIO`; campo inválido, `400` com `CAMPO_OBRIGATORIO`, `EMAIL_INVALIDO`, `TELEFONE_INVALIDO`, `CNPJ_INVALIDO` ou `OPCAO_INVALIDA`. Grava o envio com o texto do termo vigente e a data do aceite, e responde só a `mensagemSucesso` (a superfície pública não devolve o id do envio). Com `paginaSlug = empresa-a-consultoria` o canal é `landing_page`; sem ele, `formulario`. Depois de gravar, chama o CRM e publica `landing.formulario.recebido` (abaixo), sem segurar a resposta ao visitante;
 - `POST /public/landing/formularios/{chavePublica}/sessoes`, `.../sessoes/{sessaoId}/consentimento`, `.../respostas` e `.../concluir`: o chatbot de exemplo, devolvendo o `PassoChatbot` do contrato. A resposta que traz e-mail ou telefone com o aceite publica `landing.chatbot.lead_capturado`; o `concluir` grava o envio com canal `chatbot` e publica `landing.formulario.recebido`;
 - `GET /api/landing/envios/{id}` e `GET /api/landing/formularios/{id}/resumo`: as rotas lidas pelo Marketing (abaixo);
 - entrega da página: se `dist/` existir, como no container, serve os arquivos e manda qualquer outra rota para o `index.html`. Em desenvolvimento, quem entrega a página é o Vite.
 
 ### `server/formulario.ts`
 
-O formulário de exemplo: chave pública `fk_empresaA01`, id `a0000000-0000-4000-8000-0000000000f1`, do tenant Empresa A (`a0000000-0000-4000-8000-00000000000a`, o mesmo do identity em modo dev), com oito campos (nome, e-mail, telefone, empresa, porte, interesses, prazo e mensagem), o texto de consentimento e a landing page de teste (`empresa-a-consultoria`). O formulário é do Landing: o Marketing nunca o define.
+O formulário de exemplo: chave pública `fk_empresaA01`, id `a0000000-0000-4000-8000-0000000000f1`, do tenant Empresa A (`a0000000-0000-4000-8000-00000000000a`, o mesmo do identity em modo dev), com nove campos (nome, e-mail, telefone, empresa, CNPJ, porte, interesses, prazo e mensagem), o texto de consentimento e a landing page de teste (`empresa-a-consultoria`). O formulário é do Landing: o Marketing nunca o define.
 
 ### `server/envios.ts` e `server/validacao.ts`
 
-Os envios ficam num `Map` em memória e somem quando o servidor reinicia. O consentimento guarda o texto e a data do aceite, como o `ConsentimentoRegistrado` do contrato; IP e *User-Agent* não são guardados nem logados. A origem é reduzida aos campos do `ToqueOrigem` do contrato: o `fbclid` e o `gclid` não têm campo próprio lá e chegam dentro da `paginaEntrada`.
+Os envios ficam num `Map` em memória e somem quando o servidor reinicia (decisão X10: é ferramenta de teste; para reproduzir um cenário, basta enviar de novo). O consentimento guarda o texto e a data do aceite, como o `ConsentimentoRegistrado` do contrato; IP e *User-Agent* não são guardados nem logados. A origem é reduzida aos campos do `ToqueOrigem` do contrato: o `fbclid` e o `gclid` não têm campo próprio lá e chegam dentro da `paginaEntrada`.
+
+### `server/crm.ts` (handoff para o CRM)
+
+Depois de gravar o envio (formulário ou conclusão do chatbot) e **antes** de publicar `landing.formulario.recebido`, o placeholder faz o que o `landing.yaml` ("Como o CRM recebe o lead") e o Contrato §12.7 pedem ao Landing, chamando `CRM_BASE_URL` direto, com `X-Tenant-Id` do formulário, `Authorization: Bearer placeholder-landing` (o stub não confere o token), o `X-Request-Id` do envio e timeout de 3 s por chamada:
+
+| Passo | Corpo (`crm.yaml`) | Duplicidade |
+|---|---|---|
+| `POST /api/crm/empresas` | campos com `mapeamentoCrm = empresa.*` (`empresa.nome` vira `razaoSocial`, `empresa.cnpj` vai só com dígitos), `origem: landing`, `origemModuloId` = id do envio | `409 EMPRESA_DUPLICADA` (mesmo CNPJ no tenant): usa o `data.empresaId` devolvido |
+| `POST /api/crm/contatos` | campos com `mapeamentoCrm = contato.*` (nome, e-mail, telefone), `empresaId`, `consentimentoLgpd: concedido`, UTMs da última origem, `origem: landing`, `origemModuloId` = id do envio | `409 CONTATO_DUPLICADO` (mesmo e-mail na empresa): usa o `data.contatoId` devolvido |
+| `POST /api/crm/oportunidades` | `titulo: "Formulário: <nome do formulário>"` (sem dado pessoal, porque vai no evento do CRM), `empresaId`, `contatoId`, `tipo: nova`, `origem: landing`, **`origemModuloId` = id do envio** | — (cada envio abre uma oportunidade) |
+
+O stub publica `crm.oportunidade.criada` ao criar a oportunidade, então esse evento sai **antes** do `landing.formulario.recebido` do mesmo envio, um dos cenários que o Marketing precisa tratar. Os ids de empresa e contato ficam no envio (`GET /api/landing/envios/{id}`) e vão no evento.
+
+**CRM fora do ar, lento (mais de 3 s) ou recusando** (`400`, `5xx`): para no passo que falhou, o envio continua gravado e o evento sai do mesmo jeito, com o que se conseguiu até ali (normalmente `empresaId` e `contatoId` nulos), como diz o `landing.yaml`. O log diz só o id do envio, o passo e o motivo (`ECONNREFUSED`, `sem resposta em 3000 ms` ou `HTTP 400 (campo:CODIGO)`), sem nenhum dado do visitante. Não há nova tentativa: o Landing real também não descreve uma.
+
+**CNPJ:** o CRM só reconhece empresa repetida pelo CNPJ. Por isso o formulário de exemplo tem o campo opcional **CNPJ da empresa** (tipo `CNPJ`, `mapeamentoCrm: empresa.cnpj`, validado com os dígitos verificadores; `400 CNPJ_INVALIDO`). Com ele, reenviar com o mesmo CNPJ e e-mail reaproveita empresa e contato; sem ele, cada envio cria uma empresa nova (e, por consequência, um contato novo), como aconteceria no CRM real. CNPJ válido para teste: `11.222.333/0001-81`.
 
 ### `server/chatbot.ts`
 
@@ -126,7 +144,7 @@ Envelope da §9.7: `id`, `tipo`, `versao: 1`, `tenantId` (do formulário), `modu
 | Quando | Evento | `dados` |
 |---|---|---|
 | a conversa do chatbot recebe e-mail ou telefone, com o aceite | `landing.chatbot.lead_capturado` | `sessaoId`, `formularioId`, `paginaId`, `contato {nome, email, telefone}`, `origem {utmSource, utmMedium, utmCampaign}` (última origem), `consentimento {aceito: true, aceitoEm}` |
-| o formulário é enviado, ou a conversa é concluída | `landing.formulario.recebido` | `envioId`, `formularioId`, `empresaId`, `contatoId` (`null` até a L4), `canal` (`landing_page`, `formulario` ou `chatbot`) |
+| o formulário é enviado, ou a conversa é concluída, depois da chamada ao CRM | `landing.formulario.recebido` | `envioId`, `formularioId`, `empresaId`, `contatoId` (do CRM; `null` se ele não respondeu), `canal` (`landing_page`, `formulario` ou `chatbot`) |
 
 A etapa do funil não vai no evento: quem decide é o Marketing.
 
@@ -137,15 +155,24 @@ A etapa do funil não vai no evento: quem decide é o Marketing.
 | `GET /api/landing/envios/{id}` | `Envio` do `landing.yaml`: `nome`, `email`, `canal`, `paginaId`, `recebidoEm`, `anonimizado`, `respostas[] {campoId, rotulo, tipo, valor}` na ordem dos campos, `origem {primeira, ultima}`, `consentimento {aceito, texto, aceitoEm}`, `empresaId`, `contatoId` |
 | `GET /api/landing/formularios/{id}/resumo` | `Formulario`: nome, status, modo, texto do termo e `campos[] {id, ordem, rotulo, tipo, obrigatorio, placeholder, opcoes}`, sem chave pública nem `mapeamentoCrm` |
 
-As duas exigem o cabeçalho `X-Tenant-Id` (sem ele, `401`) e respondem `404` para registro de outro tenant. **O token de serviço ainda não é conferido** (X10). O id do envio sai no evento e no log do servidor (`Envio <id> gravado ...`).
+As duas são as únicas que aceitam token de serviço no Landing real (`clientId` `marketing`, chamada direta em `landing:8088`, §9.2). Aqui, pela **decisão X10**:
+
+- exigem `Authorization: Bearer <token>` e `X-Tenant-Id`; sem um ou outro, `401` no envelope, com `NAO_AUTENTICADO` no campo que faltou;
+- **não conferem a assinatura, a validade nem as permissões do token**: qualquer valor serve. Quem valida pelo JWKS do identity é o Landing real; o placeholder só garante que o Marketing manda o cabeçalho;
+- o tenant vem do `X-Tenant-Id`, e registro de outro tenant responde `404`.
+
+O id do envio sai no evento e no log do servidor (`Envio <id> gravado ...`).
 
 ```bash
-curl -H 'X-Tenant-Id: a0000000-0000-4000-8000-00000000000a' http://localhost:8088/api/landing/envios/<envioId>
+curl -H 'Authorization: Bearer qualquer' -H 'X-Tenant-Id: a0000000-0000-4000-8000-00000000000a' \
+  http://localhost:8088/api/landing/envios/<envioId>
 ```
+
+Diferenças conhecidas em relação ao `landing.yaml`: o `Formulario` do resumo não traz `criadoPor`/`atualizadoPor` (o formulário de exemplo não tem autor) nem `chavePublica` (a rota não devolve a chave de embed); `403` nunca acontece, porque as permissões do token não são lidas.
 
 ### `server/config.ts`
 
-Objeto `config` com `porta` e `rabbitmqUrl`, lidos das variáveis de ambiente. O placeholder não chama a API do Marketing, assim como o Landing real.
+Objeto `config` com `porta`, `rabbitmqUrl` e `crmBaseUrl`, lidos das variáveis de ambiente. O placeholder não chama a API do Marketing, assim como o Landing real.
 
 ### `server/envelope.ts`
 
@@ -176,7 +203,7 @@ Faixa amarela no topo: "Placeholder do Landing (Grupo 7) para testes locais do G
 Detalhes e dependências em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md), tarefas L1 a L5:
 
 1. ~~**Página e UTM (L1)**~~ e ~~**Eventos (L2)**~~: feitas.
-2. **Envios (L3):** as duas rotas já respondem no formato do `landing.yaml`, com os envios em memória. Falta decidir a X10: guardar em memória ou em arquivo, e conferir ou não o token de serviço do `marketing`.
-3. **CRM (L4 e L5):** no envio, antes do evento, criar empresa, contato e oportunidade no stub do CRM, com `origem: landing` e `origemModuloId` igual ao `envioId`. O stub publica `crm.oportunidade.criada` em `crm.eventos`.
+2. ~~**Envios (L3)**~~: feita. Envios em memória; as duas rotas exigem Bearer e `X-Tenant-Id`, sem conferir a assinatura (X10).
+3. ~~**CRM (L4 e L5)**~~: feitas. No envio, antes do evento, empresa, contato e oportunidade no stub do CRM, com `origem: landing` e `origemModuloId` igual ao `envioId`; o stub publica `crm.oportunidade.criada` em `crm.eventos`.
 
 **Regras de desacoplamento:** o Marketing nunca importa código daqui, e este app nunca lê o schema `marketing`. Os dois conversam só por RabbitMQ e HTTP, como o Landing real faria. Se o Grupo 7 mudar um nome ou formato, atualize primeiro o contrato em `Docs/contratos/`, depois este placeholder e o consumidor do Marketing.

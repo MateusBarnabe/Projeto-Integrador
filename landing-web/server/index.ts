@@ -14,7 +14,8 @@ import express, { type Request, type Response } from 'express';
 import { buscarSessao, consentir, encerrarSessao, iniciarSessao, passo, responder } from './chatbot.ts';
 import { config } from './config.ts';
 import { erro, ok } from './envelope.ts';
-import { buscarEnvio, envioParaContrato, gravarEnvio } from './envios.ts';
+import { criarNoCrm } from './crm.ts';
+import { buscarEnvio, envioParaContrato, gravarEnvio, registrarIdsDoCrm, type EnvioGravado } from './envios.ts';
 import { publicarFormularioRecebido, publicarLeadCapturado } from './eventos.ts';
 import {
   buscarPorChave,
@@ -52,6 +53,16 @@ const semConsentimento = () => erro('Não foi possível enviar o formulário.', 
 const confirmacao = (formulario: Formulario) =>
   ok({ mensagemSucesso: formulario.mensagemSucesso, urlRedirecionamento: formulario.urlRedirecionamento });
 
+/**
+ * O que acontece depois de gravar o envio, fora da resposta ao visitante: empresa, contato e
+ * oportunidade no CRM e, só então, `landing.formulario.recebido` com os ids do CRM (nulos se ele
+ * não respondeu). Nunca lança: o CRM e o RabbitMQ registram as próprias falhas no log.
+ */
+async function entregarEnvio(envio: EnvioGravado, formulario: Formulario, correlacaoId: string) {
+  registrarIdsDoCrm(envio, await criarNoCrm(envio, formulario, correlacaoId));
+  await publicarFormularioRecebido(envio, correlacaoId);
+}
+
 function formularioDaChave(req: Request, res: Response): Formulario | undefined {
   const formulario = buscarPorChave(String(req.params.chavePublica));
   if (!formulario) res.status(404).json(formularioNaoEncontrado());
@@ -66,7 +77,7 @@ app.get('/public/landing/formularios/:chavePublica', (req, res) => {
 
 /**
  * Recebe a resposta do visitante. Ordem: consentimento → validação dos campos → gravação →
- * `landing.formulario.recebido` (depois de gravar). A chamada ao CRM antes do evento é a L4.
+ * CRM (empresa, contato e oportunidade) → `landing.formulario.recebido`.
  */
 app.post('/public/landing/formularios/:chavePublica/envios', (req, res) => {
   const formulario = formularioDaChave(req, res);
@@ -85,7 +96,7 @@ app.post('/public/landing/formularios/:chavePublica/envios', (req, res) => {
     respostas: valores,
     origem: normalizarOrigem(corpo.origem),
   });
-  void publicarFormularioRecebido(envio, correlacao(req));
+  void entregarEnvio(envio, formulario, correlacao(req));
 
   // A superfície pública recebe, não consulta: a resposta não traz o id do envio (§12.6)
   res.json(confirmacao(formulario));
@@ -155,24 +166,33 @@ app.post('/public/landing/formularios/:chavePublica/sessoes/:sessaoId/concluir',
     aceitoEm: sessao.aceitoEm,
   });
   encerrarSessao(sessao);
-  void publicarFormularioRecebido(envio, correlacao(req));
+  void entregarEnvio(envio, formulario, correlacao(req));
   res.json(confirmacao(formulario));
 });
 
 // ── Rotas lidas pelo Marketing (token de serviço + X-Tenant-Id, direto em landing:8088) ─────
-// O placeholder ainda não confere o token (pendência X10, tarefa L3): só exige o X-Tenant-Id.
+// Decisão X10: exige `Authorization: Bearer <token>` e `X-Tenant-Id`, mas não confere a
+// assinatura do token (é placeholder local; o Landing real valida pelo JWKS do identity).
 
 const naoEncontrado = (campo: string) =>
   erro('Registro não encontrado.', [{ campo, codigo: 'NAO_ENCONTRADO', detalhe: 'Não existe neste tenant.' }]);
 
+const naoAutenticado = (campo: string, detalhe: string) =>
+  erro('Não autenticado.', [{ campo, codigo: 'NAO_AUTENTICADO', detalhe }]);
+
+/** Tenant da chamada de serviço; sem token Bearer ou sem `X-Tenant-Id`, responde `401` e devolve `undefined`. */
 function tenantDaRequisicao(req: Request, res: Response): string | undefined {
+  const token = /^Bearer\s+(\S+)$/i.exec(req.header('Authorization') ?? '')?.[1];
+  if (!token) {
+    res.status(401).json(naoAutenticado('Authorization', 'Chamada de serviço precisa do cabeçalho Authorization: Bearer <token>.'));
+    return undefined;
+  }
   const tenant = req.header('X-Tenant-Id');
   if (!tenant) {
-    res.status(401).json(erro('Não autenticado.', [
-      { campo: 'X-Tenant-Id', codigo: 'NAO_AUTENTICADO', detalhe: 'Chamada de serviço precisa do cabeçalho X-Tenant-Id.' },
-    ]));
+    res.status(401).json(naoAutenticado('X-Tenant-Id', 'Chamada de serviço precisa do cabeçalho X-Tenant-Id.'));
+    return undefined;
   }
-  return tenant;
+  return tenant.toLowerCase();
 }
 
 /** `GET /api/landing/envios/{id}` (`landing.envio.ver`): envio de outro tenant responde 404. */

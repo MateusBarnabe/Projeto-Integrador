@@ -1,6 +1,6 @@
 /*
- * Envios recebidos pelo placeholder. Ficam em memória: somem quando o servidor reinicia
- * (onde guardar de vez é a pendência X10, da tarefa L3).
+ * Envios recebidos pelo placeholder. Ficam em memória e somem quando o servidor reinicia
+ * (decisão X10: é ferramenta de teste local; o Landing real guarda no schema dele).
  */
 import { randomUUID } from 'node:crypto';
 import { contatoDasRespostas, type Formulario } from './formulario.ts';
@@ -41,7 +41,7 @@ export function gravarEnvio(
     respostas: dados.respostas,
     origem: dados.origem,
     consentimento: { aceito: true, texto: formulario.textoConsentimento, aceitoEm: dados.aceitoEm ?? agora },
-    // preenchidos pela chamada ao stub do CRM (tarefa L4)
+    // preenchidos depois, pela chamada ao CRM (registrarIdsDoCrm); ficam nulos se o CRM não responder
     empresaId: null,
     contatoId: null,
     recebidoEm: agora,
@@ -51,6 +51,12 @@ export function gravarEnvio(
   // só ids e canal: nada de resposta, contato, IP ou User-Agent em log
   console.log(`Envio ${envio.id} gravado (formulário ${envio.formularioId}, canal ${envio.canal}, tenant ${envio.tenantId})`);
   return envio;
+}
+
+/** Guarda no envio a empresa e o contato que o CRM criou ou reaproveitou. */
+export function registrarIdsDoCrm(envio: EnvioGravado, ids: { empresaId: string | null; contatoId: string | null }) {
+  envio.empresaId = ids.empresaId;
+  envio.contatoId = ids.contatoId;
 }
 
 export function buscarEnvio(id: string): EnvioGravado | undefined {

@@ -14,7 +14,10 @@ public enum TipoEventoLead implements ValorPersistido {
     VENDEDOR_ATRIBUIDO("vendedor_atribuido"),
     HANDOFF_CRM("handoff_crm"),
     DESCADASTRADO("descadastrado"),
-    ANONIMIZADO("anonimizado");
+    ANONIMIZADO("anonimizado"),
+    // E5/E11 (V10): junção de duplicados e desistência da leitura do envio (job 4.6)
+    LEADS_UNIDOS("leads_unidos"),
+    RESPOSTAS_INDISPONIVEIS("respostas_indisponiveis");
 
     private final String valor;
 
