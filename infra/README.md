@@ -52,11 +52,11 @@ Só aponta para o `definitions.json`. O RabbitMQ importa esse arquivo ao subir.
 |---|---|
 | vhost | `plataforma` |
 | usuário `admin` (senha `admin`) | administrador, para o painel em http://localhost:15672 |
-| usuário `mq_marketing` (senha `mq_marketing`) | o Marketing. **Configura** `marketing.*`; **escreve** em `marketing.*` e `identity.entrada`; **lê** `marketing.*` e `landing.eventos` |
+| usuário `mq_marketing` (senha `mq_marketing`) | o Marketing. **Configura** `marketing.*`; **escreve** em `marketing.*` e `identity.entrada`; **lê** `marketing.*` e qualquer `*.eventos` (igual à plataforma), para ligar as próprias filas |
 | usuário `mq_landing` (senha `mq_landing`) | o placeholder do Landing. **Configura** e **escreve** em `landing.*`; **lê** `landing.*` e `marketing.eventos` |
-| exchanges (topic, duráveis) | `marketing.eventos`, `landing.eventos` e `identity.entrada` |
+| exchanges (topic, duráveis) | `marketing.eventos`, `landing.eventos`, `crm.eventos` e `identity.entrada` |
 
-Não há filas aqui: **cada módulo declara as filas que consome**. As filas `marketing.landing-leads` (eventos do Landing) e `marketing.crm-oportunidades` (`crm.oportunidade.criada`), com as DLQs, serão criadas pela própria API do Marketing (tarefa F4 em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md)). A exchange `crm.eventos` e o usuário `mq_crm` do stub do CRM entram aqui com a tarefa L5.
+Não há filas aqui: **cada módulo declara as filas que consome**. As filas `marketing.landing-leads` (eventos do Landing) e `marketing.crm-oportunidades` (`crm.oportunidade.criada`), com as DLQs `.dlq` e a exchange `marketing.dlx`, são criadas pela própria API do Marketing ao conectar (`TopologiaDeConsumo`, tarefa F4). A exchange `crm.eventos` já está aqui porque a fila do CRM se liga a ela; o usuário `mq_crm` do stub do CRM entra com a tarefa L5.
 
 Os usuários `mq_*` não têm acesso ao painel web; é normal o login deles no painel falhar. Para conferir uma senha:
 

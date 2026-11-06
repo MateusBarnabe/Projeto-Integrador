@@ -27,7 +27,7 @@
       "vhost": "plataforma",
       "configure": "^marketing\\..*",
       "write": "^(marketing\\..*|identity\\.entrada)$",
-      "read": "^(marketing\\..*|landing\\.eventos)$"
+      "read": "^(marketing\\..*|[a-z]+\\.eventos)$"
     },
     {
       "user": "mq_landing",
@@ -40,6 +40,7 @@
   "exchanges": [
     { "name": "marketing.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
     { "name": "landing.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
+    { "name": "crm.eventos", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
     { "name": "identity.entrada", "vhost": "plataforma", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {} }
   ]
 }
