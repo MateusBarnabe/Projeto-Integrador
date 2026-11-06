@@ -290,6 +290,15 @@ public class Lead extends EntidadeBase {
         this.qualificadoEm = Objects.requireNonNull(calculadoEm, "calculadoEm");
     }
 
+    /**
+     * Grava o vendedor do lead, escolhido pelo rodízio ou na reatribuição manual (§9.3). Só o UUID
+     * do usuário do identity. Quem registra {@code vendedor_atribuido} na timeline é o rodízio.
+     */
+    public void atribuirVendedor(UUID vendedorId, OffsetDateTime atribuidoEm) {
+        this.vendedorId = Objects.requireNonNull(vendedorId, "vendedorId");
+        this.vendedorAtribuidoEm = Objects.requireNonNull(atribuidoEm, "atribuidoEm");
+    }
+
     /** Só é lead quem tem um identificador de contato: Meta, e-mail ou telefone (§3). */
     public boolean possuiIdentificadorDeContato() {
         return temTexto(metaLeadId) || temTexto(email) || temTexto(telefone);
