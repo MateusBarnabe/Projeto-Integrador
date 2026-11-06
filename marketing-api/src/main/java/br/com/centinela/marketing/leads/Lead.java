@@ -299,6 +299,52 @@ public class Lead extends EntidadeBase {
         this.vendedorAtribuidoEm = Objects.requireNonNull(atribuidoEm, "atribuidoEm");
     }
 
+    // --- Entrada pelo Landing (E1; reaproveitado por E5/E6) ---------------------------------------
+    // Os valores chegam já normalizados (entrada.NormalizacaoDeContato). "atualizar" é para o fato
+    // mais recente: valor preenchido substitui, vazio nunca apaga (§3). "completar" é para o fato que
+    // chega atrasado (ex.: captura do chatbot depois do envio): só preenche o que falta (§2).
+
+    /** Contato vindo de um fato atrasado: só preenche os campos vazios. */
+    public void completarContato(String nome, String email, String telefone, String whatsapp) {
+        this.nome = completar(this.nome, nome);
+        this.email = completar(this.email, email);
+        this.telefone = completar(this.telefone, telefone);
+        this.whatsapp = completar(this.whatsapp, whatsapp);
+    }
+
+    /** UTM da última origem do visitante (§3). Valor vazio nunca sobrescreve um preenchido. */
+    public void atualizarUtm(String source, String medium, String campaign, String term, String content) {
+        this.utmSource = preencher(this.utmSource, source);
+        this.utmMedium = preencher(this.utmMedium, medium);
+        this.utmCampaign = preencher(this.utmCampaign, campaign);
+        this.utmTerm = preencher(this.utmTerm, term);
+        this.utmContent = preencher(this.utmContent, content);
+    }
+
+    /** UTM vinda de um fato atrasado: só preenche os campos vazios. */
+    public void completarUtm(String source, String medium, String campaign, String term, String content) {
+        this.utmSource = completar(this.utmSource, source);
+        this.utmMedium = completar(this.utmMedium, medium);
+        this.utmCampaign = completar(this.utmCampaign, campaign);
+        this.utmTerm = completar(this.utmTerm, term);
+        this.utmContent = completar(this.utmContent, content);
+    }
+
+    /**
+     * Formulário do Landing e canal do contato sem envio (captura do chatbot). O envio usa
+     * {@link #vincularEnvio}. Valor nulo não apaga o que existe.
+     */
+    public void vincularFormulario(UUID formularioId, CanalLead canal) {
+        this.formularioId = preencher(this.formularioId, formularioId);
+        this.canal = preencher(this.canal, canal);
+    }
+
+    private static String completar(String atual, String novo) {
+        return temTexto(atual) ? atual : preencher(atual, novo);
+    }
+
+    // --- fim da entrada pelo Landing -------------------------------------------------------------
+
     /** Só é lead quem tem um identificador de contato: Meta, e-mail ou telefone (§3). */
     public boolean possuiIdentificadorDeContato() {
         return temTexto(metaLeadId) || temTexto(email) || temTexto(telefone);

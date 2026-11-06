@@ -56,11 +56,14 @@ public class LeadEvento extends EntidadeBase {
         this.payload = payload;
     }
 
-    /** Registro de mudança de etapa do funil, com a etapa de antes e a de depois. */
-    public static LeadEvento etapaAlterada(UUID leadId, int etapaAnterior, int etapaNova,
+    /**
+     * Registro de mudança de etapa do funil, com a etapa de antes e a de depois. Na criação do lead,
+     * a etapa anterior é nula.
+     */
+    public static LeadEvento etapaAlterada(UUID leadId, Integer etapaAnterior, int etapaNova,
             Map<String, Object> payload) {
         LeadEvento evento = new LeadEvento(leadId, TipoEventoLead.ETAPA_ALTERADA, payload);
-        evento.etapaAnterior = (short) etapaAnterior;
+        evento.etapaAnterior = etapaAnterior == null ? null : etapaAnterior.shortValue();
         evento.etapaNova = (short) etapaNova;
         return evento;
     }
