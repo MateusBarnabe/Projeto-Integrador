@@ -3,7 +3,7 @@
  * (onde guardar de vez é a pendência X10, da tarefa L3).
  */
 import { randomUUID } from 'node:crypto';
-import type { Formulario } from './formulario.ts';
+import { contatoDasRespostas, type Formulario } from './formulario.ts';
 import type { Origem, Valor } from './validacao.ts';
 
 export type Canal = 'formulario' | 'landing_page' | 'embed' | 'chatbot';
@@ -48,9 +48,37 @@ export function gravarEnvio(
     anonimizado: false,
   };
   envios.set(envio.id, envio);
+  // só ids e canal: nada de resposta, contato, IP ou User-Agent em log
+  console.log(`Envio ${envio.id} gravado (formulário ${envio.formularioId}, canal ${envio.canal}, tenant ${envio.tenantId})`);
   return envio;
 }
 
 export function buscarEnvio(id: string): EnvioGravado | undefined {
   return envios.get(id);
+}
+
+/** Schema `Envio` do landing.yaml (respostas na ordem dos campos do formulário). */
+export function envioParaContrato(envio: EnvioGravado, formulario: Formulario) {
+  const contato = contatoDasRespostas(formulario, envio.respostas);
+  return {
+    id: envio.id,
+    formularioId: envio.formularioId,
+    formularioNome: formulario.nome,
+    paginaId: envio.paginaId,
+    canal: envio.canal,
+    nome: envio.anonimizado ? null : contato.nome,
+    email: envio.anonimizado ? null : contato.email,
+    recebidoEm: envio.recebidoEm,
+    anonimizado: envio.anonimizado,
+    respostas: formulario.campos.map((campo) => ({
+      campoId: campo.id,
+      rotulo: campo.rotulo,
+      tipo: campo.tipo,
+      valor: envio.anonimizado ? null : (envio.respostas[campo.id] ?? null),
+    })),
+    origem: envio.origem,
+    consentimento: envio.consentimento,
+    empresaId: envio.empresaId,
+    contatoId: envio.contatoId,
+  };
 }

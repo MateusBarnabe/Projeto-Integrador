@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BarChart3, MessageCircle, ShieldCheck, Target } from 'lucide-react';
 import { AvisoPlaceholder } from './AvisoPlaceholder';
+import { ChatbotExemplo } from './ChatbotExemplo';
 import { FormularioExemplo } from './FormularioExemplo';
 import { esquecerOrigem, registrarVisita, type Origem, type ToqueOrigem } from './origem';
 
@@ -59,6 +60,7 @@ export function App() {
       )}
 
       <PainelOrigem origem={origem} />
+      <ChatbotExemplo origem={origem} />
     </div>
   );
 }

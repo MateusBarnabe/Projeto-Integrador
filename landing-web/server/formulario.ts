@@ -122,6 +122,11 @@ export function buscarPorId(id: string): Formulario | undefined {
   return FORMULARIOS.find((f) => f.id === id);
 }
 
+/** `CampoPublico`: sem `mapeamentoCrm`. */
+export function campoPublico({ mapeamentoCrm: _m, ...publico }: Campo) {
+  return publico;
+}
+
 /** `FormularioPublico`: só o necessário para renderizar, sem `mapeamentoCrm` nem dado interno. */
 export function formularioPublico(formulario: Formulario) {
   return {
@@ -129,6 +134,25 @@ export function formularioPublico(formulario: Formulario) {
     nome: formulario.nome,
     modoExibicao: formulario.modoExibicao,
     textoConsentimento: formulario.textoConsentimento,
-    campos: formulario.campos.map(({ mapeamentoCrm: _m, ...publico }) => publico),
+    campos: formulario.campos.map(campoPublico),
   };
+}
+
+/** `Formulario` do resumo para outros módulos: sem chave de embed nem mapeamento para o CRM. */
+export function formularioResumo(formulario: Formulario) {
+  const { tenantId: _t, chavePublica: _c, campos, ...resto } = formulario;
+  return {
+    ...resto,
+    campos: campos.map(({ mapeamentoCrm: _m, textoPergunta: _p, ...campo }) => campo),
+  };
+}
+
+/** Nome, e-mail e telefone das respostas, pelo `mapeamentoCrm` dos campos. */
+export function contatoDasRespostas(formulario: Formulario, respostas: Record<string, unknown>) {
+  const valor = (mapeamento: string) => {
+    const campo = formulario.campos.find((c) => c.mapeamentoCrm === mapeamento);
+    const v = campo ? respostas[campo.id] : null;
+    return typeof v === 'string' && v !== '' ? v : null;
+  };
+  return { nome: valor('contato.nome'), email: valor('contato.email'), telefone: valor('contato.telefone') };
 }
