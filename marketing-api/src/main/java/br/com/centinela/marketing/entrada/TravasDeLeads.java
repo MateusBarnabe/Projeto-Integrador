@@ -1,5 +1,6 @@
 package br.com.centinela.marketing.entrada;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,5 +38,44 @@ class TravasDeLeads {
         jdbc.query("SELECT id FROM marketing.leads WHERE id = ? AND tenant_id = ? FOR UPDATE",
                 (linha, n) -> linha.getObject("id", UUID.class), lead.getId(), TenantContexto.exigir());
         entityManager.refresh(lead);
+    }
+
+    // --- job 4.6 (E11) ---------------------------------------------------------------------------
+
+    /** Leitura do envio pendente e ainda não abandonada (§4.6); o índice parcial da V10 cobre. */
+    static final String LEITURA_PENDENTE = """
+            envio_id IS NOT NULL
+            AND envio_lido_em IS NULL
+            AND leitura_envio_desistida_em IS NULL
+            AND deleted_at IS NULL
+            AND anonimizado = false
+            """;
+
+    /** Tenants com algum lead com a leitura do envio pendente; o job percorre só estes. */
+    List<UUID> tenantsComLeituraPendente() {
+        return jdbc.queryForList("SELECT DISTINCT tenant_id FROM marketing.leads WHERE " + LEITURA_PENDENTE,
+                UUID.class);
+    }
+
+    /**
+     * Até {@code limite} leads do tenant com a leitura pendente, sem travar: os com menos falhas
+     * primeiro, para um envio que não responde não tomar a vez dos que chegaram depois.
+     */
+    List<UUID> comLeituraPendente(int limite) {
+        return jdbc.queryForList("SELECT id FROM marketing.leads WHERE tenant_id = ? AND " + LEITURA_PENDENTE
+                + " ORDER BY leitura_envio_falhas, created_at, id LIMIT ?", UUID.class, TenantContexto.exigir(),
+                limite);
+    }
+
+    /**
+     * Trava o lead se ele ainda está com a leitura pendente e ninguém está com ele (outra execução do
+     * job, outra instância ou o consumo do envio): {@code FOR UPDATE SKIP LOCKED}.
+     *
+     * @return {@code false} se outra transação está com o lead ou se a leitura já não está pendente
+     */
+    boolean travarComLeituraPendente(UUID leadId) {
+        return !jdbc.queryForList("SELECT id FROM marketing.leads WHERE id = ? AND tenant_id = ? AND "
+                + LEITURA_PENDENTE + " FOR UPDATE SKIP LOCKED", UUID.class, leadId, TenantContexto.exigir())
+                .isEmpty();
     }
 }
