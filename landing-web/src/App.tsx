@@ -4,6 +4,7 @@ import { AvisoPlaceholder } from './AvisoPlaceholder';
 import { ChatbotExemplo } from './ChatbotExemplo';
 import { FormularioExemplo } from './FormularioExemplo';
 import { esquecerOrigem, registrarVisita, type Origem, type ToqueOrigem } from './origem';
+import { visitaDoAnuncio } from './rastreamentoMarketing';
 
 const BENEFICIOS = [
   { icone: Target, titulo: 'Diagnóstico', texto: 'Entendemos o momento da sua empresa antes de propor qualquer coisa.' },
@@ -31,19 +32,27 @@ export function App() {
           <p className="max-w-xl text-lg text-gray-300">
             Consultoria para pequenas e médias empresas que querem crescer com processo, e não com improviso.
           </p>
-          <div>
+          <div className="flex flex-wrap gap-3">
             <button
+              data-rastreio="fale-conosco"
               onClick={() => setFormularioAberto(true)}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-5 py-3 font-semibold text-white hover:bg-brand-800"
             >
               <MessageCircle className="h-5 w-5" />
               Fale conosco
             </button>
+            <a
+              href="#precos"
+              data-rastreio="ver-planos"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-5 py-3 font-semibold text-white hover:bg-white/10"
+            >
+              Ver planos
+            </a>
           </div>
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-5xl gap-6 px-6 py-16 md:grid-cols-3">
+      <section data-rastreio-secao="beneficios" className="mx-auto grid max-w-5xl gap-6 px-6 py-16 md:grid-cols-3">
         {BENEFICIOS.map(({ icone: Icone, titulo, texto }) => (
           <div key={titulo} className="rounded-xl border border-gray-100 p-6">
             <Icone className="mb-3 h-6 w-6 text-brand-700" />
@@ -52,6 +61,8 @@ export function App() {
           </div>
         ))}
       </section>
+
+      <Planos onContratar={() => setFormularioAberto(true)} />
 
       {formularioAberto && (
         <section className="mx-auto w-full max-w-xl px-6 pb-16">
@@ -65,8 +76,44 @@ export function App() {
   );
 }
 
+const PLANOS = [
+  { nome: 'Diagnóstico', preco: 'R$ 4.900', texto: 'Duas semanas de imersão e um plano de ação.' },
+  { nome: 'Acompanhamento', preco: 'R$ 9.800/mês', texto: 'Diagnóstico mais três meses de execução junto com o time.' },
+];
+
+/** Seção de preços: o script do Marketing registra a visita a ela e o clique no simulador. */
+function Planos({ onContratar }: { onContratar: () => void }) {
+  return (
+    <section id="precos" data-rastreio-secao="precos" className="bg-gray-50 py-16">
+      <div className="mx-auto max-w-5xl px-6">
+        <h2 className="mb-6 text-2xl font-bold">Planos e preços</h2>
+        <div className="grid gap-6 md:grid-cols-2">
+          {PLANOS.map((plano) => (
+            <div key={plano.nome} className="rounded-xl border border-gray-200 bg-white p-6">
+              <p className="font-semibold">{plano.nome}</p>
+              <p className="my-2 text-3xl font-bold text-brand-800">{plano.preco}</p>
+              <p className="mb-4 text-sm text-gray-600">{plano.texto}</p>
+              <button
+                data-rastreio={`contratar-${plano.nome.toLowerCase()}`}
+                onClick={onContratar}
+                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+              >
+                Quero este
+              </button>
+            </div>
+          ))}
+        </div>
+        <button data-rastreio="simulador-preco" className="mt-6 text-sm font-medium text-brand-800 underline">
+          Simular o investimento para a minha empresa
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Rodapé de teste: mostra a origem que vai no envio e permite recomeçar a jornada. */
 function PainelOrigem({ origem }: { origem: Origem }) {
+  const visita = visitaDoAnuncio(origem.ultima.paginaEntrada) ?? visitaDoAnuncio(origem.primeira.paginaEntrada);
   const resumo = (t: ToqueOrigem) =>
     [
       t.utmSource && `utm_source=${t.utmSource}`,
@@ -86,6 +133,9 @@ function PainelOrigem({ origem }: { origem: Origem }) {
       <div className="mx-auto flex max-w-5xl flex-col gap-1">
         <span>Primeira origem: {resumo(origem.primeira)}</span>
         <span>Última origem: {resumo(origem.ultima)}</span>
+        <span>
+          Visita de anúncio rastreada pelo Marketing (mkt_visita): {visita ?? 'nenhuma, a página não veio de um link de campanha'}
+        </span>
         <button
           onClick={() => {
             esquecerOrigem();

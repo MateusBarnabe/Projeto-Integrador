@@ -44,7 +44,14 @@ public class RegraPontuacao extends EntidadeBase {
     @Column(name = "campo_meta")
     private String campoMeta;
 
-    /** Em campos, as respostas (texto); em {@code utm}, objetos com source, medium etc. */
+    /** Métrica da interação nas regras de {@code comportamento} ({@link MetricaComportamento}). */
+    @Column(name = "campo_comportamento")
+    private String campoComportamento;
+
+    /**
+     * Em campos, as respostas (texto); em {@code utm}, objetos com source, medium etc.; em
+     * {@code comportamento}, {@code {"minimo": n}} nas métricas numéricas e textos nas outras.
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "valores", nullable = false)
     private List<Object> valores;
@@ -84,6 +91,17 @@ public class RegraPontuacao extends EntidadeBase {
         return regra;
     }
 
+    /**
+     * Regra sobre o comportamento do visitante na landing page (R1), ex.: tempo na página
+     * {@code [{"minimo": 60}]} ou página visitada {@code ["precos"]}.
+     */
+    public static RegraPontuacao porComportamento(String criterio, MetricaComportamento metrica, List<?> valores,
+            int pontos) {
+        RegraPontuacao regra = new RegraPontuacao(criterio, valores, pontos);
+        regra.apontarParaComportamento(metrica);
+        return regra;
+    }
+
     public void alterar(String criterio, List<?> valores, int pontos) {
         if (criterio == null || criterio.isBlank()) {
             throw new IllegalArgumentException("Regra de pontuação sem critério.");
@@ -106,6 +124,16 @@ public class RegraPontuacao extends EntidadeBase {
         this.formularioId = formularioId;
         this.campoId = campoId;
         this.campoMeta = null;
+        this.campoComportamento = null;
+    }
+
+    public void apontarParaComportamento(MetricaComportamento metrica) {
+        Objects.requireNonNull(metrica, "Regra de comportamento precisa da métrica.");
+        this.fonte = FonteRegra.COMPORTAMENTO;
+        this.formularioId = null;
+        this.campoId = null;
+        this.campoMeta = null;
+        this.campoComportamento = metrica.valor();
     }
 
     public void apontarParaCampoMeta(String pergunta) {
@@ -116,6 +144,7 @@ public class RegraPontuacao extends EntidadeBase {
         this.formularioId = null;
         this.campoId = null;
         this.campoMeta = pergunta.strip();
+        this.campoComportamento = null;
     }
 
     public void apontarParaUtm() {
@@ -123,6 +152,7 @@ public class RegraPontuacao extends EntidadeBase {
         this.formularioId = null;
         this.campoId = null;
         this.campoMeta = null;
+        this.campoComportamento = null;
     }
 
     public void ativar() {
@@ -151,6 +181,10 @@ public class RegraPontuacao extends EntidadeBase {
 
     public String getCampoMeta() {
         return campoMeta;
+    }
+
+    public String getCampoComportamento() {
+        return campoComportamento;
     }
 
     public List<Object> getValores() {

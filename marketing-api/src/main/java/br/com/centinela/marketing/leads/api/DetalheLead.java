@@ -21,7 +21,7 @@ import br.com.centinela.marketing.leads.LeadEvento;
 public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonimizado, OffsetDateTime criadoEm,
         OffsetDateTime atualizadoEm, Contato contato, Origem origem, Respostas respostas, Qualificacao qualificacao,
         Vendedor vendedor, Consentimento consentimento, Aquecimento aquecimento, Crm crm,
-        List<ItemTimeline> timeline) {
+        List<ItemTimeline> timeline, Interacao interacao) {
 
     /** Dados de contato; todos nulos em lead anonimizado. */
     public record Contato(String nome, String email, String telefone, String whatsapp) {
@@ -74,6 +74,13 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
     public record Crm(UUID empresaId, UUID contatoId, UUID oportunidadeId) {
     }
 
+    /**
+     * Visita do anúncio que converteu (R1): contexto técnico do aparelho e comportamento na landing
+     * page. Nulos sem visita ligada e no lead anonimizado (a E10 zera as duas colunas).
+     */
+    public record Interacao(Map<String, Object> contextoTecnico, Map<String, Object> comportamento) {
+    }
+
     /** Item da timeline ({@code lead_eventos}), em ordem de {@code sequencia}. */
     public record ItemTimeline(long sequencia, String tipo, Integer etapaAnterior, Integer etapaNova,
             Map<String, Object> payload, OffsetDateTime ocorridoEm) {
@@ -99,7 +106,9 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
                 lead.getCriadoEm(), lead.getAtualizadoEm(), contato, origem, respostas(lead, anonimizado),
                 qualificacao, new Vendedor(lead.getVendedorId(), lead.getVendedorAtribuidoEm()), consentimento,
                 aquecimento, new Crm(lead.getCrmEmpresaId(), lead.getCrmContatoId(), lead.getCrmOportunidadeId()),
-                eventos.stream().map(DetalheLead::item).toList());
+                eventos.stream().map(DetalheLead::item).toList(),
+                anonimizado ? new Interacao(null, null)
+                        : new Interacao(lead.getContextoTecnico(), lead.getComportamento()));
     }
 
     private static Respostas respostas(Lead lead, boolean anonimizado) {

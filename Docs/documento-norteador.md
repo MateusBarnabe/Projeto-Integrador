@@ -98,7 +98,7 @@ O módulo roda dentro da plataforma do Grupo 2 e herda dela nomes, portas, crede
 
 | | Autenticada (casca, iframe) | Pública (sem login) |
 |---|---|---|
-| O que é do marketing | o módulo da Etapa 2: painel, leads, qualificação e distribuição, configurações, modelos de mensagem e ciclo de vida | webhook do Meta Ads e página de descadastro. O visitante da landing page e do formulário é atendido pelo Landing, não pelo Marketing |
+| O que é do marketing | o módulo da Etapa 2: painel, leads, qualificação e distribuição, configurações, modelos de mensagem e ciclo de vida | webhook do Meta Ads, página de descadastro e o rastreamento do clique no anúncio (link de campanha, script e sinais, seção 6) **[Novo]**. O visitante da landing page e do formulário é atendido pelo Landing, não pelo Marketing |
 | Tenant | claim `tenant_id` do token | subdomínio ou slug, nunca parâmetro alterável |
 | Devolve dado de negócio | sim, conforme permissão | nunca; só recebe informação |
 
@@ -127,6 +127,8 @@ O módulo roda dentro da plataforma do Grupo 2 e herda dela nomes, portas, crede
 **A etapa 2 fica reservada.** A coluna continua aceitando 0 a 3, mas nenhum fato publicado hoje leva o lead a ela. O Landing guarda as respostas parciais das sessões passo a passo e do chatbot, mas não avisa quando o preenchimento passa de "grande parte". O pedido está na seção 11.
 
 **Visitante sem contato não é lead.** Visita, clique em "fale conosco" e início de preenchimento não chegam ao Marketing: são as métricas do Landing (`landing.metrica.ver`, tela Métricas do Landing). O funil do Marketing começa quando há um identificador de contato.
+
+> **Lead 0: a visita de anúncio [Novo · IoT].** Quem clicou num anúncio do Marketing e caiu na landing page, mas ainda não deixou contato, é o "lead 0". Ele não é lead e não entra no funil: fica em `visitas_anuncio` (seção 3), com o contexto técnico do aparelho (dispositivo, sistema, navegador, localização aproximada, idioma, fuso e tela) e o comportamento na página (tempo, rolagem, botões clicados e seções vistas). O anúncio aponta para um link de campanha do Marketing, que registra o clique e segue para a landing page com o `mkt_visita` na URL; um script do Marketing na landing page manda o comportamento (seção 6). Se a pessoa enviar o formulário, o envio traz o `mkt_visita` na página de entrada e a visita é ligada ao lead, que pode pontuar pelo comportamento (9.3). Se ela não seguir em frente no prazo do tenant, os dados da visita são descartados (4.7). É o ponto de IoT do Marketing: telemetria do aparelho de quem clicou, com utilidade de marketing na qualificação. A etapa 0 continua sendo o lead do Meta; o lead 0 vem antes do funil.
 
 **Etapa do funil e qualificação medem coisas diferentes.** A etapa, e a temperatura que sai dela, mede quanto o lead avançou. A qualificação (9.3) mede o perfil, pela pontuação das respostas e da origem. Um lead pode estar na etapa 3 e cair na faixa de nutrição. O painel mostra as duas.
 
@@ -185,6 +187,8 @@ Registro central do lead. Existe quando há um identificador de contato: leads d
 | opt_out_em | timestamptz, nullable | base da retenção após opt-out |
 | token_descadastro | varchar, UNIQUE | token opaco e aleatório do link de descadastro (seção 6). Não é token da plataforma |
 | anonimizado | boolean, default false | |
+| contexto_tecnico **[Novo]** | jsonb, nullable | contexto técnico do aparelho da visita de anúncio ligada ao lead (seção 2, lead 0): `tipoDispositivo`, `sistema`, `navegador`, `localizacao`, `idioma`, `fuso`, `tela`. Não depende da fonte: um pixel próprio ou o Landing podem preenchê-lo depois |
+| comportamento **[Novo]** | jsonb, nullable | comportamento da visita na landing page: `tempoNaPaginaSegundos`, `profundidadeRolagem`, `elementosClicados`, `paginasVisitadas`. As regras de `comportamento` pontuam por ele (9.3) |
 | colunas obrigatórias | §7.2 | |
 
 ```sql
@@ -212,7 +216,7 @@ Timeline e auditoria da progressão do lead, exigidas pelo Prompt Mestre em todo
 | id / tenant_id | uuid | PK / not null, indexado |
 | sequencia | bigint GENERATED ALWAYS AS IDENTITY, UNIQUE | ordem global, usada como `id` das mensagens SSE (9.1) |
 | lead_id | uuid | FK para `leads.id`, no mesmo schema |
-| tipo_evento | varchar | `etapa_alterada`, `respostas_lidas`, `comunicacao_enviada`, `consentimento_registrado`, `qualificacao_alterada`, `vendedor_atribuido`, `handoff_crm`, `leads_unidos`, `respostas_indisponiveis`, `descadastrado`, `anonimizado`. `respostas_lidas` substitui `formulario_atualizado` (D8); `handoff_crm` marca a ligação com a oportunidade; `leads_unidos` registra a junção de dois leads nos dois lados (seção 5, passo 3); `respostas_indisponiveis` marca a desistência da leitura (4.6) |
+| tipo_evento | varchar | `etapa_alterada`, `respostas_lidas`, `comunicacao_enviada`, `consentimento_registrado`, `qualificacao_alterada`, `vendedor_atribuido`, `handoff_crm`, `leads_unidos`, `respostas_indisponiveis`, `visita_vinculada`, `descadastrado`, `anonimizado`. `respostas_lidas` substitui `formulario_atualizado` (D8); `handoff_crm` marca a ligação com a oportunidade; `leads_unidos` registra a junção de dois leads nos dois lados (seção 5, passo 3); `respostas_indisponiveis` marca a desistência da leitura (4.6); `visita_vinculada` **[Novo]** marca a visita de anúncio ligada ao lead, só com ids, campanha, dispositivo e tempo na página (seção 5, passo 3) |
 | etapa_anterior / etapa_nova | smallint, nullable | |
 | payload | jsonb | detalhes do evento, sem dado pessoal além do necessário |
 | colunas obrigatórias | §7.2 | |
@@ -327,10 +331,11 @@ Critérios da pontuação do lead (9.3), por tenant. A pessoa gestora monta as r
 |---|---|---|
 | id / tenant_id | uuid | |
 | criterio | varchar | nome amigável: "Cargo", "Orçamento", "Prazo de compra", "Origem do tráfego". Cada critério conta uma vez por lead: se duas regras dele baterem, vale a de mais pontos |
-| fonte | varchar | `campo_formulario`, `campo_meta` ou `utm` |
+| fonte | varchar | `campo_formulario`, `campo_meta`, `utm` ou `comportamento` **[Novo]** |
 | formulario_id / campo_id | uuid, nullable | só em `campo_formulario`: o formulário e o campo do Landing, pelos ids do resumo do formulário. Sem FK. **Index (tenant_id, formulario_id)** |
 | campo_meta | varchar, nullable | só em `campo_meta`: o nome da pergunta do formulário instantâneo do Meta |
-| valores | jsonb | respostas que disparam a regra, ex.: `["Decisor", "Sócio", "Gerente"]`. Em `utm`: `[{"source": "google", "medium": "cpc"}, {"direto": true}]` |
+| campo_comportamento **[Novo]** | varchar, nullable | só em `comportamento`: a métrica da visita, `tempo_na_pagina`, `profundidade_rolagem`, `pagina_visitada`, `elemento_clicado` ou `tipo_dispositivo` |
+| valores | jsonb | respostas que disparam a regra, ex.: `["Decisor", "Sócio", "Gerente"]`. Em `utm`: `[{"source": "google", "medium": "cpc"}, {"direto": true}]`. Em `comportamento`: `[{"minimo": 60}]` nas métricas numéricas e textos nas outras, ex.: `["precos"]` |
 | pontos | int | pode ser 0 |
 | ativo | boolean | |
 | colunas obrigatórias | §7.2 | |
@@ -363,6 +368,50 @@ Quem participa da escala do rodízio (9.3).
 | ativo | boolean | participa da escala |
 | ultima_atribuicao_em | timestamptz, nullable | o rodízio escolhe o ativo com a atribuição mais antiga |
 | colunas obrigatórias | §7.2 | |
+
+### `rastreamento_configuracoes` [Novo · IoT]
+
+Rastreamento do clique no anúncio (seção 2, lead 0), uma linha por tenant. Sem linha, vale ligado com 30 minutos.
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| id / tenant_id | uuid | `tenant_id` UNIQUE |
+| ativo | boolean | desligado, o link de campanha só redireciona, sem registrar a visita |
+| prazo_conversao_minutos | int | de 1 minuto a 7 dias. Tempo sem envio nem sinal do visitante até o descarte (4.7) |
+| colunas obrigatórias | §7.2 | |
+
+### `links_campanha` [Novo · IoT]
+
+Destino de um anúncio. A pessoa gestora cola no gerenciador de anúncios a URL pública do link (seção 6).
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| id / tenant_id | uuid | |
+| codigo | varchar(16) | aleatório, **UNIQUE na plataforma**: é por ele que a rota pública acha o tenant |
+| nome | varchar | |
+| url_destino | varchar(2048) | landing page do anúncio, só `http` ou `https`, para a rota pública não virar redirecionamento aberto |
+| utm_source / utm_medium / utm_campaign / utm_term / utm_content | varchar, nullable | acrescentadas à URL de destino no clique (as que a URL já tem ficam) |
+| ativo | boolean | desligado ou excluído, o link responde `404` |
+| colunas obrigatórias | §7.2 | |
+
+### `visitas_anuncio` [Novo · IoT]
+
+Um clique no anúncio: o lead 0. Não guarda dado pessoal: nem IP (só a localização aproximada que sai dele), nem o *User-Agent* bruto, nem o que o visitante digitou.
+
+| Coluna | Tipo | Observação |
+|---|---|---|
+| id / tenant_id | uuid | o `id` é o `mkt_visita` que segue na URL da landing page |
+| link_id | uuid | FK para `links_campanha` |
+| situacao | varchar | `ativa`, `convertida` ou `descartada` |
+| clicado_em / ultimo_sinal_em | timestamptz | |
+| expira_em | timestamptz | último sinal (ou o clique) mais o prazo do tenant. **Index parcial** das ativas para o job 4.7 |
+| utm_* | varchar, nullable | UTM do link no momento do clique, para as contagens não mudarem quando o link for editado |
+| contexto_tecnico / comportamento | jsonb, nullable | mesmos formatos das colunas de `leads`. Zerados no descarte |
+| lead_id | uuid, nullable | FK para `leads`. `CHECK`: preenchido se e só se `convertida` |
+| convertida_em / descartada_em | timestamptz, nullable | |
+| colunas obrigatórias | §7.2 | |
+
+A `V11` cria as três tabelas, as colunas novas de `leads` e `regras_pontuacao` e o tipo `visita_vinculada`.
 
 ### `eventos_processados` [Regra da infra]
 
@@ -444,6 +493,14 @@ Roda a cada minuto. Pega leads com `envio_id` preenchido, `envio_lido_em` nulo e
 3. Calcula a pontuação e, se o lead virou MQL sem vendedor, atribui pelo rodízio
 4. Cada falha soma em `leitura_envio_falhas`. Depois de 10 falhas seguidas do mesmo lead, grava `leitura_envio_desistida_em` e `respostas_indisponiveis` (só o `envioId`, o número de falhas e o motivo), pontua com o que o lead tem e para de tentar; o detalhe mostra "respostas indisponíveis no Landing". Com um minuto entre as tentativas, são cerca de 10 minutos de Landing fora do ar (seção 11)
 
+### 4.7 Descarte das visitas de anúncio [Novo · IoT]
+
+Roda a cada minuto (`rastreamento/DescarteDeVisitas`). É a regra do lead 0 (seção 2): quem clicou no anúncio e não enviou o formulário nem deu sinal dentro do prazo do tenant (`rastreamento_configuracoes.prazo_conversao_minutos`, padrão 30) tem os dados da visita apagados.
+
+1. Pega as visitas `ativa` com `expira_em` no passado, de todos os tenants, em lotes de 500 com `FOR UPDATE SKIP LOCKED`: a visita que estiver recebendo um sinal ou sendo ligada a um lead fica para a próxima execução
+2. Marca `descartada` e `descartada_em` e zera `contexto_tecnico` e `comportamento`. A linha fica, só com o link, a UTM e as datas, para as contagens de cliques, conversões e descartes
+3. Cada sinal do script adia o descarte: o prazo conta do último sinal, para não descartar quem ainda está na página
+
 ---
 
 ## 5. Fluxo de escrita
@@ -459,9 +516,10 @@ Roda a cada minuto. Pega leads com `envio_id` preenchido, `envio_lido_em` nulo e
    1. lê o envio no Landing antes de travar qualquer lead (passo 3); procura o lead por `envio_id` (pode já existir, se `crm.oportunidade.criada` chegou antes); senão, por `sessao_id`, quando o Landing passar a mandar no evento [Pendente · Grupo 7]; senão, por `crm_contato_id`; senão, se a leitura deu certo, pelo e-mail ou telefone do envio; senão, cria um lead novo. O lead achado é travado e relido antes de mudar;
    2. grava `envio_id`, `formulario_id`, `canal`, `crm_empresa_id` e `crm_contato_id` e sobe para a etapa 3;
    3. lê `GET /api/landing/envios/{envioId}`: contato (o telefone vem da primeira resposta de tipo `TELEFONE`, porque o `Envio` não tem esse campo), respostas (`dados_formulario`), origem (UTM e toques) e consentimento, marca `envio_lido_em` e registra `respostas_lidas`. Se o Landing não responder em 3 s ou devolver erro, o lead fica gravado com a leitura pendente (`leitura_envio_falhas = 1`), a mensagem não vai para a `.dlq` e o job 4.6 tenta de novo;
-   4. com as respostas lidas, faz o merge com todo lead do tenant de mesmo e-mail ou telefone (`entrada/JuncaoDeLeads`). O mais antigo (por `created_at`, depois id) fica e recebe do outro o que ainda não tem: sessão, envio e respostas, ids do CRM e da oportunidade, vendedor, contato, UTM e toques, boas-vindas; o opt-out sempre passa. A etapa sobe à maior das duas, nunca desce. Os consentimentos são copiados sem repetir linha. O outro é marcado como excluído, com `sessao_id`, `envio_id` e `meta_lead_id` limpos (os únicos valem também para excluídos), e os dois recebem `leads_unidos` na timeline, só com ids;
-   5. calcula a pontuação e a faixa e, se for MQL sem vendedor, atribui pelo rodízio (9.3);
-   6. registra em `lead_eventos`, notifica o vendedor (seção 8) e envia o evento SSE do painel. Quem notifica é o rodízio, ao atribuir; lead que já tinha vendedor não é notificado de novo.
+   4. com as respostas lidas, faz o merge com todo lead do tenant de mesmo e-mail ou telefone (`entrada/JuncaoDeLeads`). O mais antigo (por `created_at`, depois id) fica e recebe do outro o que ainda não tem: sessão, envio e respostas, ids do CRM e da oportunidade, vendedor, contato, UTM e toques, boas-vindas, contexto técnico e comportamento; o opt-out sempre passa. A etapa sobe à maior das duas, nunca desce. Os consentimentos são copiados sem repetir linha. O outro é marcado como excluído, com `sessao_id`, `envio_id` e `meta_lead_id` limpos (os únicos valem também para excluídos), e os dois recebem `leads_unidos` na timeline, só com ids;
+   5. **visita de anúncio [Novo · IoT]:** procura o `mkt_visita` nas páginas de entrada da última e da primeira origem do envio (o Landing guarda a URL inteira). Cada visita `ativa` do tenant encontrada é travada, vira `convertida` com o `lead_id` e registra `visita_vinculada`; o lead fica com o contexto técnico e o comportamento da visita mais recente (`rastreamento/VinculoDeVisitas`). Visita convertida, descartada ou de outro tenant é ignorada;
+   6. calcula a pontuação e a faixa (com as regras de `comportamento`, se houve visita) e, se for MQL sem vendedor, atribui pelo rodízio (9.3);
+   7. registra em `lead_eventos`, notifica o vendedor (seção 8) e envia o evento SSE do painel. Quem notifica é o rodízio, ao atribuir; lead que já tinha vendedor não é notificado de novo.
 
    A confirmação de boas-vindas sai pelo job 4.5, em até 1 ou 2 minutos
 4. **Oportunidade:** `crm.oportunidade.criada` chega na fila `marketing.crm-oportunidades`. Só interessa a de `origem = landing`:
@@ -489,6 +547,11 @@ Rotas sem usuário ficam sob `/public/marketing/**`. O gateway as libera de toke
 | GET | `/public/marketing/{subdominio}/meta/leads` | handshake do Meta: confere `hub.verify_token` com `meta_verify_token` do tenant e devolve `hub.challenge` | Meta (servidor) |
 | POST | `/public/marketing/{subdominio}/meta/leads` | HMAC `X-Hub-Signature-256` calculado com o `meta_app_secret` do tenant | Meta (servidor) |
 | GET / POST | `/public/marketing/descadastro/{token}` | token opaco do lead | Destinatário do e-mail |
+| GET | `/public/marketing/c/{codigo}` **[Novo · IoT]** | código aleatório do link de campanha | Navegador de quem clicou no anúncio |
+| POST | `/public/marketing/visitas/{id}/sinais` **[Novo · IoT]** | id da visita (o `mkt_visita`), gerado no clique | Script de rastreamento na landing page |
+| GET | `/public/marketing/rastreamento.js` **[Novo · IoT]** | nenhuma | Landing page (tag `<script>`) |
+
+> **Rastreamento do clique no anúncio [Novo · IoT].** O tenant vem do código do link ou do id da visita, gerados pelo servidor, nunca de parâmetro. O clique (`/c/{codigo}`) registra a visita com o tipo de dispositivo, o sistema e o navegador lidos do *User-Agent* e a localização aproximada do IP (o primeiro do `X-Forwarded-For`), sem guardar nenhum dos dois, e responde `302` para a landing page com as UTM do link e o `mkt_visita`; link desconhecido, desligado ou excluído responde `404` com envelope. Os sinais chegam em `text/plain` (o `navigator.sendBeacon` não dispara a checagem de CORS) ou JSON, até 8 KB, sempre com os totais da visita: o servidor guarda o maior tempo e a maior rolagem e junta as listas, com limites de tamanho, e tira a consulta das páginas. Visita desconhecida responde `404`; convertida ou descartada, `200` sem mudar nada. O script só age com o `mkt_visita` na URL, não lê campos de formulário e não usa cookie. O `302` e o JavaScript são exceções ao envelope, como o `hub.challenge` (seção 11). A localização hoje é simulada (`rastreamento/LocalizacaoSimulada`); a real é outra implementação de `LocalizacaoPorIp`, com base GeoIP local. A URL pública do link e do script vem de `MARKETING_URL_PUBLICA`.
 
 > **Como o tenant do webhook é resolvido.** O slug do caminho é o subdomínio do tenant. O módulo pergunta à plataforma a qual tenant ele pertence, em `GET /api/identity/tenants/resolver?subdominio=`, com o próprio token de serviço. A permissão `identity.tenant.ver` já foi concedida ao marketing em `permissoes/identity.yaml`. Subdomínio desconhecido responde `404`.
 >
@@ -521,6 +584,11 @@ Token JWT no cabeçalho, validado localmente pelo JWKS do identity (§4.2). Perm
 | GET / POST | `/api/marketing/regras-pontuacao` **[Etapa 2]** | `marketing.qualificacao.ver` / `.editar` | |
 | PUT / DELETE | `/api/marketing/regras-pontuacao/{id}` **[Etapa 2]** | `marketing.qualificacao.editar` | DELETE é soft delete |
 | GET / PUT | `/api/marketing/rodizio/vendedores` **[Etapa 2]** | `marketing.qualificacao.ver` / `.editar` | quem está na escala |
+| GET / PUT | `/api/marketing/rastreamento` **[Novo · IoT]** | `marketing.configuracao.ver` / `.editar` | rastreamento ligado, prazo de conversão e URL do script |
+| GET / POST | `/api/marketing/links-campanha` **[Novo · IoT]** | `marketing.configuracao.ver` / `.editar` | lista paginada, com a URL pública e os cliques de cada link |
+| PUT / DELETE | `/api/marketing/links-campanha/{id}` **[Novo · IoT]** | `marketing.configuracao.editar` | o código e a URL pública não mudam; DELETE é soft delete |
+| GET | `/api/marketing/visitas-anuncio` **[Novo · IoT]** | `marketing.configuracao.ver` | visitas (lead 0), das mais recentes; filtro `situacao` |
+| GET | `/api/marketing/visitas-anuncio/resumo` **[Novo · IoT]** | `marketing.configuracao.ver` | visitas das últimas 24 h por situação e a taxa de conversão, em pontos percentuais |
 | GET | `/api/marketing/health` | nenhuma | `200` com o serviço de pé e conectado ao banco (§8.5) |
 
 Saíram `GET/POST /api/marketing/formularios` e `GET/PUT /api/marketing/formularios/{id}`: o formulário é do Landing.
@@ -880,6 +948,7 @@ A consulta de leads é do Marketing. O CRM só passa a ter o lead quando ele vir
 - Confirmação de boas-vindas: enviada, pendente ou com falha (4.5)
 - Respostas do formulário, como foram lidas do Landing (rótulo e valor), com o nome do formulário e o canal. Leitura pendente aparece como "aguardando o Landing" (4.6)
 - Pontuação com o detalhe: quais regras somaram quantos pontos (9.3)
+- **Interação [Novo · IoT]:** contexto técnico do aparelho e comportamento na landing page da visita de anúncio ligada ao lead (seção 2, lead 0). A lista mostra o tipo de dispositivo
 - Vendedor atribuído, com a ação de reatribuir (`marketing.qualificacao.editar`)
 - Timeline (`lead_eventos`) e e-mails de aquecimento enviados
 - Depois da etapa 3: resumo da empresa e do contato no CRM (`crm.empresa.ver_resumo`, `crm.contato.ver_resumo`) e o link da oportunidade
@@ -897,6 +966,7 @@ As regras de negócio completas estão em [Regras de Negócio](Regras%20de%20Neg
   - `campo_formulario`: só as regras do `formulario_id` do lead; compara a resposta de mesmo `campoId` com `valores`
   - `campo_meta`: compara a resposta da pergunta de nome `campo_meta` com `valores`
   - `utm`: compara a UTM do lead. Cada condição de `valores` é um objeto que bate quando todas as chaves batem; as chaves são `source`, `medium`, `campaign`, `term` e `content` (com ou sem o prefixo `utm_`), e uma chave aceita uma lista (`{"medium": ["display", "social"]}`). `{"direto": true}` exige as cinco UTMs vazias; lead do Meta sem UTM não conta como direto, porque veio de anúncio. Condição vazia ou com chave desconhecida não pontua
+  - `comportamento` **[Novo · IoT]:** só para lead com visita de anúncio ligada; compara a métrica `campo_comportamento`. Tempo na página e rolagem batem quando chegam ao `minimo` de alguma condição (`[{"minimo": 60}]`); página visitada e elemento clicado batem quando algum item contém um dos valores (`["precos"]` bate com `/#precos`); tipo de dispositivo compara igual
   - cada critério conta uma vez, pela regra de mais pontos (no empate, a de menor id). Critérios com o mesmo nome, sem diferença de maiúsculas, acentos e espaços, são o mesmo critério, mesmo vindos de fontes diferentes
   - as respostas são comparadas sem diferença de maiúsculas, acentos e espaços nas pontas; na múltipla escolha, basta uma opção bater
 - **Faixa:** `pontuacao >= limite_mql_quente` é `mql_quente`; `>= limite_mql_morno` é `mql_morno`; abaixo disso, `nutricao`. Sem linha em `qualificacao_configuracoes`, valem 70 e 40
@@ -929,7 +999,14 @@ Faixas iniciais: 70 ou mais é MQL quente; de 40 a 69, MQL morno; abaixo de 40, 
 
 ### 9.4 Configurações de marketing
 
-Uma tela com quatro abas: canais de anúncio, modelos de mensagem, ciclo de vida e qualificação.
+Uma tela com cinco abas: rastreamento, canais de anúncio, modelos de mensagem, ciclo de vida e qualificação.
+
+**Aba "Rastreamento"** **[Novo · IoT]**: `/api/marketing/rastreamento`, `/links-campanha` e `/visitas-anuncio`
+
+- Resumo das últimas 24 horas: cliques, lead 0 em andamento, convertidas, descartadas e taxa de conversão
+- Configuração: ligar e desligar o registro das visitas, o prazo para converter e a tag do script para pedir ao Landing, pronta para copiar
+- Links de campanha: criar, editar, desligar e excluir; a URL pública para colar no anúncio, os cliques de cada link e "Simular clique"
+- Visitas ao vivo, relidas a cada 5 s até o SSE (9.1): situação com a contagem regressiva do descarte, aparelho, tempo, rolagem e cliques; o detalhe da visita mostra o contexto técnico e o comportamento e leva ao lead quando ela converteu
 
 **Aba "Canais de anúncio"**: `GET/PUT /api/marketing/canais-anuncio`
 
@@ -1088,6 +1165,12 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | Quem recebe a notificação `NOVO_LEAD` quando não há vendedor (rodízio desligado ou fora do horário) | Grupo 4 | A definir |
 | Consumidores de `marketing.lead.qualificado`, `marketing.lead.atribuido`, `marketing.lead.descadastrado` e do resumo do lead (9.6) | Interessados | A confirmar antes do AsyncAPI |
 | Rastreio de aberto e clicado em `lead_comunicacoes` (pixel e redirecionamento públicos, §12.5) | Grupo 4 | A definir |
+| **[Novo · IoT]** Landing page carregar a tag do script de rastreamento do Marketing e manter a URL de entrada inteira (com o `mkt_visita`) em `paginaEntrada` ([`landing-requisitos.md`](contratos/landing-requisitos.md)). Sem a tag, o clique ainda dá o contexto técnico, mas não o comportamento | Grupo 7 | A pedir |
+| **[Novo · IoT]** `landing.chatbot.lead_capturado` sem página de entrada: a captura do chatbot não liga a visita do anúncio, só o envio | Grupo 7 | A pedir (dá para seguir sem) |
+| **[Novo · IoT]** Base legal e aviso do rastreamento do lead 0 antes do aceite (legítimo interesse, sem cookie, dados apagados no prazo) e o aviso na landing page | Grupo 4, Grupo 7, professores | Proposta a confirmar |
+| **[Novo · IoT]** Exceção ao envelope para o `302` do link de campanha e para o `rastreamento.js`, como o `hub.challenge` | Grupo 2 | Pedir exceção registrada |
+| **[Novo · IoT]** `MARKETING_URL_PUBLICA` (endereço do gateway que o navegador alcança) no serviço `marketing` do compose da plataforma; até lá vale `http://localhost:8087` | Grupo 2 | A pedir |
+| **[Novo · IoT]** Localização por IP real (base GeoIP local, como a GeoLite2, sem chamar serviço externo); hoje é simulada | Grupo 4 | A fazer |
 | Custo real e ROI/ROAS: hoje o custo por lead é estimado pelo orçamento informado; ROI precisa do valor do contrato | Grupo 4, professores | Evolução futura |
 | Construtor visual de automação (60), gatilhos e ações (61–62) e campanhas de e-mail (63), atribuídos ao Grupo 4 pelo Mapa e não cobertos aqui | Grupo 4, professores | Lacuna de escopo a definir |
 | WhatsApp e telefonia (65–67), sem dono no Mapa | — | Fora desta fase; evolução futura |
@@ -1100,6 +1183,18 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 ---
 
 ## 12. Registro de alterações
+
+### 09/11/2026 · IoT: lead 0 e rastreamento do clique no anúncio
+
+Decisão do Grupo 4 para o ponto de IoT do módulo, no lugar da demo da branch `feat/iot-ingestao-leads` (que fica como histórico): os dados vêm das campanhas de marketing, do aparelho de quem clica no anúncio.
+
+- **Lead 0 (seção 2):** quem clicou no anúncio e ainda não deixou contato. Não é lead e não entra no funil; a etapa 0 continua sendo o lead do Meta
+- **Tabelas (seção 3, `V11`):** `rastreamento_configuracoes`, `links_campanha` e `visitas_anuncio`; `contexto_tecnico` e `comportamento` em `leads`; a fonte `comportamento` e `campo_comportamento` em `regras_pontuacao`; o tipo `visita_vinculada` em `lead_eventos`
+- **Job 4.7:** descarte dos dados da visita que não converte no prazo do tenant
+- **Fluxo (seção 5, passo 3):** a leitura do envio liga a visita do `mkt_visita` da página de entrada ao lead, antes da pontuação
+- **Rotas (seção 6):** o link de campanha, os sinais e o script, públicos; configuração, links e visitas, autenticados, com as permissões de configuração que já existem
+- **Telas (9.2 e 9.4):** a aba Interação no detalhe do lead e a aba Rastreamento em Configurações
+- Pendências novas na seção 11: a tag do script no Landing, o chatbot sem página de entrada, a base legal do rastreamento, a exceção ao envelope, `MARKETING_URL_PUBLICA` e a localização real
 
 ### 06/11/2026 · fase 2: lead qualificado e ligado ao CRM
 

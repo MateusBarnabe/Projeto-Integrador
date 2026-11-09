@@ -20,6 +20,8 @@ import br.com.centinela.marketing.leads.OrigemLead;
  * @param leadDoMeta          lead que entrou pelo Meta; só ele usa as regras de {@code campo_meta}
  * @param respostasMeta       valor de cada pergunta do formulário instantâneo, pelo nome da pergunta
  * @param utm                 origem do tráfego do lead
+ * @param interacao           comportamento da visita do anúncio e o tipo de dispositivo, pela chave de
+ *                            {@link MetricaComportamento#chave()}; vazio sem visita ligada (R1)
  */
 public record EntradaPontuacao(
         UUID tenantId,
@@ -27,13 +29,21 @@ public record EntradaPontuacao(
         Map<UUID, Object> respostasFormulario,
         boolean leadDoMeta,
         Map<String, Object> respostasMeta,
-        Utm utm) {
+        Utm utm,
+        Map<String, Object> interacao) {
 
     public EntradaPontuacao {
         Objects.requireNonNull(tenantId, "tenantId");
         respostasFormulario = imutavel(respostasFormulario);
         respostasMeta = imutavel(respostasMeta);
         utm = utm == null ? Utm.NENHUMA : utm;
+        interacao = imutavel(interacao);
+    }
+
+    /** Sem interação: lead sem visita de anúncio ligada. */
+    public EntradaPontuacao(UUID tenantId, UUID formularioId, Map<UUID, Object> respostasFormulario,
+            boolean leadDoMeta, Map<String, Object> respostasMeta, Utm utm) {
+        this(tenantId, formularioId, respostasFormulario, leadDoMeta, respostasMeta, utm, Map.of());
     }
 
     /**
@@ -51,7 +61,23 @@ public record EntradaPontuacao(
                 lead.getOrigem() == OrigemLead.META_ADS,
                 respostasMeta == null ? Map.of() : new HashMap<>(respostasMeta),
                 new Utm(lead.getUtmSource(), lead.getUtmMedium(), lead.getUtmCampaign(), lead.getUtmTerm(),
-                        lead.getUtmContent()));
+                        lead.getUtmContent()),
+                interacao(lead));
+    }
+
+    /** Comportamento da visita mais o tipo de dispositivo do contexto técnico. */
+    private static Map<String, Object> interacao(Lead lead) {
+        Map<String, Object> interacao = new HashMap<>();
+        if (lead.getComportamento() != null) {
+            interacao.putAll(lead.getComportamento());
+        }
+        if (lead.getContextoTecnico() != null) {
+            Object tipo = lead.getContextoTecnico().get(MetricaComportamento.TIPO_DISPOSITIVO.chave());
+            if (tipo != null) {
+                interacao.put(MetricaComportamento.TIPO_DISPOSITIVO.chave(), tipo);
+            }
+        }
+        return interacao;
     }
 
     /** Respostas do envio no formato do Landing ({@code campoId}, {@code rotulo}, {@code tipo}, {@code valor}). */

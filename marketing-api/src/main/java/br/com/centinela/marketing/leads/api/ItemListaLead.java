@@ -7,12 +7,13 @@ import br.com.centinela.marketing.leads.Lead;
 
 /**
  * Linha da lista de leads (norteador §9.2): nome, etapa, faixa, pontuação, origem e canal, campanha,
- * vendedor, oportunidade no CRM ("no CRM") e data de entrada. Lead anonimizado aparece sem nome e
- * sem e-mail, para as contagens baterem com o painel.
+ * vendedor, oportunidade no CRM ("no CRM"), data de entrada e o aparelho da visita do anúncio (R1).
+ * Lead anonimizado aparece sem nome e sem e-mail, para as contagens baterem com o painel.
  */
 public record ItemListaLead(UUID id, String nome, String email, int etapa, String temperatura,
         String faixaQualificacao, Integer pontuacao, String origem, String canal, String utmCampaign,
-        UUID vendedorId, UUID crmOportunidadeId, boolean anonimizado, OffsetDateTime criadoEm) {
+        UUID vendedorId, UUID crmOportunidadeId, boolean anonimizado, OffsetDateTime criadoEm,
+        String tipoDispositivo) {
 
     static ItemListaLead de(Lead lead) {
         boolean anonimizado = lead.isAnonimizado();
@@ -22,6 +23,12 @@ public record ItemListaLead(UUID id, String nome, String email, int etapa, Strin
                 lead.getEtapa(), Valores.de(lead.getTemperatura()), Valores.de(lead.getFaixaQualificacao()),
                 lead.getPontuacao(), Valores.de(lead.getOrigem()), Valores.de(lead.getCanal()),
                 lead.getUtmCampaign(), lead.getVendedorId(), lead.getCrmOportunidadeId(), anonimizado,
-                lead.getCriadoEm());
+                lead.getCriadoEm(), tipoDispositivo(lead));
+    }
+
+    /** Aparelho da visita do anúncio ligada ao lead (R1); nulo sem visita. */
+    private static String tipoDispositivo(Lead lead) {
+        Object tipo = lead.getContextoTecnico() == null ? null : lead.getContextoTecnico().get("tipoDispositivo");
+        return tipo == null ? null : tipo.toString();
     }
 }

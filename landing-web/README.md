@@ -62,6 +62,7 @@ Em container, roda **um processo só**: o servidor Node entrega a página (o bui
 | `RABBITMQ_URL` | `amqp://mq_landing:mq_landing@localhost:5672/plataforma` | RabbitMQ; conecta como `mq_landing`, porque o `user_id` das mensagens precisa bater com o usuário |
 | `CRM_BASE_URL` | `http://localhost:8082` | API do CRM (o stub local ou o real), chamada direto, sem gateway; no `docker-compose.yml`, `http://crm:8082` |
 | `SERVIDOR_PROXY_ALVO` | `http://localhost:8088` | para onde o Vite repassa `/api/landing` e `/public/landing` em desenvolvimento |
+| `VITE_MARKETING_URL` | `http://localhost:8087` | API do Marketing de onde a página carrega o `rastreamento.js` (R3). Lida no build do Vite |
 
 ## Estrutura de pastas
 
@@ -180,7 +181,11 @@ Tipo `Resposta<T>` e as funções `ok(data)` e `erro(mensagem, erros?)`, no mesm
 
 ### `src/App.tsx`
 
-Landing page de um tenant de teste ("Empresa A · Consultoria"): chamada principal, botão **Fale conosco**, que abre o formulário de exemplo, e três cartões de benefícios. No rodapé, a primeira e a última origem guardadas.
+Landing page de um tenant de teste ("Empresa A · Consultoria"): chamada principal, botão **Fale conosco**, que abre o formulário de exemplo, três cartões de benefícios e a seção **Planos e preços**. No rodapé, a primeira e a última origem guardadas e o `mkt_visita` da visita de anúncio, quando a página veio de um link de campanha do Marketing. Os botões e as seções têm `data-rastreio` e `data-rastreio-secao`, que o script do Marketing usa para nomear cliques e seções vistas.
+
+### `src/rastreamentoMarketing.ts`
+
+Simula a tag que pedimos ao Landing (pedido 6 do [landing-requisitos.md](../Docs/contratos/landing-requisitos.md)): carrega `VITE_MARKETING_URL/public/marketing/rastreamento.js` na página. O script é do Marketing e só age quando a URL tem o `mkt_visita` (lead 0, ver [Docs/demo-iot.md](../Docs/demo-iot.md)). No Landing real, é uma linha fixa no HTML.
 
 ### `src/origem.ts`
 
@@ -205,5 +210,6 @@ Detalhes e dependências em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md), tarefas
 1. ~~**Página e UTM (L1)**~~ e ~~**Eventos (L2)**~~: feitas.
 2. ~~**Envios (L3)**~~: feita. Envios em memória; as duas rotas exigem Bearer e `X-Tenant-Id`, sem conferir a assinatura (X10).
 3. ~~**CRM (L4 e L5)**~~: feitas. No envio, antes do evento, empresa, contato e oportunidade no stub do CRM, com `origem: landing` e `origemModuloId` igual ao `envioId`; o stub publica `crm.oportunidade.criada` em `crm.eventos`.
+4. ~~**Script do Marketing (R3)**~~: feita. A página carrega o `rastreamento.js` e guarda a URL de entrada inteira (com o `mkt_visita`) na origem do envio.
 
 **Regras de desacoplamento:** o Marketing nunca importa código daqui, e este app nunca lê o schema `marketing`. Os dois conversam só por RabbitMQ e HTTP, como o Landing real faria. Se o Grupo 7 mudar um nome ou formato, atualize primeiro o contrato em `Docs/contratos/`, depois este placeholder e o consumidor do Marketing.
