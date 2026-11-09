@@ -23,7 +23,8 @@ import br.com.centinela.marketing.leads.FaixaQualificacao;
  *       {@code deleted_at}; o motor confere de novo para nunca somar regra alheia.</li>
  *   <li>{@code campo_formulario}: só as do {@code formulario_id} do lead; compara a resposta de mesmo
  *       {@code campoId}. {@code campo_meta}: só para lead do Meta; compara a resposta da pergunta de
- *       mesmo nome. {@code utm}: para todo lead.</li>
+ *       mesmo nome. {@code utm}: para todo lead. {@code comportamento}: só para lead com visita de
+ *       anúncio ligada; compara a métrica da interação ({@link MetricaComportamento}).</li>
  *   <li>Cada critério conta uma vez, pela regra de mais pontos.</li>
  * </ul>
  *
@@ -73,6 +74,7 @@ public final class MotorDePontuacao {
                     && entrada.formularioId().equals(regra.getFormularioId());
             case CAMPO_META -> entrada.leadDoMeta();
             case UTM -> true;
+            case COMPORTAMENTO -> !entrada.interacao().isEmpty();
         };
     }
 
@@ -83,7 +85,48 @@ public final class MotorDePontuacao {
             case CAMPO_META -> algumaIgual(respostaMeta(entrada, regra.getCampoMeta()), regra.getValores());
             case UTM -> regra.getValores().stream()
                     .anyMatch(valor -> valor instanceof Map<?, ?> condicao && utmBate(condicao, entrada));
+            case COMPORTAMENTO -> MetricaComportamento.de(regra.getCampoComportamento())
+                    .map(metrica -> comportamentoBate(metrica, regra.getValores(), entrada))
+                    .orElse(false);
         };
+    }
+
+    /**
+     * Regra de comportamento (R1). Numérica: bate quando o valor do lead chega ao {@code minimo} de
+     * alguma condição ({@code [{"minimo": 60}]}). Lista: bate quando algum item do lead contém um dos
+     * valores. Texto: bate quando é igual a um dos valores.
+     */
+    private static boolean comportamentoBate(MetricaComportamento metrica, List<Object> valoresDaRegra,
+            EntradaPontuacao entrada) {
+        Object doLead = entrada.interacao().get(metrica.chave());
+        if (doLead == null) {
+            return false;
+        }
+        return switch (metrica.tipo()) {
+            case NUMERO -> {
+                Double medido = numero(doLead);
+                yield medido != null && valoresDaRegra.stream()
+                        .map(valor -> valor instanceof Map<?, ?> condicao ? numero(condicao.get("minimo")) : null)
+                        .anyMatch(minimo -> minimo != null && medido >= minimo);
+            }
+            case LISTA -> {
+                Set<String> itens = textos(doLead);
+                Set<String> procurados = textos(valoresDaRegra);
+                yield itens.stream().anyMatch(item -> procurados.stream().anyMatch(item::contains));
+            }
+            case TEXTO -> algumaIgual(doLead, valoresDaRegra);
+        };
+    }
+
+    private static Double numero(Object valor) {
+        if (valor instanceof Number numero) {
+            return numero.doubleValue();
+        }
+        try {
+            return valor == null ? null : Double.valueOf(valor.toString().strip());
+        } catch (NumberFormatException naoNumerico) {
+            return null;
+        }
     }
 
     private static Object respostaMeta(EntradaPontuacao entrada, String pergunta) {
