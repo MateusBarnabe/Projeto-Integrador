@@ -64,6 +64,8 @@ services:
       LANDING_BASE_URL: http://landing:8088
       CRM_BASE_URL: ${CRM_BASE_URL:-http://crm:8082}
       SVC_CLIENT_SECRET: ${SVC_MARKETING_SEGREDO:-}
+      # Endereço que o navegador do visitante alcança: monta o link do anúncio e a tag do script (R1)
+      MARKETING_URL_PUBLICA: ${MARKETING_URL_PUBLICA:-http://localhost:8087}
     ports:
       - "8087:8087"
     depends_on:
