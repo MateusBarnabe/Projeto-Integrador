@@ -17,7 +17,9 @@ public enum TipoEventoLead implements ValorPersistido {
     ANONIMIZADO("anonimizado"),
     // E5/E11 (V10): junção de duplicados e desistência da leitura do envio (job 4.6)
     LEADS_UNIDOS("leads_unidos"),
-    RESPOSTAS_INDISPONIVEIS("respostas_indisponiveis");
+    RESPOSTAS_INDISPONIVEIS("respostas_indisponiveis"),
+    // R1 (V11): a visita do anúncio foi ligada ao lead na leitura do envio
+    VISITA_VINCULADA("visita_vinculada");
 
     private final String valor;
 
