@@ -74,6 +74,8 @@ Todo endereço e credencial vem de variável de ambiente (Contrato §9.1). **Os 
 | `CRM_BASE_URL` | `http://crm:8082` | CRM. Ainda não está no compose da plataforma (X14) |
 | `SVC_CLIENT_ID`, `SVC_CLIENT_SECRET` | `marketing`, vazio | token de serviço; o compose da plataforma preenche o segredo com o `SVC_MARKETING_SEGREDO` do `.env`. Sem ele, a API sobe e as chamadas a outros módulos falham com `NAO_CONFIGURADO` |
 | `SWAGGER_HABILITADO` | `true` | `false` desliga o Swagger UI e o `/v3/api-docs` |
+| `MARKETING_URL_PUBLICA` | `http://localhost:8087` | endereço que o navegador do visitante alcança (o gateway, na plataforma): monta a URL do link de campanha e a tag do script de rastreamento (R1). Ainda não está no compose da plataforma (X19) |
+| `RASTREAMENTO_LOCALIZACAO_SIMULADA` | `true` | `false` desliga a localização simulada da visita (R1) |
 
 No perfil `dev` ([application-dev.yml](src/main/resources/application-dev.yml)), os três endereços apontam para `localhost`. Propriedades do módulo, sem variável de ambiente própria: `marketing.rodizio.atribuicao-pendente.intervalo` e `marketing.entrada.leitura-pendente.intervalo` (padrão `PT1M`, os jobs 4.4 e 4.6), `marketing.rodizio.fuso-horario` (padrão `America/Sao_Paulo`, para o horário comercial) e `marketing.consumo.landing-leads.auto-startup` e `marketing.consumo.crm-oportunidades.auto-startup` (padrão `true`; os testes que leem as filas direto desligam os consumidores).
 
@@ -104,19 +106,23 @@ marketing-api/
     │   │   │   └── api/                       API de leads: lista, detalhe, resumo e busca (A2)
     │   │   ├── notificacoes/                  NOVO_LEAD e registro na timeline (N1)
     │   │   ├── qualificacao/                  regras, faixas e motor de pontuação (D5, Q1)
+    │   │   ├── rastreamento/                  lead 0: link de campanha, visita, sinais, vínculo e job 4.7 (R1)
+    │   │   │   └── api/                       rotas públicas e de configuração do rastreamento
     │   │   ├── rodizio/                       rodízio, job 4.4 e reatribuição manual (Q2)
     │   │   └── saude/SaudeController.java     GET /api/marketing/health
     │   └── resources/
     │       ├── application.yml                configuração
     │       ├── application-dev.yml            perfil dev (Flyway fora de ordem, endereços em localhost)
-    │       └── db/migration/                  migrations do Flyway (V1, V2, V6, V8, V9, V10)
+    │       ├── rastreamento/rastreamento.js   script que a landing page carrega (R1)
+    │       └── db/migration/                  migrations do Flyway (V1, V2, V6, V8, V9, V10, V11)
     └── test/java/br/com/centinela/marketing/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
         ├── compartilhado/                     dados, http, mensageria, segurança e a base de integração (F6)
         ├── entrada/                           consumo do chatbot, do envio, da oportunidade e job 4.6
         ├── leads/                             regras do lead, repositórios e a API (leads/api)
         ├── notificacoes/, rodizio/            pedidos à plataforma e rodízio
-        └── qualificacao/                      regras da qualificação e motor de pontuação
+        ├── qualificacao/                      regras da qualificação e motor de pontuação
+        └── rastreamento/                      User-Agent, link, sinais e a API do rastreamento (o ponta a ponta está em entrada/)
 ```
 
 **Onde colocar código novo:** um pacote por área de domínio ao lado de `compartilhado/` e `saude/`, por exemplo `leads/`, `qualificacao/`, `rodizio/`, `configuracoes/`, `painel/`, `entrada/` (consumidores dos eventos do Landing e do CRM, webhook e buffer do Meta). Clientes HTTP de outros módulos (Landing, CRM, identity) ficam em `compartilhado/`. Cada pacote reúne o controller, o serviço, as entidades e os repositórios daquela área. O que servir para mais de uma área vai para `compartilhado/`.
@@ -296,7 +302,25 @@ Pacote `entrada`, que segue a seção 5 do norteador. Os consumidores usam `Cons
 
 ### API de leads (A2)
 
-Pacote `leads/api`: `LeadsController`, as consultas em `LeadConsultas` e os DTOs do detalhe, da lista, do resumo e da busca. Os parâmetros da lista estão no norteador, seção 6.
+Pacote `leads/api`: `LeadsController`, as consultas em `LeadConsultas` e os DTOs do detalhe, da lista, do resumo e da busca. Os parâmetros da lista estão no norteador, seção 6. O detalhe tem a seção `interacao` (contexto técnico e comportamento da visita do anúncio) e a lista, o `tipoDispositivo`.
+
+### Rastreamento do anúncio: o lead 0 (R1)
+
+Pacote `rastreamento`, que segue o norteador (seção 2, "Lead 0", e seções 3, 4.7, 5 e 6). O roteiro da demonstração está em [Docs/demo-iot.md](../Docs/demo-iot.md).
+
+| Classe | O que é |
+|---|---|
+| `LinkCampanha`, `VisitaAnuncio`, `RastreamentoConfiguracao`, `SituacaoVisita` | entidades da `V11`: o destino do anúncio, o clique (com `contexto_tecnico` e `comportamento` em `jsonb`) e a configuração do tenant |
+| `CliqueNoAnuncio` | `GET /public/marketing/c/{codigo}`: acha o tenant pelo código, registra a visita e devolve a landing page com UTM e `mkt_visita` |
+| `SinaisDaVisita`, `SinaisDoVisitante` | `POST /public/marketing/visitas/{id}/sinais`: trava a visita, junta os totais (maior tempo e rolagem, listas unidas e limitadas) e adia o descarte |
+| `VinculoDeVisitas` | chamado por `entrada/LeituraDoEnvio` antes da pontuação: acha o `mkt_visita` nas páginas de entrada do envio, converte a visita e copia a interação para o lead |
+| `DescarteDeVisitas`, `AgendaDoDescarteDeVisitas` | job 4.7: zera as visitas ativas vencidas, em lotes com `SKIP LOCKED` (`marketing.rastreamento.descarte.intervalo`, padrão `PT1M`) |
+| `LeitorDeUserAgent` | tipo de dispositivo, sistema e navegador a partir do *User-Agent*, que não é guardado |
+| `LocalizacaoPorIp`, `LocalizacaoSimulada` | contrato da localização por IP e o **simulador** atual. A versão real é outra implementação com `@Primary` (R4) |
+| `AcessoPublico` | consultas em SQL sem o filtro de tenant do Hibernate: tenant pelo código ou pela visita, trava e descarte |
+| `api/RastreamentoPublicoController`, `api/RastreamentoController` | rotas públicas (clique, sinais, `rastreamento.js`) e as de configuração, links e visitas |
+
+A pontuação ganhou a fonte `comportamento` (`qualificacao/MetricaComportamento`): tempo na página e rolagem com `{"minimo": n}`, página visitada e elemento clicado por trecho, tipo de dispositivo por igualdade.
 
 ## Endpoints atuais
 
@@ -309,6 +333,13 @@ Pacote `leads/api`: `LeadsController`, as consultas em `LeadConsultas` e os DTOs
 | GET | `/api/marketing/leads/resumo?ids=` | `marketing.lead.ver_resumo` | até 100 resumos |
 | PUT | `/api/marketing/leads/{id}/vendedor` | `marketing.qualificacao.editar` | reatribuição manual do vendedor |
 | GET | `/api/marketing/busca?q=` | `marketing.lead.ver` | busca global, até 5 itens |
+| GET / PUT | `/api/marketing/rastreamento` | `marketing.configuracao.ver` / `.editar` | rastreamento ligado, prazo de conversão e URL do script |
+| GET / POST | `/api/marketing/links-campanha` | `marketing.configuracao.ver` / `.editar` | links de campanha com a URL pública e os cliques |
+| PUT / DELETE | `/api/marketing/links-campanha/{id}` | `marketing.configuracao.editar` | altera ou exclui (soft delete) o link |
+| GET | `/api/marketing/visitas-anuncio` e `/visitas-anuncio/resumo` | `marketing.configuracao.ver` | visitas (lead 0) e o resumo de 24 h |
+| GET | `/public/marketing/c/{codigo}` | nenhuma | `302` para a landing page, ou `404` |
+| POST | `/public/marketing/visitas/{id}/sinais` | nenhuma | sinais do script, em `text/plain` ou JSON |
+| GET | `/public/marketing/rastreamento.js` | nenhuma | o script de rastreamento |
 | qualquer | outra rota em `/api/marketing/**` | — | sem token: `401` com envelope |
 
 Os outros endpoints previstos estão na seção 6 do norteador e nas tarefas A3 e A4 dos próximos passos.
