@@ -85,6 +85,14 @@ marketing:
       client-id: ${SVC_CLIENT_ID:marketing}
       client-secret: ${SVC_CLIENT_SECRET:}
 
+  # Rastreamento do clique no anúncio (R1). A URL pública é o endereço que o navegador do visitante
+  # alcança (o gateway, na plataforma): monta o link do anúncio e a tag do script da landing page.
+  rastreamento:
+    url-publica: ${MARKETING_URL_PUBLICA:http://localhost:8087}
+    # Simulador da localização por IP; trocar por uma base GeoIP é outra implementação de LocalizacaoPorIp
+    localizacao-simulada:
+      habilitada: ${RASTREAMENTO_LOCALIZACAO_SIMULADA:true}
+
 logging:
   pattern:
     level: "%5p [%X{requestId:-}]"

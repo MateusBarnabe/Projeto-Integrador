@@ -2,6 +2,8 @@ package br.com.centinela.marketing.entrada;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -23,6 +25,7 @@ import br.com.centinela.marketing.leads.OrigemConsentimento;
 import br.com.centinela.marketing.leads.TipoEventoLead;
 import br.com.centinela.marketing.qualificacao.PontuacaoDeLeads;
 import br.com.centinela.marketing.qualificacao.ResultadoPontuacao;
+import br.com.centinela.marketing.rastreamento.VinculoDeVisitas;
 import br.com.centinela.marketing.rodizio.ResultadoAtribuicao;
 import br.com.centinela.marketing.rodizio.RodizioDeVendedores;
 
@@ -68,10 +71,11 @@ public class LeituraDoEnvio {
     private final PontuacaoDeLeads pontuacao;
     private final RodizioDeVendedores rodizio;
     private final LeadEventoRepository eventos;
+    private final VinculoDeVisitas vinculoDeVisitas;
 
     LeituraDoEnvio(ClientesDeModulos clientes, JuncaoDeLeads juncao, GravacaoDeLeads gravacao,
             RegistroDeConsentimentos consentimentos, PontuacaoDeLeads pontuacao, RodizioDeVendedores rodizio,
-            LeadEventoRepository eventos) {
+            LeadEventoRepository eventos, VinculoDeVisitas vinculoDeVisitas) {
         this.clientes = clientes;
         this.juncao = juncao;
         this.gravacao = gravacao;
@@ -79,6 +83,7 @@ public class LeituraDoEnvio {
         this.pontuacao = pontuacao;
         this.rodizio = rodizio;
         this.eventos = eventos;
+        this.vinculoDeVisitas = vinculoDeVisitas;
     }
 
     /**
@@ -156,6 +161,8 @@ public class LeituraDoEnvio {
             LOG.warn("Envio {} lido sem e-mail nem telefone utilizável; lead {} segue sem contato", envioId,
                     gravado.getId());
         }
+        // R1: o mkt_visita na página de entrada liga a visita do anúncio, que as regras de comportamento pontuam
+        vinculoDeVisitas.vincular(gravado, paginasDeEntrada(envio), procedencia.fonte(), procedencia.eventoId());
 
         ResultadoPontuacao resultado = pontuacao.pontuar(gravado);
         ResultadoAtribuicao atribuicao = rodizio.atribuir(gravado);
@@ -202,6 +209,14 @@ public class LeituraDoEnvio {
         return consentimentos.registrar(lead, LeadConsentimento.doLanding(lead.getId(),
                 OrigemConsentimento.FORMULARIO_RECEBIDO, true, aceitoEm, aceite.texto(), lead.getFormularioId(),
                 lead.getEnvioId(), null, procedencia.eventoId()));
+    }
+
+    /** Páginas de entrada da última e da primeira origem do envio, nessa ordem. */
+    private static List<String> paginasDeEntrada(EnvioDoLanding envio) {
+        List<String> paginas = new ArrayList<>();
+        paginas.add(envio.ultimoToque().paginaEntrada());
+        paginas.add(envio.primeiroToque().paginaEntrada());
+        return paginas;
     }
 
     // Sem as respostas: só quantas vieram e de onde
