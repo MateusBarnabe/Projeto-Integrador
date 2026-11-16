@@ -3,6 +3,7 @@ package br.com.centinela.marketing.leads;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -659,6 +660,7 @@ public class Lead extends EntidadeBase {
         crmEmpresaId = crmEmpresaId != null ? crmEmpresaId : juntado.crmEmpresaId;
         crmContatoId = crmContatoId != null ? crmContatoId : juntado.crmContatoId;
         crmOportunidadeId = crmOportunidadeId != null ? crmOportunidadeId : juntado.crmOportunidadeId;
+        completarInteracao(juntado);
         if (vendedorId == null && juntado.vendedorId != null) {
             vendedorId = juntado.vendedorId;
             vendedorAtribuidoEm = juntado.vendedorAtribuidoEm;
@@ -698,4 +700,47 @@ public class Lead extends EntidadeBase {
     }
 
     // --- fim de E5/E11 ---------------------------------------------------------------------------
+
+    // --- R1: visita do anúncio (V11) ---------------------------------------------------------------
+    // Contexto técnico do aparelho e comportamento na landing page da visita que converteu. As colunas
+    // não dependem da fonte: hoje é a visita de anúncio (rastreamento/); depois, um pixel ou o Landing.
+
+    /** {@code tipoDispositivo}, {@code sistema}, {@code navegador}, {@code localizacao}, {@code idioma}, {@code fuso}, {@code tela}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "contexto_tecnico")
+    private Map<String, Object> contextoTecnico;
+
+    /** {@code tempoNaPaginaSegundos}, {@code profundidadeRolagem}, {@code elementosClicados}, {@code paginasVisitadas}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "comportamento")
+    private Map<String, Object> comportamento;
+
+    /**
+     * Guarda o contexto técnico e o comportamento da visita ligada ao lead. A visita mais recente é o
+     * fato mais recente: substitui a anterior; vazio não apaga.
+     */
+    public void registrarInteracao(Map<String, Object> contextoTecnico, Map<String, Object> comportamento) {
+        if (contextoTecnico != null && !contextoTecnico.isEmpty()) {
+            this.contextoTecnico = new LinkedHashMap<>(contextoTecnico);
+        }
+        if (comportamento != null && !comportamento.isEmpty()) {
+            this.comportamento = new LinkedHashMap<>(comportamento);
+        }
+    }
+
+    /** Na junção, o lead que fica recebe a interação do outro se não tiver a sua. */
+    void completarInteracao(Lead juntado) {
+        this.contextoTecnico = this.contextoTecnico != null ? this.contextoTecnico : juntado.contextoTecnico;
+        this.comportamento = this.comportamento != null ? this.comportamento : juntado.comportamento;
+    }
+
+    public Map<String, Object> getContextoTecnico() {
+        return contextoTecnico;
+    }
+
+    public Map<String, Object> getComportamento() {
+        return comportamento;
+    }
+
+    // --- fim de R1 -------------------------------------------------------------------------------
 }

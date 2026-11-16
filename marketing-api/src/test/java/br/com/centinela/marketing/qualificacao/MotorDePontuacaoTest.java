@@ -153,6 +153,31 @@ class MotorDePontuacaoTest {
                 });
     }
 
+    @Test
+    void regrasDeComportamentoComparamMinimoTrechoEIgualdade() {
+        List<RegraPontuacao> regras = List.of(
+                doTenant(RegraPontuacao.porComportamento("Engajamento", MetricaComportamento.TEMPO_NA_PAGINA,
+                        List.of(Map.of("minimo", 60)), 20)),
+                doTenant(RegraPontuacao.porComportamento("Rolagem", MetricaComportamento.PROFUNDIDADE_ROLAGEM,
+                        List.of(Map.of("minimo", 90)), 5)),
+                doTenant(RegraPontuacao.porComportamento("Interesse em preço", MetricaComportamento.PAGINA_VISITADA,
+                        List.of("Preços", "precos"), 10)),
+                doTenant(RegraPontuacao.porComportamento("Celular", MetricaComportamento.TIPO_DISPOSITIVO,
+                        List.of("smartphone"), 5)));
+        Map<String, Object> interacao = Map.of("tempoNaPaginaSegundos", 60, "profundidadeRolagem", 75,
+                "paginasVisitadas", List.of("/", "/#precos"), "tipoDispositivo", "smartphone");
+
+        ResultadoPontuacao resultado = calcular(new EntradaPontuacao(TENANT, null, Map.of(), false, Map.of(),
+                Utm.NENHUMA, interacao), regras);
+
+        assertThat(resultado.itens()).extracting(ResultadoPontuacao.ItemPontuacao::criterio)
+                .containsExactly("Engajamento", "Interesse em preço", "Celular");
+        assertThat(resultado.pontuacao()).isEqualTo(35);
+        assertThat(resultado.detalhe().getFirst()).containsEntry("fonte", "comportamento")
+                .containsEntry("campoComportamento", "tempo_na_pagina");
+        assertThat(calcular(semFormulario(Utm.NENHUMA, false), regras).itens()).as("lead sem visita").isEmpty();
+    }
+
     private static FaixaQualificacao faixaCom(int pontos) {
         RegraPontuacao regra = doTenant(RegraPontuacao.porUtm("Origem", List.of(Map.of("direto", true)), pontos));
         return calcular(semFormulario(Utm.NENHUMA, false), List.of(regra)).faixa();

@@ -5,7 +5,7 @@
   "description": "Stub do módulo CRM (Grupo 6) para o ambiente local: empresas, contatos e oportunidades em memória e o evento crm.oportunidade.criada",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.ts",
+    "dev": "node --watch-path=src src/index.ts",
     "start": "node src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

@@ -82,12 +82,13 @@ marketing-web/
     ├── layout/LayoutModulo.tsx   faixa "Marketing", abas das áreas e sidebar do modo sozinho
     ├── components/
     │   ├── ui/index.tsx          componentes base com os nomes do Design System
+    │   ├── InteracaoVisitante.tsx contexto técnico e comportamento da visita do anúncio (R1)
     │   ├── StatusApi.tsx         selo "API do módulo: no ar / fora do ar"
     │   └── EmConstrucao.tsx      estado vazio das áreas sem funcionalidade
     └── features/                 uma pasta por área do módulo
         ├── painel/               PainelPage.tsx + rotas.tsx
-        ├── leads/                LeadsPage.tsx + rotas.tsx
-        └── configuracoes/        ConfiguracoesPage.tsx + rotas.tsx
+        ├── leads/                LeadsPage (lista), DetalheLeadModal, api.ts, formatos.ts, rotas.tsx (W5)
+        └── configuracoes/        ConfiguracoesPage (abas) e rastreamento/ (aba Rastreamento, R2)
 ```
 
 ## Como a tela é montada
@@ -163,8 +164,16 @@ Componentes base com **os mesmos nomes e a mesma API do Design System** (`Docs/D
 | `Pagination` | `pagina` (começa em 0, como a API), `tamanho`, `total`, `onChange` |
 | `DetailSection` / `DetailField` | detalhe em lista de definição; `DetailField` com `label`, `colSpan`, valor vazio vira "—" |
 | `Stepper` | `steps` (rótulos) e `current` (começa em 0) |
+| `Tabs` | `abas` (`{valor, rotulo, icone?, contador?}`), `ativa`, `onChange`, `escura` (sobre o cabeçalho `brand-950` do detalhe); setas trocam de aba |
+| `Spinner` | carregando dentro do container; `rotulo` |
+| `EmptyState` | lista vazia ou erro: `icone`, `titulo`, `descricao`, `acao`, `erro` |
 
 Antes de criar um componente, veja se ele já existe no Design System e use o mesmo nome.
+
+### Telas prontas
+
+- **Leads** (`features/leads`, W5 parcial): lista com busca, filtros de etapa, faixa, origem e canal, paginação e o aparelho da visita do anúncio; o detalhe abre em `Modal noPad` na rota `/leads/{id}` (a da busca global), com as abas Dados, Origem, Interação, Respostas, Pontuação e Timeline.
+- **Configurações › Rastreamento** (`features/configuracoes/rastreamento`, R2): o lead 0. Resumo de 24 h, configuração e tag do script, links de campanha com "Simular clique" e as visitas ao vivo, relidas a cada 5 s. A aba fica na URL (`?aba=`); as outras quatro abas ainda são `EmConstrucao` (W4). Roteiro da demo em [Docs/demo-iot.md](../Docs/demo-iot.md).
 
 ### `components/StatusApi.tsx` e `components/EmConstrucao.tsx`
 

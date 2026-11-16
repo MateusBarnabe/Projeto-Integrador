@@ -50,11 +50,16 @@ public record ResultadoPontuacao(int pontuacao, FaixaQualificacao faixa, FaixaQu
      * @param campoMeta pergunta do Meta, nas regras de {@code campo_meta}
      */
     public record ItemPontuacao(UUID regraId, String criterio, FonteRegra fonte, int pontos, UUID campoId,
-            String campoMeta) {
+            String campoMeta, String campoComportamento) {
+
+        public ItemPontuacao(UUID regraId, String criterio, FonteRegra fonte, int pontos, UUID campoId,
+                String campoMeta) {
+            this(regraId, criterio, fonte, pontos, campoId, campoMeta, null);
+        }
 
         static ItemPontuacao da(RegraPontuacao regra) {
             return new ItemPontuacao(regra.getId(), regra.getCriterio(), regra.getFonte(), regra.getPontos(),
-                    regra.getCampoId(), regra.getCampoMeta());
+                    regra.getCampoId(), regra.getCampoMeta(), regra.getCampoComportamento());
         }
 
         Map<String, Object> paraDetalhe() {
@@ -68,6 +73,9 @@ public record ResultadoPontuacao(int pontuacao, FaixaQualificacao faixa, FaixaQu
             }
             if (campoMeta != null) {
                 item.put("campoMeta", campoMeta);
+            }
+            if (campoComportamento != null) {
+                item.put("campoComportamento", campoComportamento);
             }
             return item;
         }

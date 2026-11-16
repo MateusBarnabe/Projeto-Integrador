@@ -5,13 +5,15 @@ import br.com.centinela.marketing.compartilhado.dados.ValorPersistido;
 
 /**
  * De onde a regra de pontuação lê o valor: a resposta de um campo de formulário do Landing, a
- * resposta de uma pergunta do formulário instantâneo do Meta ou a UTM de origem.
+ * resposta de uma pergunta do formulário instantâneo do Meta, a UTM de origem ou o comportamento do
+ * visitante na landing page (visita do anúncio, R1).
  */
 public enum FonteRegra implements ValorPersistido {
 
     CAMPO_FORMULARIO("campo_formulario"),
     CAMPO_META("campo_meta"),
-    UTM("utm");
+    UTM("utm"),
+    COMPORTAMENTO("comportamento");
 
     private final String valor;
 

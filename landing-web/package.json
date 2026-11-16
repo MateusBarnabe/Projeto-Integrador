@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently -k -n front,server -c cyan,magenta \"npm:dev:front\" \"npm:dev:server\"",
     "dev:front": "vite",
-    "dev:server": "node --watch server/index.ts",
+    "dev:server": "node --watch-path=server server/index.ts",
     "build": "npm run typecheck && vite build",
     "start": "node server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json"

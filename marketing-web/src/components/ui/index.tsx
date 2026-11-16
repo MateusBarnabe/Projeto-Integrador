@@ -7,10 +7,12 @@ import {
   useRef,
   type ButtonHTMLAttributes,
   type ComponentProps,
+  type ComponentType,
+  type KeyboardEvent as EventoDeTeclado,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronLeft, ChevronRight, LayoutGrid, List, Search, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Inbox, LayoutGrid, List, Loader2, Search, X } from 'lucide-react';
 
 /*
  * Componentes base, com os mesmos nomes e a mesma API do Design System Centinela
@@ -134,6 +136,10 @@ const varianteDoStatus: Record<string, VarianteBadge> = {
   no_crm: 'green',
   descadastrado: 'gray',
   anonimizado: 'gray',
+  // Marketing: visita de anúncio, o "lead 0" (R1)
+  ativa: 'blue',
+  convertida: 'green',
+  descartada: 'gray',
 };
 
 function normalizarStatus(status: string) {
@@ -711,6 +717,129 @@ export function DetailField({
           children
         )}
       </dd>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Tabs
+
+export interface Aba {
+  valor: string;
+  rotulo: string;
+  icone?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  /** Número ao lado do rótulo (ex.: itens da timeline). */
+  contador?: number;
+}
+
+/**
+ * Abas internas de uma tela ou de um painel de detalhe (Design System 5.2). Só desenha a barra; a
+ * tela mostra o conteúdo da aba ativa. Setas esquerda e direita trocam de aba (padrão WAI-ARIA).
+ * `escura` é a variante sobre o cabeçalho brand-950 do detalhe.
+ */
+export function Tabs({
+  abas,
+  ativa,
+  onChange,
+  escura = false,
+  className,
+  label = 'Abas',
+}: {
+  abas: Aba[];
+  ativa: string;
+  onChange: (valor: string) => void;
+  escura?: boolean;
+  className?: string;
+  label?: string;
+}) {
+  const id = useId();
+  function teclado(evento: EventoDeTeclado<HTMLDivElement>) {
+    if (evento.key !== 'ArrowRight' && evento.key !== 'ArrowLeft') return;
+    evento.preventDefault();
+    const atual = abas.findIndex((aba) => aba.valor === ativa);
+    const proxima = (atual + (evento.key === 'ArrowRight' ? 1 : abas.length - 1)) % abas.length;
+    onChange(abas[proxima].valor);
+    document.getElementById(`${id}-${abas[proxima].valor}`)?.focus();
+  }
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      onKeyDown={teclado}
+      className={cx('flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden', className)}
+    >
+      {abas.map(({ valor, rotulo, icone: Icone, contador }) => {
+        const selecionada = valor === ativa;
+        return (
+          <button
+            key={valor}
+            id={`${id}-${valor}`}
+            type="button"
+            role="tab"
+            aria-selected={selecionada}
+            tabIndex={selecionada ? 0 : -1}
+            onClick={() => onChange(valor)}
+            className={cx(
+              'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:-outline-offset-2',
+              escura
+                ? selecionada
+                  ? 'border-brand-400 text-white'
+                  : 'border-transparent text-brand-300/80 hover:text-white'
+                : selecionada
+                  ? 'border-brand-700 text-brand-800 dark:text-brand-300'
+                  : 'border-transparent text-texto-3 hover:border-borda-forte hover:text-texto',
+            )}
+          >
+            {Icone && <Icone aria-hidden className="h-4 w-4 shrink-0" />}
+            {rotulo}
+            {contador !== undefined && (
+              <span
+                className={cx(
+                  'rounded-full px-1.5 text-xs',
+                  escura ? 'bg-white/10 text-white' : 'bg-superficie-2 text-texto-3',
+                )}
+              >
+                {contador}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Spinner e EmptyState
+
+/** Carregando, dentro do container (Design System: nunca tela inteira bloqueada). */
+export function Spinner({ rotulo = 'Carregando…', className }: { rotulo?: string; className?: string }) {
+  return (
+    <div role="status" className={cx('flex items-center justify-center gap-2 py-10 text-sm text-texto-3', className)}>
+      <Loader2 aria-hidden className="h-4 w-4 shrink-0 animate-spin text-brand-700" />
+      {rotulo}
+    </div>
+  );
+}
+
+/** Lista vazia ou erro de carregamento, com ícone, texto e uma ação opcional. */
+export function EmptyState({
+  icone: Icone = Inbox,
+  titulo,
+  descricao,
+  acao,
+  erro = false,
+}: {
+  icone?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  titulo: string;
+  descricao?: ReactNode;
+  acao?: ReactNode;
+  erro?: boolean;
+}) {
+  return (
+    <div role={erro ? 'alert' : undefined} className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+      <Icone aria-hidden className={cx('h-8 w-8', erro ? 'text-red-500' : 'text-texto-3')} />
+      <p className="text-sm font-semibold text-titulo">{titulo}</p>
+      {descricao && <p className="max-w-md text-sm text-texto-3">{descricao}</p>}
+      {acao && <div className="mt-2">{acao}</div>}
     </div>
   );
 }

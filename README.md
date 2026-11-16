@@ -93,7 +93,7 @@ O `docker-compose.yml` imita só o pedaço da plataforma que o Marketing usa:
 - **RabbitMQ:** vhost `plataforma`, um usuário por módulo (`mq_marketing`, `mq_landing`, com senha igual ao nome) e as exchanges `marketing.eventos`, `landing.eventos` e `identity.entrada` ([infra/rabbitmq](infra/rabbitmq/definitions.json)). As filas são declaradas pelo módulo que consome.
 - **Mailpit:** recebe os e-mails de boas-vindas e de aquecimento.
 
-O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador-2026`. O identity nunca é simulado: as rotas autenticadas precisam de um token real de um usuário de teste, e o endereço do JWKS vai em `JWKS_URI`. A API usa os mesmos nomes de variável do compose da plataforma ([marketing-api/README.md](marketing-api/README.md#variáveis-de-ambiente)). Sem ele, só as rotas públicas e o `/health` respondem. Se os dois composes rodarem ao mesmo tempo, as portas 5432, 5672 e 15672 conflitam: suba só os apps deste repositório e aponte-os para a infraestrutura da plataforma.
+O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador-2026`. O identity nunca é simulado: as rotas autenticadas precisam de um token real de um usuário de teste, e o endereço do JWKS vai em `JWKS_URI`. A API usa os mesmos nomes de variável do compose da plataforma ([marketing-api/README.md](marketing-api/README.md#variáveis-de-ambiente)). Sem ele, só as rotas públicas e o `/health` respondem. Se os dois composes rodarem ao mesmo tempo, as portas 5432, 5672 e 15672 conflitam: suba só os apps deste repositório e aponte-os para a infraestrutura da plataforma. O [scripts/dev-plataforma.ps1](scripts/dev-plataforma.ps1) faz isso de uma vez: sobe a infraestrutura e o identity do `infra-integrador-2026`, pega o token, abre os quatro apps com as senhas certas e carrega as regras da demo (ver [Docs/demo-iot.md](Docs/demo-iot.md#como-subir-localmente)).
 
 ## Documentação (`Docs/`)
 
@@ -101,6 +101,7 @@ O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador
 |---|---|
 | [documento-norteador.md](Docs/documento-norteador.md) | **Fonte da verdade do grupo:** etapas do projeto, funil, tabelas, jobs, endpoints, permissões, mensageria, Etapa 2, testes e pendências. O `.html` é a mesma coisa em página |
 | [contratos/](Docs/contratos/) | O que atravessa a fronteira do módulo: OpenAPI e AsyncAPI do Marketing (cópias do infra) e o que consumimos e pedimos ao Landing |
+| [demo-iot.md](Docs/demo-iot.md) | O ponto de IoT do Marketing, o "lead 0": como os dados andam, o que é real e o que é simulado, e o roteiro da apresentação |
 | [permissoes/marketing.yaml](Docs/permissoes/marketing.yaml) · [modulos/marketing.json](Docs/modulos/marketing.json) | Permissões e registro no menu da casca, para o PR no `infra-integrador-2026` |
 | [DesignSystem/](Docs/DesignSystem/) | Design System Centinela: tokens, componentes e padrões de tela |
 | [Fluxo.md](Docs/Fluxo.md) · [Requisitos.md](Docs/Requisitos.md) · [Regras de Negocio.md](Docs/Regras%20de%20Negocio.md) · [LGPD.md](Docs/LGPD.md) · [Troubleshooting.md](Docs/Troubleshooting.md) | Levantamento de negócio: fluxo do lead, requisitos, pontuação e rodízio, LGPD e operação |

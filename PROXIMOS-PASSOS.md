@@ -1,6 +1,6 @@
 # Próximos passos · Módulo de Marketing
 
-Plano de trabalho a partir do alicerce criado em 25/09/2026, **revisado em 05/11/2026** depois do alinhamento com os contratos do Landing e do CRM: o Landing é o dono dos formulários, os eventos dele não trazem mais a etapa do funil e quem cria a oportunidade no CRM é o Landing (norteador, seção 12). Atualizado em 06/11/2026 com o fechamento da fase 1 (F4, F5, F6, Q1, W1, L1, L2, L5 e I2) e da fase 2, "lead qualificado e ligado ao CRM" (N1, Q2, E1, A2, L3, L4, E5, E6 e E11).
+Plano de trabalho a partir do alicerce criado em 25/09/2026, **revisado em 05/11/2026** depois do alinhamento com os contratos do Landing e do CRM: o Landing é o dono dos formulários, os eventos dele não trazem mais a etapa do funil e quem cria a oportunidade no CRM é o Landing (norteador, seção 12). Atualizado em 06/11/2026 com o fechamento da fase 1 (F4, F5, F6, Q1, W1, L1, L2, L5 e I2) e da fase 2, "lead qualificado e ligado ao CRM" (N1, Q2, E1, A2, L3, L4, E5, E6 e E11). Atualizado em 09/11/2026 com o ponto de IoT, o "lead 0" (R1 a R3), e a parte essencial da tela Leads (W5).
 
 O repositório já tem:
 
@@ -18,6 +18,8 @@ O repositório já tem:
 - o front com layout, abas, camada da casca, cliente HTTP e os componentes do Design System (W1);
 - o placeholder do Landing com a página, o formulário de exemplo, o chatbot, os dois eventos, a leitura do envio e a criação de empresa, contato e oportunidade no stub do CRM (L1 a L5);
 - o CI que testa e publica as imagens (I2);
+- o rastreamento do clique no anúncio, o "lead 0" (R1 a R3): link de campanha, script na landing page, ligação da visita ao lead no envio, pontuação por comportamento, descarte no prazo e a aba Rastreamento em Configurações;
+- a tela Leads, com lista, filtros e o detalhe em abas (W5, parte essencial);
 - o ambiente local em Docker.
 
 Cada pasta tem um README com o que já existe: [marketing-api](marketing-api/README.md), [marketing-web](marketing-web/README.md), [landing-web](landing-web/README.md), [crm-stub](crm-stub/README.md) e [infra](infra/README.md).
@@ -26,7 +28,7 @@ A referência de **o quê** fazer é o [documento norteador](Docs/documento-nort
 
 ## Como ler
 
-- Cada tarefa tem um código: **F** fundação do back, **D** dados (migrations), **E** entrada de leads e Etapa 1, **C** CRM, **N** notificações, **Q** qualificação, **A** APIs da Etapa 2, **W** front, **L** placeholder do Landing, **I** integração e entregas.
+- Cada tarefa tem um código: **F** fundação do back, **D** dados (migrations), **E** entrada de leads e Etapa 1, **C** CRM, **N** notificações, **Q** qualificação, **A** APIs da Etapa 2, **W** front, **L** placeholder do Landing, **R** rastreamento do anúncio (IoT), **I** integração e entregas.
 - **Bloqueado por:** o que precisa estar pronto antes de começar a tarefa. Tarefas concluídas não aparecem mais como bloqueio.
 - **Bloqueia:** o que só pode começar depois que a tarefa terminar.
 - **X1, X2...** são dependências **de outros grupos ou decisões ainda abertas**. Elas estão na [lista de dependências externas](#dependências-externas-e-decisões-em-aberto).
@@ -86,7 +88,7 @@ Cada trilha pode ser de uma pessoa ou dupla.
 
 ### Dados: migrations do Flyway (D)
 
-Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador. Fora das tarefas D, a fase 2 usou a `V9` (Q2: índice dos leads aguardando vendedor) e a `V10` (E5/E11: colunas e índice da leitura pendente do envio); o próximo número livre é o `V11`.
+Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador. Fora das tarefas D, a fase 2 usou a `V9` (Q2: índice dos leads aguardando vendedor) e a `V10` (E5/E11: colunas e índice da leitura pendente do envio), e o IoT usou a `V11` (R1: rastreamento do anúncio); o próximo número livre é o `V12`.
 
 O número da migration é da tarefa, não da ordem de merge: cada tarefa sai numa branch própria e os PRs podem entrar fora de ordem. Na plataforma e nos testes o banco sobe do zero e aplica tudo em ordem. No banco local, o perfil `dev` liga o `out-of-order` do Flyway para aplicar uma versão menor que chegou depois (ver o [README da API](marketing-api/README.md#banco-e-migrations)).
 
@@ -142,7 +144,7 @@ As telas podem começar antes da API ficar pronta, com dados fictícios no forma
 | **W2** | Integração com a casca real: conferir o formato das mensagens com o `exemplo-modulo`, o tema (`data-tema`) e a altura; esconder as abas sem permissão. Levar os neutros e o `dark:` ao `LayoutModulo` e ao `EmConstrucao` e conferir o `Modal` dentro do iframe (a altura acompanha o conteúdo) | X9 | I3 | 9 |
 | **W3** | **[cancelada]** Tela Formulários. A aba saiu do front; as respostas aparecem no detalhe do lead (W5) | — | — | 9.5 |
 | **W4** | Tela **Configurações**, com quatro abas: canais de anúncio (segredos do Meta só de escrita e URL do webhook), modelos de mensagem, ciclo de vida, e qualificação e distribuição (regras escolhendo formulário e campo do Landing, ou pergunta do Meta) | A3 | — | 9.4 |
-| **W5** | Tela **Leads**: lista com filtros e paginação; detalhe em modal com contato, consentimentos, respostas lidas do Landing (inclusive "aguardando Landing" e "indisponíveis"), pontuação, timeline, e-mails e CRM, e a reatribuição do vendedor. Vai precisar de `Tabs` (e talvez `Spinner` e `EmptyState`), que existem na casca mas não estavam na lista da W1 | — | I4 | 9.2 |
+| **W5** | **[parcial]** Tela **Leads**: lista com filtros (busca, etapa, faixa, origem, canal) e paginação, e detalhe em modal (rota `/leads/{id}`, a da busca global) com as abas Dados, Origem, Interação (visita do anúncio, R1), Respostas (inclusive "aguardando Landing" e "indisponíveis"), Pontuação e Timeline; `Tabs`, `Spinner` e `EmptyState` entraram no Design System. **Falta:** reatribuir o vendedor (`PUT /leads/{id}/vendedor`), o histórico de consentimentos, os e-mails (D3), o nome do vendedor (X7) e os resumos do CRM, e os filtros de campanha, vendedor e período | — | I4 | 9.2 |
 | **W6** | Tela **Painel**: funil, qualificação, série temporal, campanhas, canais, distribuição e leads recentes, com atualização por SSE | A4 | — | 9.1 |
 
 ### Placeholder do Landing (L)
@@ -158,6 +160,19 @@ O placeholder imita o **contrato publicado do Landing** (`landing.yaml` e `landi
 | **L5** | **[concluída]** Stub do CRM em `crm-stub/` (serviço `crm`, porta 8082, como o CRM real): `POST /api/crm/empresas`, `/contatos` e `/oportunidades` em memória por tenant, e publicação de `crm.oportunidade.criada` em `crm.eventos` como `mq_crm` | — | — | 06* |
 
 \* Contexto do ambiente local, fora do norteador: resumo no [README do landing-web](landing-web/README.md), no [README do crm-stub](crm-stub/README.md) e o contrato em [Docs/contratos/landing-requisitos.md](Docs/contratos/landing-requisitos.md).
+
+### Rastreamento do anúncio: o ponto de IoT (R)
+
+Decisão de 09/11/2026 (norteador, seção 12): o IoT do Marketing é o **lead 0**, quem clicou no anúncio e ainda não deixou contato. O dado vem das campanhas: o aparelho de quem clica (contexto técnico) e o que a pessoa faz na landing page (comportamento). Substitui a demo da branch `feat/iot-ingestao-leads`, que fica como histórico; dela vieram o modelo do contexto técnico e do comportamento em `jsonb` e o modal de detalhe.
+
+| ID | Tarefa | Bloqueado por | Bloqueia | § |
+|---|---|---|---|---|
+| **R1** | **[concluída]** Back do rastreamento (`rastreamento/`, `V11`): link de campanha (`GET /public/marketing/c/{codigo}`, `302` com UTM e `mkt_visita`), sinais do script (`POST /public/marketing/visitas/{id}/sinais`), `rastreamento.js`, ligação da visita ao lead na leitura do envio (`VinculoDeVisitas`, antes da pontuação), fonte `comportamento` nas regras de pontuação, job 4.7 de descarte e as rotas de configuração, links e visitas. Localização por IP simulada (`LocalizacaoSimulada`) | — | — | 2, 3, 4.7, 5, 6 |
+| **R2** | **[concluída]** Front: aba Rastreamento em Configurações (resumo de 24 h, configuração e tag do script, links com "Simular clique" e visitas ao vivo com a contagem do descarte) e a aba Interação no detalhe do lead | — | — | 9.2, 9.4 |
+| **R3** | **[concluída]** Placeholder do Landing carrega o script do Marketing (`VITE_MARKETING_URL`), tem a seção de preços e os `data-rastreio`, e mostra o `mkt_visita` no rodapé de teste | — | — | 06* |
+| **R4** | Localização por IP real: outra implementação de `LocalizacaoPorIp` com base GeoIP local (GeoLite2), marcada `@Primary` | — | — | 6 |
+| **R5** | Regras de comportamento na tela de qualificação (W4) e valores iniciais delas (D7). Até lá, as regras entram por SQL (`infra/demo/regras-comportamento.sql`) | A3 | — | 9.3 |
+| **R6** | Painel: cliques, lead 0, conversão e descarte por campanha e por dispositivo (A4/W6), com a atualização das visitas pelo SSE no lugar da releitura a cada 5 s | A4 | — | 9.1 |
 
 ### Integração e entregas (I)
 
@@ -190,6 +205,9 @@ Estas não se resolvem programando: precisam de resposta de outro grupo, dos pro
 | **X14** | `LANDING_BASE_URL` e `CRM_BASE_URL` no serviço `marketing` do compose da plataforma (hoje valem os padrões `http://landing:8088` e `http://crm:8082`) | Grupo 2 | I3 (parcial: os padrões já apontam para os nomes dos containers) |
 | **X15** | Campos para `fbclid` e `gclid` no `ToqueOrigem` do envio; hoje eles só chegam dentro de `paginaEntrada` | Grupo 7 | — (parcial: o Marketing pode extrair da URL) |
 | **X16** | `servicos` em `marketing.lead.ver_resumo`, para outros módulos lerem o resumo do lead com token de serviço (9.6). O código já aceita; falta declarar nas quatro cópias da permissão e no infra, e saber quem consome | Grupo 4, Grupo 2 | — |
+| **X17** | Landing page carregar a tag do `rastreamento.js` e manter a URL de entrada inteira em `paginaEntrada` ([landing-requisitos.md](Docs/contratos/landing-requisitos.md)) | Grupo 7 | — (parcial: sem a tag, o clique ainda dá o contexto técnico) |
+| **X18** | Base legal e aviso do rastreamento do lead 0 antes do aceite (proposta: legítimo interesse, sem cookie, dados apagados no prazo) | Grupo 4, Grupo 7, professores | — |
+| **X19** | Exceção ao envelope para o `302` do link de campanha e o `rastreamento.js`; `MARKETING_URL_PUBLICA` no compose da plataforma | Grupo 2 | I3 (parcial) |
 
 ## Mapa das dependências internas
 

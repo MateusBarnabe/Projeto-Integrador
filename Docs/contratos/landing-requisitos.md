@@ -1,6 +1,6 @@
 # Marketing ← Landing: o que consumimos e o que ainda pedimos
 
-**Para:** Grupo 7 (Landing Pages e Formulários) · **De:** Grupo 4 (Marketing) · **Revisão:** 05/11/2026
+**Para:** Grupo 7 (Landing Pages e Formulários) · **De:** Grupo 4 (Marketing) · **Revisão:** 09/11/2026 (pedidos 6 e 7, rastreamento do anúncio)
 
 Este documento substitui a proposta de 24/09, que pedia cinco eventos com a etapa do funil e formulários definidos pelo Marketing. Seguimos o contrato que vocês publicaram no `infra-integrador-2026` (`contratos/landing.yaml` e `contratos/landing.asyncapi.yaml`, PR #26): **o Landing é o dono de formulários, campos e envios, e o Marketing só consome.** Do nosso lado, formulários já saíram do `marketing.yaml`, das permissões e do menu (PR #29).
 
@@ -24,6 +24,8 @@ Se o Landing não responder em 3 s, o lead fica gravado com a leitura pendente e
 | 3 | **IP e *User-Agent* do aceite** em `ConsentimentoRegistrado` (hoje só `texto` e `aceitoEm`) | A LGPD (8.1) e o nosso requisito RC03 pedem a evidência completa do consentimento. Vocês recebem os dois na rota pública de envio | Média |
 | 4 | **Um evento para o preenchimento parcial** (ex.: `landing.sessao.atualizada`), quando a sessão passo a passo ou o chatbot passa de "grande parte" do formulário, com o critério documentado | É a etapa 2 do nosso funil (lead morno). Hoje ela não tem fonte e aparece zerada no painel | Média |
 | 5 | **Listar os formulários do tenant com token de serviço** (só id, nome e status) | A nossa tela de regras só conhece os formulários que já trouxeram lead. Com a lista, a pessoa gestora configura a pontuação antes do primeiro envio | Baixa (seguimos sem) |
+| 6 | **Carregar o script de rastreamento do Marketing nas landing pages** (`<script src="https://<plataforma>/public/marketing/rastreamento.js" async></script>`, uma linha fixa no HTML) e **manter a URL de entrada inteira, com a consulta, em `ToqueOrigem.paginaEntrada`** (revisão de 09/11) | É o ponto de IoT do Marketing, o "lead 0": o anúncio aponta para um link nosso, que segue para a landing page com o `mkt_visita` na URL. O script manda o que a pessoa faz na página (tempo, rolagem, cliques em botões e seções vistas) e só age com o `mkt_visita`; não lê campos do formulário nem usa cookie. No envio, achamos o `mkt_visita` na `paginaEntrada` e ligamos a visita ao lead. Nada muda no contrato de vocês | Média |
+| 7 | **Página de entrada em `landing.chatbot.lead_capturado`** (o `paginaEntrada` da origem, como no envio) | Para ligar a visita do anúncio também à captura do chatbot. Hoje só o envio a liga | Baixa (seguimos sem) |
 
 Os pedidos 1 e 2 não mudam nada para quem já consome os eventos de vocês: são campos a mais.
 
