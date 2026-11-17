@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import br.com.centinela.marketing.comunicacao.LeadComunicacao;
+import br.com.centinela.marketing.comunicacao.ModeloMensagem;
 import br.com.centinela.marketing.leads.Lead;
 import br.com.centinela.marketing.leads.LeadConsentimento;
 import br.com.centinela.marketing.leads.LeadEvento;
@@ -65,9 +67,15 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
             String userAgent) {
     }
 
-    /** Cadência de aquecimento e boas-vindas (4.2 e 4.5). Os e-mails enviados entram com a D3. */
+    /** Cadência de aquecimento e boas-vindas (4.2 e 4.5), com o histórico de e-mails enviados (D3). */
     public record Aquecimento(String status, int tentativas, OffsetDateTime ultimaComunicacaoEm,
-            OffsetDateTime boasVindasEnviadaEm, OffsetDateTime esgotadoEm, OffsetDateTime optOutEm) {
+            OffsetDateTime boasVindasEnviadaEm, OffsetDateTime esgotadoEm, OffsetDateTime optOutEm,
+            List<ComunicacaoEnviada> comunicacoes) {
+    }
+
+    /** Registro de {@code lead_comunicacoes}: um envio de boas-vindas ou aquecimento. */
+    public record ComunicacaoEnviada(UUID id, String canal, UUID modeloId, String modeloNome, String tipoModelo,
+            String status, OffsetDateTime enviadoEm) {
     }
 
     /** Ids no CRM: empresa e contato do envio e a oportunidade de {@code crm.oportunidade.criada}. */
@@ -87,6 +95,11 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
     }
 
     static DetalheLead de(Lead lead, List<LeadConsentimento> consentimentos, List<LeadEvento> eventos) {
+        return de(lead, consentimentos, eventos, List.of(), Map.of());
+    }
+
+    static DetalheLead de(Lead lead, List<LeadConsentimento> consentimentos, List<LeadEvento> eventos,
+            List<LeadComunicacao> comunicacoes, Map<UUID, ModeloMensagem> modelosPorId) {
         boolean anonimizado = lead.isAnonimizado();
         Contato contato = anonimizado
                 ? new Contato(null, null, null, null)
@@ -99,9 +112,11 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
                 lead.getQualificadoEm(), lead.getPontuacaoDetalhe() == null ? List.of() : lead.getPontuacaoDetalhe());
         Consentimento consentimento = new Consentimento(lead.isConsentimentoMarketing(), lead.getConsentimentoEm(),
                 consentimentos.stream().map(registro -> registro(registro, anonimizado)).toList());
+        List<ComunicacaoEnviada> envios = comunicacoes == null ? List.of()
+                : comunicacoes.stream().map(c -> comunicacao(c, modelosPorId.get(c.getModeloId()))).toList();
         Aquecimento aquecimento = new Aquecimento(Valores.de(lead.getStatusAquecimento()),
                 lead.getTentativasAquecimento(), lead.getUltimaComunicacaoEm(), lead.getBoasVindasEnviadaEm(),
-                lead.getEsgotadoEm(), lead.getOptOutEm());
+                lead.getEsgotadoEm(), lead.getOptOutEm(), envios);
         return new DetalheLead(lead.getId(), lead.getEtapa(), Valores.de(lead.getTemperatura()), anonimizado,
                 lead.getCriadoEm(), lead.getAtualizadoEm(), contato, origem, respostas(lead, anonimizado),
                 qualificacao, new Vendedor(lead.getVendedorId(), lead.getVendedorAtribuidoEm()), consentimento,
@@ -109,6 +124,13 @@ public record DetalheLead(UUID id, int etapa, String temperatura, boolean anonim
                 eventos.stream().map(DetalheLead::item).toList(),
                 anonimizado ? new Interacao(null, null)
                         : new Interacao(lead.getContextoTecnico(), lead.getComportamento()));
+    }
+
+    private static ComunicacaoEnviada comunicacao(LeadComunicacao envio, ModeloMensagem modelo) {
+        return new ComunicacaoEnviada(envio.getId(), Valores.de(envio.getCanal()), envio.getModeloId(),
+                modelo == null ? null : modelo.getNome(),
+                modelo == null ? null : Valores.de(modelo.getTipo()),
+                Valores.de(envio.getStatus()), envio.getEnviadoEm());
     }
 
     private static Respostas respostas(Lead lead, boolean anonimizado) {

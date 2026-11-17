@@ -21,6 +21,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.centinela.marketing.compartilhado.web.Pagina;
+import br.com.centinela.marketing.comunicacao.LeadComunicacao;
+import br.com.centinela.marketing.comunicacao.LeadComunicacaoRepository;
+import br.com.centinela.marketing.comunicacao.ModeloMensagem;
+import br.com.centinela.marketing.comunicacao.ModeloMensagemRepository;
 import br.com.centinela.marketing.leads.Lead;
 import br.com.centinela.marketing.leads.LeadConsentimentoRepository;
 import br.com.centinela.marketing.leads.LeadEventoRepository;
@@ -61,13 +65,17 @@ public class LeadConsultas {
     private final LeadRepository leads;
     private final LeadConsentimentoRepository consentimentos;
     private final LeadEventoRepository eventos;
+    private final LeadComunicacaoRepository comunicacoes;
+    private final ModeloMensagemRepository modelos;
 
     public LeadConsultas(EntityManager em, LeadRepository leads, LeadConsentimentoRepository consentimentos,
-            LeadEventoRepository eventos) {
+            LeadEventoRepository eventos, LeadComunicacaoRepository comunicacoes, ModeloMensagemRepository modelos) {
         this.em = em;
         this.leads = leads;
         this.consentimentos = consentimentos;
         this.eventos = eventos;
+        this.comunicacoes = comunicacoes;
+        this.modelos = modelos;
     }
 
     public Pagina<ItemListaLead> listar(FiltroLeads filtro, PageRequest pedido) {
@@ -94,9 +102,17 @@ public class LeadConsultas {
     }
 
     public Optional<DetalheLead> detalhar(UUID id) {
-        return leads.findById(id).map(lead -> DetalheLead.de(lead,
-                consentimentos.findByLeadIdOrderByRegistradoEmDescCriadoEmDesc(id),
-                eventos.findByLeadIdOrderBySequenciaAsc(id)));
+        return leads.findById(id).map(lead -> {
+            List<LeadComunicacao> envios = comunicacoes.findByLeadIdOrderByEnviadoEmDescCriadoEmDesc(id);
+            Map<UUID, ModeloMensagem> modelosPorId = envios.isEmpty() ? Map.of()
+                    : modelos.findAllById(envios.stream().map(LeadComunicacao::getModeloId).collect(Collectors.toSet()))
+                            .stream().collect(Collectors.toMap(ModeloMensagem::getId, Function.identity()));
+            return DetalheLead.de(lead,
+                    consentimentos.findByLeadIdOrderByRegistradoEmDescCriadoEmDesc(id),
+                    eventos.findByLeadIdOrderBySequenciaAsc(id),
+                    envios,
+                    modelosPorId);
+        });
     }
 
     public Optional<ResumoLead> resumir(UUID id) {

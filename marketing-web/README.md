@@ -172,8 +172,8 @@ Antes de criar um componente, veja se ele já existe no Design System e use o me
 
 ### Telas prontas
 
-- **Leads** (`features/leads`, W5 parcial): lista com busca, filtros de etapa, faixa, origem e canal, paginação e o aparelho da visita do anúncio; o detalhe abre em `Modal noPad` na rota `/leads/{id}` (a da busca global), com as abas Dados, Origem, Interação, Respostas, Pontuação e Timeline.
-- **Configurações › Rastreamento** (`features/configuracoes/rastreamento`, R2): o lead 0. Resumo de 24 h, configuração e tag do script, links de campanha com "Simular clique" e as visitas ao vivo, relidas a cada 5 s. A aba fica na URL (`?aba=`); as outras quatro abas ainda são `EmConstrucao` (W4). Roteiro da demo em [Docs/demo-iot.md](../Docs/demo-iot.md).
+- **Leads** (`features/leads`, W5 parcial): lista com busca, filtros de etapa, faixa, origem e canal, paginação e o aparelho da visita do anúncio; o detalhe abre em `Modal noPad` na rota `/leads/{id}` (a da busca global), com as abas Dados (incluindo boas-vindas e e-mails enviados), Origem, Interação, Respostas, Pontuação e Timeline.
+- **Configurações** (`features/configuracoes`, R2 e W4): as cinco abas completas (`?aba=`): **Rastreamento** (lead 0, links e visitas ao vivo), **Canais de anúncio** (`google_ads` e `meta_ads` com segredos só de escrita e URL do webhook), **Modelos de mensagem** (boas-vindas e cadência de aquecimento com pré-visualização), **Ciclo de vida** (tentativas e retenção LGPD) e **Qualificação e distribuição** (faixas com prévia, regras de pontuação por campo do Landing, Meta, UTM e comportamento, e escala de vendedores do rodízio). Roteiro da demo em [Docs/demo-iot.md](../Docs/demo-iot.md).
 
 ### `components/StatusApi.tsx` e `components/EmConstrucao.tsx`
 

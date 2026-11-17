@@ -7,15 +7,16 @@
   "scripts": {
     "dev": "concurrently -k -n front,server -c cyan,magenta \"npm:dev:front\" \"npm:dev:server\"",
     "dev:front": "vite",
-    "dev:server": "node --watch-path=server server/index.ts",
+    "dev:server": "node --experimental-strip-types --watch-path=server server/index.ts",
     "build": "npm run typecheck && vite build",
-    "start": "node server/index.ts",
+    "start": "node --experimental-strip-types server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json"
   },
   "dependencies": {
     "amqplib": "^2.2.0",
     "express": "^5.2.1",
     "lucide-react": "^1.48.0",
+    "projeto-integrador-marketing": "file:..",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

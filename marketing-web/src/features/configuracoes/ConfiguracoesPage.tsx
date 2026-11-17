@@ -1,7 +1,10 @@
 import { useSearchParams } from 'react-router';
 import { Award, Clock, Mail, Megaphone, Radar } from 'lucide-react';
-import { EmConstrucao } from '@/components/EmConstrucao';
 import { Tabs, type Aba } from '@/components/ui';
+import { CanaisAba } from './canais/CanaisAba';
+import { CicloVidaAba } from './ciclo-vida/CicloVidaAba';
+import { ModelosAba } from './modelos/ModelosAba';
+import { QualificacaoAba } from './qualificacao/QualificacaoAba';
 import { RastreamentoAba } from './rastreamento/RastreamentoAba';
 
 const ABAS: Aba[] = [
@@ -12,16 +15,8 @@ const ABAS: Aba[] = [
   { valor: 'qualificacao', rotulo: 'Qualificação e distribuição', icone: Award },
 ];
 
-const EM_CONSTRUCAO: Record<string, string> = {
-  canais: 'Canais de anúncio: orçamento, público e objetivo por canal, com os segredos do Meta só de escrita e a URL do webhook (norteador 9.4, W4).',
-  modelos: 'Modelos de mensagem: boas-vindas e a cadência de aquecimento, com pré-visualização e o rodapé de descadastro (W4).',
-  'ciclo-vida': 'Ciclo de vida: máximo de tentativas e retenção depois do esgotamento e do opt-out (W4).',
-  qualificacao: 'Qualificação e distribuição: regras de pontuação (inclusive as de comportamento do lead 0), faixas e rodízio (W4).',
-};
-
 /**
- * Tela Configurações (norteador 9.4), uma tela com abas internas; a aba fica na URL (`?aba=`).
- * Rastreamento (R1) é a primeira e a única pronta; as outras chegam com a W4.
+ * Tela Configurações (norteador §9.4, R2 e W4), uma tela com cinco abas internas; a aba fica na URL (`?aba=`).
  */
 export function ConfiguracoesPage() {
   const [parametros, setParametros] = useSearchParams();
@@ -38,7 +33,11 @@ export function ConfiguracoesPage() {
         />
       </div>
       <div role="tabpanel" className="flex-1 p-5">
-        {aba === 'rastreamento' ? <RastreamentoAba /> : <EmConstrucao descricao={EM_CONSTRUCAO[aba]} />}
+        {aba === 'rastreamento' && <RastreamentoAba />}
+        {aba === 'canais' && <CanaisAba />}
+        {aba === 'modelos' && <ModelosAba />}
+        {aba === 'ciclo-vida' && <CicloVidaAba />}
+        {aba === 'qualificacao' && <QualificacaoAba />}
       </div>
     </div>
   );
