@@ -69,3 +69,33 @@ export function valorDaResposta(valor: unknown) {
   if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não';
   return String(valor);
 }
+
+/** Id encurtado do vendedor. O nome só chega com a X7 (o identity ainda não lista vendedores). */
+export function vendedorEncurtado(vendedorId: string) {
+  return `Vendedor ${vendedorId.slice(0, 8)}`;
+}
+
+export const DICA_NOME_DO_VENDEDOR = 'nome indisponível (X7)';
+
+export const NOME_PERIODO: Record<string, string> = {
+  '7d': 'Últimos 7 dias',
+  '30d': 'Últimos 30 dias',
+  '90d': 'Últimos 90 dias',
+};
+
+const INTERVALO = /^(\d{4}-\d{2}-\d{2}),(\d{4}-\d{2}-\d{2})$/;
+
+/** Separa o `periodo` da URL em início e fim; vazio quando não é um intervalo de datas. */
+export function intervaloDoPeriodo(periodo?: string): { de: string; ate: string } {
+  const partes = periodo?.match(INTERVALO);
+  return partes ? { de: partes[1], ate: partes[2] } : { de: '', ate: '' };
+}
+
+/** `lead_consentimentos.origem`: o evento do Landing (ou o descadastro) que gerou o registro. */
+export const NOME_ORIGEM_CONSENTIMENTO: Record<string, string> = {
+  'landing.formulario.recebido': 'Formulário enviado',
+  'landing.formulario.atualizado': 'Formulário atualizado',
+  'landing.chatbot.lead_capturado': 'Chatbot',
+  'landing.contato.informado': 'Contato informado',
+  descadastro: 'Descadastro',
+};

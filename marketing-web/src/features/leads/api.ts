@@ -1,4 +1,4 @@
-import { requisitar } from '@/api/cliente';
+import { requisitar, requisitarModulo } from '@/api/cliente';
 import type { Comportamento, ContextoTecnico } from '@/components/InteracaoVisitante';
 
 /** `{itens, pagina, tamanho, total}` (Contrato §8.3). */
@@ -130,12 +130,50 @@ export interface DetalheLead {
   interacao: { contextoTecnico: ContextoTecnico | null; comportamento: Comportamento | null } | null;
 }
 
+/** Filtros da lista, com os mesmos nomes dos parâmetros de `GET /api/marketing/leads`. */
 export interface FiltroLeads {
   q?: string;
   etapa?: string;
   faixa?: string;
   origem?: string;
   canal?: string;
+  /** `utm_campaign` exato. */
+  campanha?: string;
+  vendedorId?: string;
+  /** `7d`, `30d`, `90d` ou `AAAA-MM-DD,AAAA-MM-DD`. */
+  periodo?: string;
+}
+
+/** Item de `GET /api/marketing/rodizio/vendedores` (escala do rodízio). */
+export interface VendedorDaEscala {
+  id: string;
+  vendedorId: string;
+  ativo: boolean;
+  ultimaAtribuicaoEm: string | null;
+}
+
+/** `PUT /api/marketing/leads/{id}/vendedor`. */
+export interface VendedorDoLead {
+  leadId: string;
+  vendedorId: string | null;
+  vendedorAtribuidoEm: string | null;
+}
+
+/** `GET /api/crm/empresas/{id}/resumo` (crm.yaml, EmpresaResumo). */
+export interface ResumoEmpresaCrm {
+  id: string;
+  razaoSocial: string;
+  cnpj: string | null;
+  cidade: string | null;
+}
+
+/** `GET /api/crm/contatos/{id}/resumo` (crm.yaml, ContatoResumo). */
+export interface ResumoContatoCrm {
+  id: string;
+  nome: string;
+  cargo: string | null;
+  email: string | null;
+  telefone: string | null;
 }
 
 export function listarLeads(filtro: FiltroLeads, pagina: number, tamanho = 20) {
@@ -148,4 +186,26 @@ export function listarLeads(filtro: FiltroLeads, pagina: number, tamanho = 20) {
 
 export function detalharLead(id: string) {
   return requisitar<DetalheLead>(`/leads/${encodeURIComponent(id)}`);
+}
+
+/** Escala do rodízio (precisa de `marketing.qualificacao.ver`; sem ela a API responde `403`). */
+export function listarVendedoresDaEscala() {
+  return requisitar<VendedorDaEscala[]>('/rodizio/vendedores');
+}
+
+/** Reatribuição manual (precisa de `marketing.qualificacao.editar`). `422 VENDEDOR_FORA_DA_ESCALA` se não está na escala. */
+export function reatribuirVendedor(leadId: string, vendedorId: string) {
+  return requisitar<VendedorDoLead>(`/leads/${encodeURIComponent(leadId)}/vendedor`, {
+    method: 'PUT',
+    body: JSON.stringify({ vendedorId }),
+  });
+}
+
+/** Resumos que o CRM oferece a outros módulos, com o token do usuário (norteador §9.2 e §9.6). */
+export function resumirEmpresaNoCrm(id: string) {
+  return requisitarModulo<ResumoEmpresaCrm>('crm', `/empresas/${encodeURIComponent(id)}/resumo`);
+}
+
+export function resumirContatoNoCrm(id: string) {
+  return requisitarModulo<ResumoContatoCrm>('crm', `/contatos/${encodeURIComponent(id)}/resumo`);
 }
