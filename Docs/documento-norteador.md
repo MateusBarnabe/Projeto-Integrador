@@ -78,7 +78,7 @@ O módulo roda dentro da plataforma do Grupo 2 e herda dela nomes, portas, crede
 | Banco | schema `marketing`; `own_marketing` roda o Flyway, `usr_marketing` roda a aplicação | §7.1 |
 | RabbitMQ | usuário `mq_marketing`; publica só em `marketing.eventos` e `identity.entrada`; lê qualquer `*.eventos` para ligar as próprias filas | §9.7, §13.3 |
 | Token de serviço | `clientId = marketing` (`SVC_CLIENT_ID`), segredo em `SVC_CLIENT_SECRET`, que o compose da plataforma preenche com o `SVC_MARKETING_SEGREDO` do `.env` | §9.2 |
-| Variáveis de ambiente | as do `docker-compose.yml` da plataforma: `SERVER_PORT`, `DB_URL`, `DB_APP_USER`/`DB_APP_PASSWORD`, `DB_OWNER_USER`/`DB_OWNER_PASSWORD`, `RABBITMQ_HOST`/`PORT`/`VHOST`/`USER`/`PASSWORD`, `JWKS_URI`, `IDENTITY_BASE_URL`, `SVC_CLIENT_ID`/`SVC_CLIENT_SECRET` | compose do infra |
+| Variáveis de ambiente | as do `docker-compose.yml` da plataforma: `SERVER_PORT`, `DB_URL`, `DB_APP_USER`/`DB_APP_PASSWORD`, `DB_OWNER_USER`/`DB_OWNER_PASSWORD`, `RABBITMQ_HOST`/`PORT`/`VHOST`/`USER`/`PASSWORD`, `JWKS_URI`, `IDENTITY_BASE_URL`, `SVC_CLIENT_ID`/`SVC_CLIENT_SECRET`. Ainda não estão no compose da plataforma (seção 11): `MAIL_HOST`/`MAIL_PORT`/`MAIL_USERNAME`/`MAIL_PASSWORD`/`MAIL_FROM` (SMTP), `MARKETING_CHAVE_CIFRA` (segredos do Meta) e `MARKETING_URL_PUBLICA` | compose do infra |
 | Stack | Java 21, Spring Boot 3.x, Maven, Flyway, Spring AMQP; React + Vite + TypeScript, Tailwind v4 | §13.1 |
 | Imagens | `ghcr.io/{conta}/marketing` e `marketing-front`, publicadas a cada merge com `:latest` e `:sha-{commit}` | §14.3 |
 
@@ -185,7 +185,7 @@ Registro central do lead. Existe quando há um identificador de contato: leads d
 | status_aquecimento | varchar | `ativo`, `esgotado`, `opt_out` |
 | esgotado_em | timestamptz, nullable | base da retenção após esgotamento |
 | opt_out_em | timestamptz, nullable | base da retenção após opt-out |
-| token_descadastro | varchar, UNIQUE | token opaco e aleatório do link de descadastro (seção 6). Não é token da plataforma |
+| token_descadastro | varchar, UNIQUE, nullable | token opaco e aleatório do link de descadastro (seção 6). Não é token da plataforma. Obrigatório enquanto o lead não é anonimizado (`CHECK` na `V4`); a anonimização o zera (4.3) |
 | anonimizado | boolean, default false | |
 | contexto_tecnico **[Novo]** | jsonb, nullable | contexto técnico do aparelho da visita de anúncio ligada ao lead (seção 2, lead 0): `tipoDispositivo`, `sistema`, `navegador`, `localizacao`, `idioma`, `fuso`, `tela`. Não depende da fonte: um pixel próprio ou o Landing podem preenchê-lo depois |
 | comportamento **[Novo]** | jsonb, nullable | comportamento da visita na landing page: `tempoNaPaginaSegundos`, `profundidadeRolagem`, `elementosClicados`, `paginasVisitadas`. As regras de `comportamento` pontuam por ele (9.3) |
@@ -286,8 +286,10 @@ Preferências de referência por canal de anúncio. Não substitui as ferramenta
 | canal | varchar | `google_ads`, `meta_ads` |
 | orcamento_mensal | numeric(15,2), nullable | dinheiro tem tipo fixo (§8.7). Mais de 2 casas responde `400 PRECISAO_EXCEDIDA`. Base do custo estimado por lead no painel (9.1) |
 | configuracao | jsonb | `{publicoAlvo, objetivo}`. O `mapeamentoCampos` saiu: as perguntas do formulário instantâneo do Meta pontuam por regras próprias (`fonte = campo_meta`, 9.3) |
-| meta_app_secret / meta_verify_token | varchar cifrado, nullable | só na linha `meta_ads`. Validam o webhook do tenant (seção 6). A API recebe o valor, mas nunca o devolve. Proposta a confirmar |
-| meta_page_id / meta_page_access_token | varchar / varchar cifrado, nullable | só na linha `meta_ads`. O webhook do Meta traz só o `leadgen_id`; os dados do lead vêm da Graph API com o token da página (4.1). O token nunca é devolvido pela API |
+| meta_app_secret / meta_verify_token | text cifrado, nullable | só na linha `meta_ads`. Validam o webhook do tenant (seção 6). A API recebe o valor, mas nunca o devolve |
+| meta_page_id / meta_page_access_token | varchar / text cifrado, nullable | só na linha `meta_ads`. O webhook do Meta traz só o `leadgen_id`; os dados do lead vêm da Graph API com o token da página (4.1). O token nunca é devolvido pela API |
+
+> **Cifra dos segredos do Meta:** AES-256-GCM pela aplicação (`CifradorDeSegredo`), com IV aleatório por valor e a chave derivada de `MARKETING_CHAVE_CIFRA`. Fora do perfil `dev` não há chave padrão: sem a variável, o módulo sobe, mas gravar um segredo responde `503 CHAVE_CIFRA_AUSENTE`, e nada fica cifrado com uma chave conhecida. Trocar a chave torna ilegíveis os segredos já gravados; eles precisam ser informados de novo.
 | ativo | boolean | |
 | colunas obrigatórias | §7.2 | |
 
@@ -445,7 +447,7 @@ CREATE TABLE marketing.eventos_processados (
 
 ### 4.2 Comunicação de aquecimento
 
-Roda diariamente. Envia a cadência de `modelos_mensagem` com `tipo = 'aquecimento'` por e-mail para leads frios (etapa 0/1) que ainda não esgotaram as tentativas.
+Roda diariamente, às 9h de Brasília (`marketing.comunicacao.aquecimento.cron`). Envia a cadência de `modelos_mensagem` com `tipo = 'aquecimento'` por e-mail para leads frios (etapa 0/1) que ainda não esgotaram as tentativas.
 
 1. Seleciona leads com `etapa IN (0,1)`, `status_aquecimento = 'ativo'`, `consentimento_marketing = true`, e-mail preenchido e `now() - ultima_comunicacao_em >= dias_apos_anterior` do próximo modelo da sequência (posição `tentativas_aquecimento + 1`)
 2. **Confere `status_aquecimento != 'opt_out'` antes de enviar.** É obrigatório pela seção 64 do Prompt Mestre (opt-out de marketing)
@@ -458,7 +460,7 @@ O limite de tentativas é configurado por tenant em `ciclo_vida_configuracoes`, 
 
 ### 4.3 Anonimização por retenção (LGPD)
 
-Roda mensalmente. Não apaga a linha do lead, porque isso quebraria o histórico do funil e as métricas de conversão do painel. Remove só o dado pessoal identificável e preserva o valor estatístico.
+Roda mensalmente, no dia 1 às 3h de Brasília (`marketing.ciclo-vida.anonimizacao.cron`). Não apaga a linha do lead, porque isso quebraria o histórico do funil e as métricas de conversão do painel. Remove só o dado pessoal identificável e preserva o valor estatístico.
 
 1. Seleciona leads com `anonimizado = false` e (`status_aquecimento = 'esgotado'` com `now() - esgotado_em >= meses_retencao_pos_esgotamento`) ou (`status_aquecimento = 'opt_out'` com `now() - opt_out_em >= meses_retencao_pos_optout`)
 2. Zera `nome`, `email`, `telefone`, `whatsapp`, `token_descadastro` e `dados_formulario`, e também `ip` e `user_agent` das linhas do lead em `lead_consentimentos`. Mantém `etapa`, `origem`, `canal`, `utm_*`, `pontuacao`, `faixa_qualificacao`, datas e contadores, e no registro de consentimento a finalidade, o aceite, a data e o texto do termo
@@ -559,7 +561,7 @@ Rotas sem usuário ficam sob `/public/marketing/**`. O gateway as libera de toke
 >
 > O corpo do webhook traz só `leadgen_id`, `page_id`, `form_id` e `ad_id`. O webhook grava isso no buffer e responde na hora; os campos do lead são buscados depois (4.1).
 
-> **Descadastro:** o `GET` mostra a confirmação e o `POST` efetiva o opt-out, gravando `status_aquecimento = 'opt_out'`, `opt_out_em` e `consentimento_marketing = false`, e registrando em `lead_eventos` e a revogação em `lead_consentimentos`, com o IP e o *User-Agent* da requisição. O opt-out não acontece no `GET` porque leitores de e-mail costumam abrir links automaticamente. Token inválido responde a mesma página neutra, para não revelar se o lead existe.
+> **Descadastro:** o `GET` mostra a confirmação e o `POST` efetiva o opt-out, gravando `status_aquecimento = 'opt_out'`, `opt_out_em` e `consentimento_marketing = false`, e registrando em `lead_eventos` e a revogação em `lead_consentimentos`, com o IP e o *User-Agent* da requisição. O opt-out não acontece no `GET` porque leitores de e-mail costumam abrir links automaticamente. Token inválido responde a mesma página neutra, para não revelar se o lead existe. Quem abre o link é um navegador (`Accept: text/html`): o `GET` responde uma página HTML com o botão de confirmar, um formulário que faz o `POST` na própria URL, e o `POST` responde a página de concluído. A página não mostra nada do lead nem o token, não tem script e sai com `Content-Security-Policy` restrita, `Referrer-Policy: no-referrer` e `Cache-Control: no-store`. Os demais clientes recebem o envelope JSON. A página é exceção ao envelope, como o `hub.challenge` (seção 11).
 
 ### Superfície autenticada
 
@@ -1153,14 +1155,14 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | Qual sessão o lead guarda quando a captura do chatbot o acha por e-mail ou telefone: hoje fica a mais recente, e a sessão antiga deixa de achá-lo | Grupo 4 | Proposta a confirmar |
 | Desistência da leitura do envio depois de 10 falhas (cerca de 10 minutos de Landing fora do ar): avaliar uma espera crescente entre as tentativas | Grupo 4 | A avaliar |
 | Onde guardar as respostas do formulário instantâneo do Meta: sem elas, uma nova pontuação do lead (por exemplo, quando ele envia um formulário do Landing) deixa de somar as regras `campo_meta` | Grupo 4 | A definir na E4 |
-| SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao `marketing`, e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
+| SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao `marketing` (o módulo lê `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` e `MAIL_FROM`; sem elas, tenta `localhost:1025`, e o envio falha), e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
 | SSE pelo gateway: a conexão longa sobrevive à regra de `504` em 3 s? | Grupo 2 | A confirmar |
 | Rate limit de 120 req/min por IP em `/public/**` pode barrar rajadas do webhook do Meta | Grupo 2 | A confirmar |
 | Handshake do Meta exige devolver `hub.challenge` em texto puro, fora do envelope; o §8.2 só prevê exceção para download de arquivo | Grupo 2 | Pedir exceção registrada |
 | Confirmação de boas-vindas sem consentimento de marketing para quem enviou o formulário (4.5): a leitura é que ela confirma o pedido da própria pessoa e não é comunicação de marketing | Grupo 4, professores | Proposta a confirmar |
 | Consentimento de marketing dos leads do Meta Ads (etapa 0) antes do aquecimento | Grupo 4 | A definir |
 | Token de acesso da página do Meta: buscar os dados na Graph API é uma chamada externa, além do que a "config pura" previa. Confirmar também que o container pode sair para a internet | Grupo 4, Grupo 2 | A decidir |
-| Onde guardar App Secret, verify token e token da página do Meta por tenant (proposta: colunas cifradas em `canais_anuncio`) | Grupo 4 | Proposta a confirmar |
+| `MARKETING_CHAVE_CIFRA` no serviço `marketing` do compose da plataforma, com um valor só do `.env` (seção 3, `canais_anuncio`). Sem ela, os segredos do Meta não podem ser gravados | Grupo 2 | A pedir |
 | Acesso do vendedor ao lead notificado: dar `marketing.lead.ver` ao perfil VENDEDOR ou notificar com a rota da oportunidade no CRM | Grupo 4 | A definir |
 | Quem recebe a notificação `NOVO_LEAD` quando não há vendedor (rodízio desligado ou fora do horário) | Grupo 4 | A definir |
 | Consumidores de `marketing.lead.qualificado`, `marketing.lead.atribuido`, `marketing.lead.descadastrado` e do resumo do lead (9.6) | Interessados | A confirmar antes do AsyncAPI |
@@ -1168,7 +1170,7 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | **[Novo · IoT]** Landing page carregar a tag do script de rastreamento do Marketing e manter a URL de entrada inteira (com o `mkt_visita`) em `paginaEntrada` ([`landing-requisitos.md`](contratos/landing-requisitos.md)). Sem a tag, o clique ainda dá o contexto técnico, mas não o comportamento | Grupo 7 | A pedir |
 | **[Novo · IoT]** `landing.chatbot.lead_capturado` sem página de entrada: a captura do chatbot não liga a visita do anúncio, só o envio | Grupo 7 | A pedir (dá para seguir sem) |
 | **[Novo · IoT]** Base legal e aviso do rastreamento do lead 0 antes do aceite (legítimo interesse, sem cookie, dados apagados no prazo) e o aviso na landing page | Grupo 4, Grupo 7, professores | Proposta a confirmar |
-| **[Novo · IoT]** Exceção ao envelope para o `302` do link de campanha e para o `rastreamento.js`, como o `hub.challenge` | Grupo 2 | Pedir exceção registrada |
+| **[Novo · IoT]** Exceção ao envelope para o `302` do link de campanha, para o `rastreamento.js` e para a página HTML do descadastro, como o `hub.challenge` | Grupo 2 | Pedir exceção registrada |
 | **[Novo · IoT]** `MARKETING_URL_PUBLICA` (endereço do gateway que o navegador alcança) no serviço `marketing` do compose da plataforma; até lá vale `http://localhost:8087` | Grupo 2 | A pedir |
 | **[Novo · IoT]** Localização por IP real (base GeoIP local, como a GeoLite2, sem chamar serviço externo); hoje é simulada | Grupo 4 | A fazer |
 | Custo real e ROI/ROAS: hoje o custo por lead é estimado pelo orçamento informado; ROI precisa do valor do contrato | Grupo 4, professores | Evolução futura |
@@ -1183,6 +1185,17 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 ---
 
 ## 12. Registro de alterações
+
+### 18/11/2026 · comunicação, ciclo de vida e configurações
+
+Entrega do PR #22 (D3, D6, D7, E7 a E10, A3, W4 e R5) e os ajustes feitos depois dele.
+
+- **Tabelas (seção 3):** `modelos_mensagem`, `lead_comunicacoes` e `ciclo_vida_configuracoes` (`V4`); `canais_anuncio` (`V7`); `token_descadastro` passa a aceitar nulo, só no lead anonimizado
+- **Segredos do Meta:** colunas cifradas em `canais_anuncio`, com a chave em `MARKETING_CHAVE_CIFRA`, sem padrão fora do perfil `dev` (seção 3). Sai da seção 11 a decisão de onde guardá-los; entra o pedido da variável ao Grupo 2
+- **Jobs (seção 4):** o aquecimento (4.2) roda todo dia às 9h e a anonimização (4.3) no dia 1 de cada mês às 3h, por horário (`cron`), e não por intervalo contado da subida; a confirmação de boas-vindas (4.5) começa um minuto depois da subida. Cada job pode ser desligado por propriedade
+- **Valores iniciais (D7):** as regras de pontuação iniciais entram na primeira pontuação de um lead do tenant, e não só quando alguém abre a tela de qualificação; o modelo de boas-vindas, no primeiro envio ou na primeira abertura da tela
+- **Descadastro (seção 6):** página HTML com o botão de confirmar para quem abre o link no navegador; envelope JSON para os demais
+- **Variáveis (seção 1):** as de SMTP e `MARKETING_CHAVE_CIFRA` registradas como pendentes no compose da plataforma
 
 ### 09/11/2026 · IoT: lead 0 e rastreamento do clique no anúncio
 

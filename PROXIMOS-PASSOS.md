@@ -100,7 +100,7 @@ O número da migration é da tarefa, não da ordem de merge: cada tarefa sai num
 | **D4** | **[cancelada]** `V5`: `formularios` e `formulario_versoes`. O formulário é do Landing; o PR #12 foi fechado. O número `V5` fica sem uso | — | — | 9.5 |
 | **D5** | **[concluída]** `V6`: `regras_pontuacao` (com `formulario_id` e `campo_id` do Landing e a fonte `campo_meta`), `qualificacao_configuracoes` e `vendedores_rodizio` | — | — | 3, 9.3 |
 | **D6** | **[concluída]** `V7`: `canais_anuncio`, com os segredos do Meta cifrados (`CifradorDeSegredo`) e nunca devolvidos pela API, sem `mapeamentoCampos` | — | E3 | 3, 9.4 |
-| **D7** | **[concluída]** Valores iniciais por tenant (`ValoresIniciaisDoTenant`): modelo de boas-vindas padrão, as regras de pontuação de `utm` da matriz da 9.3 e de `comportamento` (R5), configurações de qualificação, de ciclo de vida e os dois canais de anúncio | — | — | 3, 9.3 |
+| **D7** | **[concluída]** Valores iniciais por tenant (`ValoresIniciaisDoTenant`): modelo de boas-vindas padrão, as regras de pontuação de `utm` da matriz da 9.3 e de `comportamento` (R5), configurações de qualificação, de ciclo de vida e os dois canais de anúncio. As regras iniciais entram também na primeira pontuação de um lead do tenant (`qualificacao/RegrasIniciais`), e o modelo de boas-vindas, no primeiro envio (`comunicacao/ModeloDeBoasVindas`) | — | — | 3, 9.3 |
 | **D8** | **[concluída]** `V8`: ajusta a `V2` ao contrato do Landing. Em `leads`: `sessao_id` (único por tenant) no lugar de `visitante_id`, `canal`, `envio_lido_em`, `envio_id` único por tenant; sai `formulario_versao`. Em `lead_consentimentos`: `sessao_id`, `texto_termo` no lugar de `versao_termo`, origens `landing.formulario.recebido`, `landing.chatbot.lead_capturado` e `descadastro`; sai `formulario_versao`. Em `lead_eventos`: `respostas_lidas` no lugar de `formulario_atualizado`. Ajusta `Lead`, `LeadConsentimento`, `OrigemConsentimento`, `TipoEventoLead`, os repositórios e os testes | — | — | 3 |
 
 ### Entrada de leads e Etapa 1 (E, C, N)
@@ -115,7 +115,7 @@ A entrada fica no pacote `entrada/`: `NormalizacaoDeContato`, `ChavesDeIdentidad
 | **E4** | Job 4.1, leads do Meta: busca os dados na Graph API (`META_GRAPH_BASE_URL`), resolve a identidade (`ChavesDeIdentidade.doMeta`), grava em `leads` na etapa 0 e pontua com as regras `campo_meta` e `utm`. Decidir onde guardar as respostas do Meta: sem elas, uma nova pontuação (por exemplo, na E5) deixa de somar as regras `campo_meta` | E3, X5 | — | 4.1 |
 | **E5** | **[concluída]** Consumir `landing.formulario.recebido` (etapa 3), na chegada: lê `GET /api/landing/envios/{id}`, acha o lead por `envio_id`, `sessao_id`, `crm_contato_id` e e-mail/telefone, grava os ids do CRM, contato, respostas, UTM e consentimento, junta os duplicados, pontua e atribui vendedor (`EnvioDoFormulario`). Com o Landing fora do ar, deixa a leitura pendente | — | — | 5 |
 | **E6** | **[concluída]** Consumir `crm.oportunidade.criada` (só `origem = landing`): acha o lead por `envio_id = origemModuloId` ou `crm_contato_id`, cria o lead pendente se o evento chegou antes do envio, grava `crm_oportunidade_id` e `handoff_crm` e pede o registro na timeline (`OportunidadeDoCrm`). Levar o vendedor como responsável fica no ponto `crm/ResponsavelDaOportunidade`, para a C1 | — | — | 5, 9.6 |
-| **E7** | **[concluída]** Descadastro público (`DescadastroPublicoController`, `DescadastroDeLead`): `GET /public/marketing/descadastro/{token}` mostra a confirmação, e o `POST` efetiva o opt-out e grava a revogação (com IP e *User-Agent*) em `lead_consentimentos` | — | — | 6 |
+| **E7** | **[concluída]** Descadastro público (`DescadastroPublicoController`, `DescadastroDeLead`): `GET /public/marketing/descadastro/{token}` mostra a confirmação, e o `POST` efetiva o opt-out e grava a revogação (com IP e *User-Agent*) em `lead_consentimentos`. No navegador, as duas respondem uma página HTML (`PaginaDeDescadastro`), com o botão que faz o `POST` | — | — | 6 |
 | **E8** | **[concluída]** Envio de e-mail por SMTP (`EnviadorDeEmail`, Mailpit local) e job de boas-vindas (4.5, `ConfirmacaoDeBoasVindas`): uma vez por lead, para quem enviou o formulário, sempre com o link de descadastro | — | — | 4.5 |
 | **E9** | **[concluída]** Job de aquecimento (4.2, `CadenciaDeAquecimento`): cadência de e-mails para as etapas 0 e 1 com consentimento; confere o opt-out antes de enviar e esgota ao fim da sequência | — | — | 4.2 |
 | **E10** | **[concluída]** Job de anonimização LGPD (4.3, `AnonimizacaoPorRetencao`): zera os dados pessoais depois do prazo de retenção e nunca apaga a linha | — | — | 4.3 |
@@ -191,10 +191,10 @@ Estas não se resolvem programando: precisam de resposta de outro grupo, dos pro
 |---|---|---|---|
 | **X1** | `sessaoId` em `landing.formulario.recebido`; confirmação de que o Landing cria a oportunidade, com `origemModuloId = envioId` (hoje `origemModuloId` é texto no `crm.asyncapi.yaml`) ([landing-requisitos.md](Docs/contratos/landing-requisitos.md)) | Grupo 7 | — (parcial: E5 e E6 já ligam por `envio_id` e `contatoId`, e aceitam `sessaoId` se ele vier) |
 | **X2** | Ação no CRM para gravar o responsável da oportunidade, com `servicos: [marketing]` | Grupo 6 | C1 |
-| **X3** | Variáveis de SMTP para o `marketing` no compose da plataforma e o provedor de e-mail fora do desenvolvimento | Grupo 2, professores | E8 (parcial: Mailpit local) |
+| **X3** | Variáveis de SMTP para o `marketing` no compose da plataforma (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS`, `MAIL_FROM`) e o provedor de e-mail fora do desenvolvimento | Grupo 2, professores | — (parcial: E8 e E9 prontos, com Mailpit local) |
 | **X4** | Exceção ao envelope para o `hub.challenge` do Meta (texto puro) e o rate limit de 120/min em `/public/**` | Grupo 2 | E3 |
 | **X5** | Token da página do Meta e saída do container para a internet (Graph API) | Grupo 4, Grupo 2 | E4 |
-| **X6** | Onde guardar os segredos do Meta por tenant (proposta: colunas cifradas em `canais_anuncio`) | Grupo 4 | D6 |
+| **X6** | **[resolvida em 18/11]** Segredos do Meta em colunas cifradas de `canais_anuncio` (D6). Falta `MARKETING_CHAVE_CIFRA` no serviço `marketing` do compose da plataforma: sem ela, gravar um segredo responde `503` | Grupo 2 | E3 (parcial: sem a variável, os segredos não podem ser gravados) |
 | **X7** | Listar usuários com perfil VENDEDOR no identity | Grupo 2 | — (parcial: a Q2 usa os ids cadastrados à mão) |
 | **X8** | SSE passando pelo gateway (regra de `504` em 3 s) | Grupo 2 | A4 (parcial: polling como alternativa) |
 | **X9** | Se a casca usa o `itensSubmenu` do `modulos/marketing.json` para desenhar subitens na sidebar (o front já tem as abas) | Grupo 2 | W2 |
@@ -207,7 +207,7 @@ Estas não se resolvem programando: precisam de resposta de outro grupo, dos pro
 | **X16** | `servicos` em `marketing.lead.ver_resumo`, para outros módulos lerem o resumo do lead com token de serviço (9.6). O código já aceita; falta declarar nas quatro cópias da permissão e no infra, e saber quem consome | Grupo 4, Grupo 2 | — |
 | **X17** | Landing page carregar a tag do `rastreamento.js` e manter a URL de entrada inteira em `paginaEntrada` ([landing-requisitos.md](Docs/contratos/landing-requisitos.md)) | Grupo 7 | — (parcial: sem a tag, o clique ainda dá o contexto técnico) |
 | **X18** | Base legal e aviso do rastreamento do lead 0 antes do aceite (proposta: legítimo interesse, sem cookie, dados apagados no prazo) | Grupo 4, Grupo 7, professores | — |
-| **X19** | Exceção ao envelope para o `302` do link de campanha e o `rastreamento.js`; `MARKETING_URL_PUBLICA` no compose da plataforma | Grupo 2 | I3 (parcial) |
+| **X19** | Exceção ao envelope para o `302` do link de campanha, o `rastreamento.js` e a página HTML do descadastro (E7); `MARKETING_URL_PUBLICA` no compose da plataforma | Grupo 2 | I3 (parcial) |
 
 ## Mapa das dependências internas
 
