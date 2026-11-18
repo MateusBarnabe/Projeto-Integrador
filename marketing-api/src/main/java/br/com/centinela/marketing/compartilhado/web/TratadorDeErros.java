@@ -5,9 +5,12 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -60,6 +63,23 @@ public class TratadorDeErros {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Resposta<Void>> metodoNaoSuportado(HttpRequestMethodNotSupportedException ex) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(Resposta.erro("Método não suportado."));
+    }
+
+    /** O corpo veio num formato que a rota não lê (ex.: {@code text/plain}): {@code 415} com envelope. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Resposta<Void>> tipoDeConteudoNaoSuportado(HttpMediaTypeNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).contentType(MediaType.APPLICATION_JSON)
+                .body(Resposta.erro("Tipo de conteúdo não suportado."));
+    }
+
+    /**
+     * O cliente só aceita um formato que a API não produz (ex.: {@code application/xml}): {@code 406} com
+     * envelope. O {@code Content-Type} JSON é fixado para a resposta de erro não cair na mesma negociação.
+     */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Resposta<Void>> formatoNaoAceito(HttpMediaTypeNotAcceptableException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).contentType(MediaType.APPLICATION_JSON)
+                .body(Resposta.erro("Formato de resposta não suportado."));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
