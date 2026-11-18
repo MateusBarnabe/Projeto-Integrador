@@ -16,7 +16,6 @@
     "amqplib": "^2.2.0",
     "express": "^5.2.1",
     "lucide-react": "^1.48.0",
-    "projeto-integrador-marketing": "file:..",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

@@ -412,6 +412,17 @@ public class ConfiguracoesController {
                 List.of(new ErroCampo(null, "CAMPO_INVALIDO", ex.getMessage()))));
     }
 
+    /**
+     * Segredo do Meta informado sem {@code MARKETING_CHAVE_CIFRA} no ambiente: {@code 503}, e a
+     * transação desfaz o pedido inteiro, inclusive as preferências do canal.
+     */
+    @ExceptionHandler(CifradorDeSegredo.ChaveDeCifraAusente.class)
+    ResponseEntity<Resposta<Void>> semChaveDeCifra(CifradorDeSegredo.ChaveDeCifraAusente ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Resposta.erro(
+                "O servidor não tem a chave para guardar os segredos do Meta. Peça a configuração de MARKETING_CHAVE_CIFRA.",
+                List.of(new ErroCampo(null, "CHAVE_CIFRA_AUSENTE", null))));
+    }
+
     // --- Apoio -----------------------------------------------------------------------------------
 
     private PreviaFaixas calcularPreviaFaixas(QualificacaoConfiguracao configuracao) {

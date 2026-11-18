@@ -39,6 +39,21 @@ class ComunicacaoEConfiguracoesUnitTest {
     }
 
     @Test
+    void cifradorSemChaveNaoUsaChavePadraoERecusaCifrarSegredo() {
+        CifradorDeSegredo semChave = new CifradorDeSegredo("  ");
+
+        assertThat(semChave.configurado()).isFalse();
+        assertThat(semChave.cifrar(null)).as("nada a cifrar não exige chave").isNull();
+        assertThat(semChave.cifrar("")).isNull();
+        assertThatThrownBy(() -> semChave.cifrar("segredo-do-meta"))
+                .isInstanceOf(CifradorDeSegredo.ChaveDeCifraAusente.class);
+
+        String cifradoComOutraChave = new CifradorDeSegredo("outra-chave").cifrar("segredo-do-meta");
+        assertThatThrownBy(() -> semChave.decifrar(cifradoComOutraChave))
+                .isInstanceOf(CifradorDeSegredo.ChaveDeCifraAusente.class);
+    }
+
+    @Test
     void canalAnuncioGuardaCredenciaisCifradasSoNoMetaAds() {
         CifradorDeSegredo cifrador = new CifradorDeSegredo("chave-teste");
         CanalAnuncio meta = new CanalAnuncio(CanalAnuncioTipo.META_ADS);

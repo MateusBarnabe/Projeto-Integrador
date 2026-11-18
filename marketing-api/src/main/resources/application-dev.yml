@@ -15,3 +15,6 @@ marketing:
     identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8081}
     landing-base-url: ${LANDING_BASE_URL:http://localhost:8088}
     crm-base-url: ${CRM_BASE_URL:http://localhost:8082}
+  # Chave conhecida, só para desenvolvimento: nunca guarda segredo de verdade
+  seguranca:
+    chave-cifra: ${MARKETING_CHAVE_CIFRA:marketing-dev-chave-local-2026}

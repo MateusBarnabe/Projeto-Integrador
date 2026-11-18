@@ -7,6 +7,7 @@ import static br.com.centinela.marketing.compartilhado.teste.ModulosSimulados.ME
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -53,7 +54,7 @@ class InfraDeTesteTest extends IntegracaoDeTeste {
     void simuladorRespondeNaUrlQueOSpringRecebeu() {
         LANDING.stubFor(get(urlPathEqualTo("/api/landing/health")).willReturn(Envelopes.ok(Map.of("status", "UP"))));
 
-        String corpo = RestClient.create(ambiente.getProperty("LANDING_BASE_URL"))
+        String corpo = RestClient.create(ambiente.getRequiredProperty("LANDING_BASE_URL"))
                 .get().uri("/api/landing/health").retrieve().body(String.class);
 
         assertThat(corpo).contains("\"success\":true").contains("\"status\":\"UP\"");
@@ -77,7 +78,7 @@ class InfraDeTesteTest extends IntegracaoDeTeste {
             template.convertAndSend("landing.eventos", "landing.formulario.recebido", "{\"id\":\"1\"}");
 
             Message mensagem = template.receive(fila.getName(), 5_000);
-            assertThat(mensagem).isNotNull();
+            assertNotNull(mensagem);
             assertThat(new String(mensagem.getBody(), StandardCharsets.UTF_8)).isEqualTo("{\"id\":\"1\"}");
         } finally {
             admin.destroy();

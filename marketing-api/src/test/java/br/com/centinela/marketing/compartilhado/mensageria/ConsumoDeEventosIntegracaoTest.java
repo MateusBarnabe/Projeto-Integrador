@@ -1,6 +1,7 @@
 package br.com.centinela.marketing.compartilhado.mensageria;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -206,7 +207,7 @@ class ConsumoDeEventosIntegracaoTest {
 
         Message morta = admin.receive(TopologiaDeConsumo.dlq(TopologiaDeConsumo.FILA_LANDING_LEADS),
                 ESPERA.toMillis());
-        assertThat(morta).as("mensagem na DLQ").isNotNull();
+        assertNotNull(morta, "mensagem na DLQ");
         assertThat(json.readTree(morta.getBody()).get("id").asText()).isEqualTo(envelope.get("id"));
         assertThat(morta.getMessageProperties().getXDeathHeader()).isNotEmpty();
         assertThat(ConsumidorDeTeste.chamadas).hasValue(3);
@@ -238,7 +239,7 @@ class ConsumoDeEventosIntegracaoTest {
         admin.send(TopologiaDeConsumo.EXCHANGE_CRM, "crm.empresa.criada", mensagem(envelope, "admin"));
 
         Message recebida = admin.receive(TopologiaDeConsumo.FILA_CRM_OPORTUNIDADES, ESPERA.toMillis());
-        assertThat(recebida).isNotNull();
+        assertNotNull(recebida);
         assertThat(recebida.getMessageProperties().getReceivedRoutingKey())
                 .isEqualTo(TopologiaDeConsumo.CRM_OPORTUNIDADE_CRIADA);
         assertThat(admin.receive(TopologiaDeConsumo.FILA_CRM_OPORTUNIDADES, 500))

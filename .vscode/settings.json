@@ -1,4 +1,8 @@
 {
   // Tailwind v4 usa @theme, @apply etc., que o validador de CSS do VS Code não conhece
-  "css.lint.unknownAtRules": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  // Análise de nulidade do Java ligada para todos, sem perguntar (usa as anotações do Spring)...
+  "java.compile.nullAnalysis.mode": "automatic",
+  // ...com o aviso de "unchecked conversion" desligado: ver o comentário em java.prefs
+  "java.settings.url": ".vscode/java.prefs"
 }

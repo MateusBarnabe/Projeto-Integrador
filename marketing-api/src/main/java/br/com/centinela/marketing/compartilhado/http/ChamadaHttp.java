@@ -86,6 +86,10 @@ final class ChamadaHttp {
                     ms(inicio), excecao.getClass().getSimpleName());
             throw falha(Motivo.INDISPONIVEL, null, null, List.of(), excecao);
         }
+        if (recebido == null) {
+            // O exchange do RestClient é @Nullable; a função acima sempre devolve uma resposta
+            throw falha(Motivo.INDISPONIVEL, null, null, List.of(), null);
+        }
 
         log.debug("Chamada ao {} {} {} respondeu {} em {} ms", modulo.codigo(), metodo, caminho,
                 recebido.status(), ms(inicio));

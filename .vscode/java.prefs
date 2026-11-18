@@ -1,0 +1,8 @@
+# Opções do compilador Java do VS Code (JDT), lidas pelo java.settings.url do settings.json.
+# Não afetam o Maven nem o CI.
+#
+# O Spring anota a própria API com @NonNull e o código do módulo não usa anotações de nulidade.
+# Assim, a análise de nulidade acusa "Null type safety ... needs unchecked conversion" em quase
+# toda chamada ao Spring, sem apontar problema real. Só esse aviso fica desligado: o resto da
+# análise (acesso a valor possivelmente nulo, @Nullable onde se exige @NonNull) continua ligado.
+org.eclipse.jdt.core.compiler.problem.nullUncheckedConversion=ignore

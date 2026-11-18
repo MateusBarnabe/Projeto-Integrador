@@ -30,13 +30,15 @@ import br.com.centinela.marketing.leads.TipoEventoLead;
 public class PontuacaoDeLeads {
 
     private final RegraPontuacaoRepository regras;
+    private final RegrasIniciais regrasIniciais;
     private final QualificacaoConfiguracaoRepository configuracoes;
     private final LeadRepository leads;
     private final LeadEventoRepository eventos;
 
-    public PontuacaoDeLeads(RegraPontuacaoRepository regras, QualificacaoConfiguracaoRepository configuracoes,
-            LeadRepository leads, LeadEventoRepository eventos) {
+    public PontuacaoDeLeads(RegraPontuacaoRepository regras, RegrasIniciais regrasIniciais,
+            QualificacaoConfiguracaoRepository configuracoes, LeadRepository leads, LeadEventoRepository eventos) {
         this.regras = regras;
+        this.regrasIniciais = regrasIniciais;
         this.configuracoes = configuracoes;
         this.leads = leads;
         this.eventos = eventos;
@@ -55,6 +57,8 @@ public class PontuacaoDeLeads {
     @Transactional
     public ResultadoPontuacao pontuar(Lead lead, Map<String, ?> respostasMeta) {
         exigirLeadDoTenantAtual(lead);
+        // Primeiro lead do tenant: as regras iniciais (D7) valem desde já, sem esperar a tela de qualificação
+        regrasIniciais.garantir();
         QualificacaoConfiguracao configuracao = configuracoes.findFirstBy()
                 .orElseGet(QualificacaoConfiguracao::padrao);
         FaixaQualificacao faixaAnterior = lead.getFaixaQualificacao();

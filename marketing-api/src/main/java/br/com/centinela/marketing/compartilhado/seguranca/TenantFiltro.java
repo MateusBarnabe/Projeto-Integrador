@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.lang.NonNull;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -33,8 +34,8 @@ public class TenantFiltro extends OncePerRequestFilter {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     @Override
-    protected void doFilterInternal(HttpServletRequest requisicao, HttpServletResponse resposta,
-            FilterChain cadeia) throws ServletException, IOException {
+    protected void doFilterInternal(@NonNull HttpServletRequest requisicao, @NonNull HttpServletResponse resposta,
+            @NonNull FilterChain cadeia) throws ServletException, IOException {
         Authentication autenticacao = SecurityContextHolder.getContext().getAuthentication();
         if (!(autenticacao instanceof JwtAuthenticationToken token)) {
             cadeia.doFilter(requisicao, resposta);

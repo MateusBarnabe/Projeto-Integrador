@@ -87,7 +87,10 @@ public record EntradaPontuacao(
             return porCampo;
         }
         for (Map<String, Object> resposta : respostas) {
-            Object campoId = resposta == null ? null : resposta.get("campoId");
+            if (resposta == null) {
+                continue;
+            }
+            Object campoId = resposta.get("campoId");
             if (campoId == null) {
                 continue;
             }

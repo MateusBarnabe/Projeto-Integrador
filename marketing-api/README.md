@@ -76,8 +76,12 @@ Todo endereço e credencial vem de variável de ambiente (Contrato §9.1). **Os 
 | `SWAGGER_HABILITADO` | `true` | `false` desliga o Swagger UI e o `/v3/api-docs` |
 | `MARKETING_URL_PUBLICA` | `http://localhost:8087` | endereço que o navegador do visitante alcança (o gateway, na plataforma): monta a URL do link de campanha e a tag do script de rastreamento (R1). Ainda não está no compose da plataforma (X19) |
 | `RASTREAMENTO_LOCALIZACAO_SIMULADA` | `true` | `false` desliga a localização simulada da visita (R1) |
+| `MAIL_HOST`, `MAIL_PORT` | `localhost`, `1025` | servidor SMTP dos e-mails de boas-vindas e de aquecimento (o Mailpit, localmente). Ainda não estão no compose da plataforma (X3) |
+| `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` | vazio, vazio, `false`, `false` | autenticação e TLS do SMTP fora do desenvolvimento |
+| `MAIL_FROM` | `marketing@centinela.local` | remetente dos e-mails |
+| `MARKETING_CHAVE_CIFRA` | vazio (no perfil `dev`, uma chave fixa) | chave dos segredos do Meta cifrados em `canais_anuncio` (D6). Sem ela, a API sobe, mas gravar um segredo responde `503 CHAVE_CIFRA_AUSENTE`. Trocar a chave torna ilegíveis os segredos já gravados. Ainda não está no compose da plataforma (X6) |
 
-No perfil `dev` ([application-dev.yml](src/main/resources/application-dev.yml)), os três endereços apontam para `localhost`. Propriedades do módulo, sem variável de ambiente própria: `marketing.rodizio.atribuicao-pendente.intervalo` e `marketing.entrada.leitura-pendente.intervalo` (padrão `PT1M`, os jobs 4.4 e 4.6), `marketing.rodizio.fuso-horario` (padrão `America/Sao_Paulo`, para o horário comercial) e `marketing.consumo.landing-leads.auto-startup` e `marketing.consumo.crm-oportunidades.auto-startup` (padrão `true`; os testes que leem as filas direto desligam os consumidores).
+No perfil `dev` ([application-dev.yml](src/main/resources/application-dev.yml)), os três endereços apontam para `localhost` e a chave de cifra tem um valor fixo, só para desenvolvimento. Propriedades do módulo, sem variável de ambiente própria: `marketing.rodizio.atribuicao-pendente.intervalo`, `marketing.entrada.leitura-pendente.intervalo` e `marketing.comunicacao.boas-vindas.intervalo` (padrão `PT1M`, os jobs 4.4, 4.6 e 4.5), `marketing.comunicacao.aquecimento.cron` (padrão `0 0 9 * * *`, o job 4.2) e `marketing.ciclo-vida.anonimizacao.cron` (padrão `0 0 3 1 * *`, o job 4.3), no fuso de Brasília; cada job tem também a sua propriedade `...habilitada` (ou `habilitado`), que os testes de integração desligam; `marketing.rodizio.fuso-horario` (padrão `America/Sao_Paulo`, para o horário comercial) e `marketing.consumo.landing-leads.auto-startup` e `marketing.consumo.crm-oportunidades.auto-startup` (padrão `true`; os testes que leem as filas direto desligam os consumidores).
 
 ## Estrutura de pastas
 
@@ -323,6 +327,20 @@ Pacote `rastreamento`, que segue o norteador (seção 2, "Lead 0", e seções 3,
 | `api/RastreamentoPublicoController`, `api/RastreamentoController` | rotas públicas (clique, sinais, `rastreamento.js`) e as de configuração, links e visitas |
 
 A pontuação ganhou a fonte `comportamento` (`qualificacao/MetricaComportamento`): tempo na página e rolagem com `{"minimo": n}`, página visitada e elemento clicado por trecho, tipo de dispositivo por igualdade.
+
+### Comunicação, ciclo de vida e configurações (D3, D6, D7, E7 a E10, A3)
+
+| Classe | O que é |
+|---|---|
+| `comunicacao/ConfirmacaoDeBoasVindas`, `AgendaDaConfirmacaoDeBoasVindas` | job 4.5: o modelo de boas-vindas uma vez por lead da etapa 3, com o link de descadastro; desiste depois de 3 falhas |
+| `comunicacao/CadenciaDeAquecimento`, `AgendaDaCadenciaDeAquecimento` | job 4.2: a cadência das etapas 0 e 1 com consentimento, todo dia às 9h |
+| `comunicacao/AnonimizacaoPorRetencao`, `AgendaDaAnonimizacaoPorRetencao` | job 4.3: zera o dado pessoal depois do prazo de retenção, no dia 1 de cada mês |
+| `comunicacao/EnviadorDeEmail`, `ClienteSmtp`, `TravasDeComunicacao` | monta e envia o e-mail por SMTP; consultas e travas (`SKIP LOCKED`) dos três jobs e do descadastro |
+| `comunicacao/DescadastroPublicoController`, `DescadastroDeLead`, `PaginaDeDescadastro` | E7: página HTML no navegador (envelope JSON para os demais); o `POST` grava o opt-out e a revogação |
+| `comunicacao/ModeloDeBoasVindas` | o modelo de boas-vindas do tenant, obrigatório; cria o padrão no primeiro uso |
+| `qualificacao/RegrasIniciais` | as regras de `utm` e de `comportamento` iniciais, criadas na primeira pontuação ou na tela, uma vez por tenant |
+| `configuracoes/ConfiguracoesController`, `FormulariosDaQualificacao`, `ValoresIniciaisDoTenant` | A3: canais de anúncio, modelos de mensagem, ciclo de vida, qualificação, regras e escala do rodízio |
+| `configuracoes/CifradorDeSegredo` | AES-256-GCM dos segredos do Meta, com a chave de `MARKETING_CHAVE_CIFRA` |
 
 ## Endpoints atuais
 
