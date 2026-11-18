@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "amqplib": "2.2.0",
-    "express": "^5.2.1",
-    "projeto-integrador-marketing": "file:.."
+    "express": "^5.2.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
