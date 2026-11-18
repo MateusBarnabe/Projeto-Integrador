@@ -26,6 +26,7 @@ import {
   type Aba,
 } from '@/components/ui';
 import { InteracaoVisitante } from '@/components/InteracaoVisitante';
+import { plataforma, usarPermissao } from '@/plataforma';
 import { detalharLead, type DetalheLead } from './api';
 import { ReatribuirVendedorModal } from './ReatribuirVendedorModal';
 import { DadosDoCrm, HistoricoDeConsentimentos } from './SecoesDoDetalhe';
@@ -59,6 +60,8 @@ export function DetalheLeadModal({ id, onClose }: { id: string | null; onClose: 
   const [aba, setAba] = useState<AbaDetalhe>('dados');
   const [reatribuindo, setReatribuindo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Esconder o botão é só usabilidade: a API continua respondendo 403 sem a permissão.
+  const podeReatribuir = usarPermissao('marketing.qualificacao.editar');
 
   useEffect(() => {
     if (!id) return;
@@ -83,6 +86,7 @@ export function DetalheLeadModal({ id, onClose }: { id: string | null; onClose: 
       .then((dados) => {
         setDetalhe(dados);
         setAviso('Vendedor reatribuído.');
+        plataforma.notificar('sucesso', 'Vendedor reatribuído.');
       })
       .catch(() => setAviso('Vendedor reatribuído, mas não foi possível recarregar o lead. Feche e abra de novo.'));
   }
@@ -160,7 +164,11 @@ export function DetalheLeadModal({ id, onClose }: { id: string | null; onClose: 
                 {aviso}
               </p>
             )}
-            <ConteudoDaAba aba={aba} detalhe={detalhe} onReatribuir={() => setReatribuindo(true)} />
+            <ConteudoDaAba
+              aba={aba}
+              detalhe={detalhe}
+              onReatribuir={podeReatribuir ? () => setReatribuindo(true) : undefined}
+            />
           </>
         )}
       </div>
@@ -190,7 +198,7 @@ function ConteudoDaAba({
 }: {
   aba: AbaDetalhe;
   detalhe: DetalheLead;
-  onReatribuir: () => void;
+  onReatribuir?: () => void;
 }) {
   switch (aba) {
     case 'dados':
@@ -212,10 +220,12 @@ function ConteudoDaAba({
                 ) : (
                   statusBadge('aguardando_vendedor', 'aguardando vendedor')
                 )}
-                <Button variant="outline" size="sm" onClick={onReatribuir}>
-                  <UserRoundPen aria-hidden className="h-3 w-3 shrink-0" />
-                  {detalhe.vendedor.vendedorId ? 'Reatribuir' : 'Atribuir'}
-                </Button>
+                {onReatribuir && (
+                  <Button variant="outline" size="sm" onClick={onReatribuir}>
+                    <UserRoundPen aria-hidden className="h-3 w-3 shrink-0" />
+                    {detalhe.vendedor.vendedorId ? 'Reatribuir' : 'Atribuir'}
+                  </Button>
+                )}
               </span>
             </DetailField>
             <DetailField label="Atribuído em">{dataHora(detalhe.vendedor.atribuidoEm)}</DetailField>
