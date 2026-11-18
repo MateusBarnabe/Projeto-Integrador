@@ -26,7 +26,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -117,8 +116,8 @@ class ChecklistDaPlataformaTest extends IntegracaoDeTeste {
     void tokens() {
         tokens.clear();
         tokens.put(TOKEN_ADMIN, usuario(tenant, usuario, PERMISSOES_DO_MODULO));
-        // Quem só entra no módulo e vê o painel: nenhuma das permissões das rotas abaixo
-        tokens.put(TOKEN_SEM_PERMISSAO, usuario(tenant, usuario, List.of("marketing.acessar", "marketing.dashboard.ver")));
+        // Quem só entra no módulo: nenhuma das permissões das rotas abaixo
+        tokens.put(TOKEN_SEM_PERMISSAO, usuario(tenant, usuario, List.of("marketing.acessar")));
         tokens.put(TOKEN_SO_LEITURA, usuario(tenant, usuario, List.of("marketing.acessar", "marketing.lead.ver")));
         tokens.put(TOKEN_OUTRO_TENANT, usuario(outroTenant, usuarioOutroTenant, PERMISSOES_DO_MODULO));
         when(decoder.decode(anyString())).thenAnswer(chamada -> {
@@ -162,7 +161,9 @@ class ChecklistDaPlataformaTest extends IntegracaoDeTeste {
     @Test
     void item04_tokenValidoSemAPermissaoResponde403NoEnvelope() throws Exception {
         for (Rota rota : rotasProtegidas()) {
-            assertEnvelope(mvc.perform(rota.pedido(TOKEN_SEM_PERMISSAO)).andExpect(status().isForbidden()), false);
+            ResultActions resposta = mvc.perform(rota.pedido(TOKEN_SEM_PERMISSAO));
+            assertThat(resposta.andReturn().getResponse().getStatus()).as("status de %s", rota).isEqualTo(403);
+            assertEnvelope(resposta, false);
         }
     }
 
@@ -335,16 +336,12 @@ class ChecklistDaPlataformaTest extends IntegracaoDeTeste {
                 .andExpect(status().isUnprocessableEntity()), false);
     }
 
-    @Disabled("Falha de produção: TratadorDeErros não trata HttpMediaTypeNotSupportedException e a resposta é 500 "
-            + "(Erro inesperado) em vez de 415. Corrigir em compartilhado/web/TratadorDeErros e reativar.")
     @Test
     void item09_tipoDeConteudoNaoSuportadoResponde415NoEnvelope() throws Exception {
         assertEnvelope(pedir(post("/api/marketing/links-campanha").contentType(MediaType.TEXT_PLAIN)
                 .content(CORPO_LINK), TOKEN_ADMIN).andExpect(status().isUnsupportedMediaType()), false);
     }
 
-    @Disabled("Falha de produção: Accept que a API não produz (ex.: application/xml) responde 406 sem corpo e sem "
-            + "envelope, porque TratadorDeErros não trata HttpMediaTypeNotAcceptableException. Corrigir e reativar.")
     @Test
     void item09_formatoDeRespostaNaoAceitoResponde406NoEnvelope() throws Exception {
         assertEnvelope(pedir(get("/api/marketing/leads").accept(MediaType.APPLICATION_XML), TOKEN_ADMIN)
@@ -478,7 +475,9 @@ class ChecklistDaPlataformaTest extends IntegracaoDeTeste {
                 new Rota("PUT", "/api/marketing/links-campanha/" + id, CORPO_LINK),
                 new Rota("DELETE", "/api/marketing/links-campanha/" + id, null),
                 new Rota("GET", "/api/marketing/visitas-anuncio", null),
-                new Rota("GET", "/api/marketing/visitas-anuncio/resumo", null));
+                new Rota("GET", "/api/marketing/visitas-anuncio/resumo", null),
+                new Rota("GET", "/api/marketing/painel", null),
+                new Rota("GET", "/api/marketing/painel/eventos", null));
     }
 
     private UUID lead(UUID doTenant, String nome, String email) {
