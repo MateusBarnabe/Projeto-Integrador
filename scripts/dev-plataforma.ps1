@@ -29,6 +29,13 @@
 .PARAMETER SemInfra
   Nao mexe nos containers da plataforma (ja estao de pe).
 
+.PARAMETER ComCasca
+  Sobe tambem a casca da plataforma (porta 3000, imagem IMAGEM_CASCA do .env do infra) e aponta o
+  gateway para o front e a API que rodam no host. Abra http://localhost:8080/ , entre com
+  marketing@empresa-a.dev e abra o Marketing no menu lateral: o modulo roda no iframe da casca, com a
+  sessao, o tema e os itens do submenu (Painel, Leads, Configuracoes) vindos dela. O token do
+  .env.local so vale no modo sozinho (http://localhost:3007/modulos/marketing/).
+
 .PARAMETER Parar
   Encerra os apps abertos por este script. Os containers da plataforma continuam de pe.
 
@@ -43,6 +50,7 @@ param(
     [switch]$SoToken,
     [switch]$Ocultos,
     [switch]$SemInfra,
+    [switch]$ComCasca,
     [switch]$Parar
 )
 
@@ -128,9 +136,28 @@ if (-not $SemInfra) {
     Passo 'Parando a infraestrutura deste repositorio, se estiver de pe (as portas conflitam)'
     & docker compose -f (Join-Path $raiz 'docker-compose.yml') --project-directory $raiz stop postgres rabbitmq mailpit marketing marketing-front landing crm 2>&1 | Out-Null
 
-    Passo 'Subindo postgres, rabbitmq, mailpit, identity e gateway da plataforma'
-    & docker compose -f (Join-Path $Infra 'docker-compose.yml') --project-directory $Infra --profile plataforma `
-        up -d postgres rabbitmq rabbitmq-init mailpit identity gateway
+    $arquivosCompose = @('-f', (Join-Path $Infra 'docker-compose.yml'))
+    $servicos = @('postgres', 'rabbitmq', 'rabbitmq-init', 'mailpit', 'identity', 'gateway')
+    if ($ComCasca) {
+        # O gateway do infra roteia /modulos/marketing/ e /api/marketing para containers (marketing-front e
+        # marketing). Aqui os dois rodam no host: o arquivo abaixo troca so essas duas rotas. Fica numa pasta
+        # temporaria e nao altera o repositorio do infra.
+        New-Item -ItemType Directory -Force $pastaLogs | Out-Null
+        $sobreposicao = Join-Path $pastaLogs 'compose-casca.yml'
+        @(
+            'services:',
+            '  gateway:',
+            '    environment:',
+            '      ROTA_MARKETING_FRONT: http://host.docker.internal:3007',
+            '      ROTA_MARKETING_API: http://host.docker.internal:8087',
+            '    extra_hosts:',
+            '      - "host.docker.internal:host-gateway"'
+        ) | Set-Content -Path $sobreposicao -Encoding ascii
+        $arquivosCompose += @('-f', $sobreposicao)
+        $servicos += 'casca'
+    }
+    Passo ("Subindo " + ($servicos -join ', ') + " da plataforma")
+    & docker compose @arquivosCompose --project-directory $Infra --profile plataforma up -d @servicos
     if ($LASTEXITCODE -ne 0) { throw 'docker compose up falhou (rede lenta? rode de novo).' }
 }
 
@@ -153,16 +180,16 @@ function Url-Rabbit($usuarioMq, $senha) {
 }
 
 # Cada app herda o ambiente deste processo no momento em que abre: as variaveis mudam entre um e outro
-function Abrir($titulo, $script, [hashtable]$variaveis) {
+function Abrir($titulo, $script, [hashtable]$variaveis, [string]$argumentos = '') {
     foreach ($nome in $variaveis.Keys) { Set-Item "env:$nome" $variaveis[$nome] }
     if ($Ocultos) {
         # Sem dois-pontos: no NTFS, "dev:api.log" viraria um fluxo alternativo do arquivo "dev"
         $log = Join-Path $pastaLogs "$($script.Replace(':', '-')).log"
-        $processo = Start-Process cmd.exe -ArgumentList '/c', "npm run $script > `"$log`" 2>&1" `
+        $processo = Start-Process cmd.exe -ArgumentList '/c', "npm run $script $argumentos > `"$log`" 2>&1" `
             -WorkingDirectory $raiz -WindowStyle Hidden -PassThru -ErrorAction Stop
         Write-Host "  $titulo (log em $log)"
     } else {
-        $comando = "`$host.UI.RawUI.WindowTitle = '$titulo'; npm run $script"
+        $comando = "`$host.UI.RawUI.WindowTitle = '$titulo'; npm run $script $argumentos"
         $processo = Start-Process powershell.exe -ArgumentList '-NoExit', '-Command', $comando `
             -WorkingDirectory $raiz -PassThru -ErrorAction Stop
         Write-Host "  $titulo (janela propria)"
@@ -179,7 +206,13 @@ Abrir 'Marketing API (8087)' 'dev:api' @{
     RABBITMQ_PASSWORD = $envInfra['MQ_MARKETING_SENHA']
     SVC_CLIENT_SECRET = $envInfra['SVC_MARKETING_SEGREDO']
 }
-Abrir 'Marketing front (3007)' 'dev:web' @{}
+if ($ComCasca) {
+    # O gateway (em container) chega ao Vite pelo host.docker.internal: o Vite precisa ouvir em todas as
+    # interfaces e aceitar esse nome de host. O segundo "--" leva o argumento do npm da raiz ao do front.
+    Abrir 'Marketing front (3007, para a casca)' 'dev:web' @{ __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = 'host.docker.internal' } '-- -- --host 0.0.0.0'
+} else {
+    Abrir 'Marketing front (3007)' 'dev:web' @{}
+}
 Abrir 'Landing placeholder (3008/8088)' 'dev:landing' @{ RABBITMQ_URL = (Url-Rabbit 'mq_landing' $envInfra['MQ_LANDING_SENHA']) }
 Abrir 'CRM stub (8082)' 'dev:crm' @{ RABBITMQ_URL = (Url-Rabbit 'mq_crm' $envInfra['MQ_CRM_SENHA']) }
 
@@ -203,6 +236,7 @@ Write-Host @"
 
 Pronto. Siga o roteiro de Docs/demo-iot.md:
   Marketing     http://localhost:3007/modulos/marketing/configuracoes
+$(if ($ComCasca) { "  Casca         http://localhost:8080/  (marketing@empresa-a.dev, Plataforma2026; menu lateral > Marketing)" })
   Landing       http://localhost:3008/
   RabbitMQ      http://localhost:15672 (admin e senha RABBITMQ_ADMIN_SENHA do .env do infra)
   Token expira em 15 min: .\scripts\dev-plataforma.ps1 -SoToken
