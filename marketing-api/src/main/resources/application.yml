@@ -109,9 +109,10 @@ marketing:
     localizacao-simulada:
       habilitada: ${RASTREAMENTO_LOCALIZACAO_SIMULADA:true}
 
-  # Segredos dos canais de anúncio cifrados em repouso (D6) e remetente de e-mails (E8/E9)
+  # Segredos dos canais de anúncio cifrados em repouso (D6) e remetente de e-mails (E8/E9). A chave
+  # não tem padrão aqui (só no perfil dev): sem ela, a API recusa gravar os segredos do Meta (503).
   seguranca:
-    chave-cifra: ${MARKETING_CHAVE_CIFRA:marketing-dev-chave-local-2026}
+    chave-cifra: ${MARKETING_CHAVE_CIFRA:}
   comunicacao:
     remetente: ${MAIL_FROM:marketing@centinela.local}
 
