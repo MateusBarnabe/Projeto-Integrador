@@ -5,6 +5,7 @@ import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestExecutionListeners;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -27,6 +28,8 @@ import org.testcontainers.utility.MountableFile;
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
+@TestExecutionListeners(listeners = ConsumidoresDoContextoAtual.class,
+        mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS)
 public abstract class IntegracaoDeTeste {
 
     @SuppressWarnings("resource")
@@ -42,6 +45,15 @@ public abstract class IntegracaoDeTeste {
                     "/etc/rabbitmq/definitions.json")
             .withRabbitMQConfig(MountableFile.forHostPath("../infra/rabbitmq/rabbitmq.conf"));
 
+    /** Propriedades que desligam cada agendamento ({@code @Scheduled}) do módulo. */
+    private static final String[] AGENDAS = {
+            "marketing.entrada.leitura-pendente.habilitada",
+            "marketing.rodizio.atribuicao-pendente.habilitada",
+            "marketing.rastreamento.descarte.habilitado",
+            "marketing.comunicacao.boas-vindas.habilitada",
+            "marketing.comunicacao.aquecimento.habilitada",
+            "marketing.ciclo-vida.anonimizacao.habilitada" };
+
     @DynamicPropertySource
     static void infraestrutura(DynamicPropertyRegistry registro) {
         Startables.deepStart(POSTGRES, RABBIT).join();
@@ -52,6 +64,13 @@ public abstract class IntegracaoDeTeste {
         registro.add("spring.flyway.password", () -> "own_marketing");
         registro.add("spring.rabbitmq.host", RABBIT::getHost);
         registro.add("spring.rabbitmq.port", RABBIT::getAmqpPort);
+        // Os jobs são chamados direto pelos testes. Agendados, rodariam em todos os contextos em cache
+        // contra o mesmo banco e disputariam as travas (SKIP LOCKED) com o teste.
+        for (String agenda : AGENDAS) {
+            registro.add(agenda, () -> "false");
+        }
+        // Chave só dos testes, para cifrar os segredos dos canais de anúncio (D6)
+        registro.add("marketing.seguranca.chave-cifra", () -> "chave-dos-testes-de-integracao");
         ModulosSimulados.registrar(registro);
     }
 
