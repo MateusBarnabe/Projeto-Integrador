@@ -173,4 +173,10 @@ public class LeadConsentimento extends EntidadeBase {
     public UUID getEventoId() {
         return eventoId;
     }
+
+    /** Zera IP e User-Agent na anonimização por retenção (job 4.3, E10, norteador §4.3). */
+    public void anonimizar() {
+        this.ip = null;
+        this.userAgent = null;
+    }
 }

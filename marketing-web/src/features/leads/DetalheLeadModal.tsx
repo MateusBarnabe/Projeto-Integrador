@@ -170,7 +170,36 @@ function ConteudoDaAba({ aba, detalhe }: { aba: AbaDetalhe; detalhe: DetalheLead
               </DetailField>
             )}
           </DetailSection>
-          <DetailSection number={4} title="CRM">
+          <DetailSection number={4} title="Comunicações e ciclo de vida">
+            <DetailField label="Boas-vindas">
+              {detalhe.aquecimento.boasVindasEnviadaEm
+                ? `Enviada em ${dataHora(detalhe.aquecimento.boasVindasEnviadaEm)}`
+                : detalhe.etapa === 3
+                  ? statusBadge('pendente', 'aguardando envio')
+                  : 'Não aplicável'}
+            </DetailField>
+            <DetailField label="Aquecimento">
+              {statusBadge(detalhe.aquecimento.status)} ({detalhe.aquecimento.tentativas} tentativa(s))
+            </DetailField>
+            {detalhe.aquecimento.comunicacoes && detalhe.aquecimento.comunicacoes.length > 0 && (
+              <DetailField label="E-mails enviados" colSpan={2}>
+                <ul className="mt-1 divide-y divide-borda rounded-lg border border-borda text-xs">
+                  {detalhe.aquecimento.comunicacoes.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <span>
+                        <strong>{c.modeloNome ?? 'Modelo'}</strong> ({c.tipoModelo ?? c.canal})
+                      </span>
+                      <span className="flex items-center gap-2 text-texto-3">
+                        {dataHora(c.enviadoEm)}
+                        {statusBadge(c.status)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </DetailField>
+            )}
+          </DetailSection>
+          <DetailSection number={5} title="CRM">
             <DetailField label="Oportunidade">
               {detalhe.crm.oportunidadeId && <span className="font-mono text-xs">{detalhe.crm.oportunidadeId}</span>}
             </DetailField>

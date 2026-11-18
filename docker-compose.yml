@@ -58,6 +58,8 @@ services:
       DB_APP_PASSWORD: ${MARKETING_APP_SENHA:-usr_marketing}
       DB_OWNER_PASSWORD: ${MARKETING_OWNER_SENHA:-own_marketing}
       RABBITMQ_HOST: rabbitmq
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
       JWKS_URI: ${JWKS_URI:-http://host.docker.internal:8081/api/identity/.well-known/jwks.json}
       # Chamadas a outros módulos com token de serviço (o identity real vem do infra)
       IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:-http://host.docker.internal:8081}

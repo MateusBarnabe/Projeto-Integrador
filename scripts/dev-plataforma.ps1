@@ -173,6 +173,7 @@ function Abrir($titulo, $script, [hashtable]$variaveis) {
 
 Passo 'Abrindo os apps'
 Abrir 'Marketing API (8087)' 'dev:api' @{
+    DB_URL            = 'jdbc:postgresql://localhost:5433/plataforma'
     DB_APP_PASSWORD   = $envInfra['DB_APP_MARKETING_SENHA']
     DB_OWNER_PASSWORD = $envInfra['DB_OWN_MARKETING_SENHA']
     RABBITMQ_PASSWORD = $envInfra['MQ_MARKETING_SENHA']

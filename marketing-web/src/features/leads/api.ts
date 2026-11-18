@@ -68,6 +68,16 @@ export interface RegistroConsentimento {
   userAgent: string | null;
 }
 
+export interface ComunicacaoEnviada {
+  id: string;
+  canal: string;
+  modeloId: string;
+  modeloNome: string | null;
+  tipoModelo: string | null;
+  status: string;
+  enviadoEm: string;
+}
+
 /** `GET /api/marketing/leads/{id}` (DetalheLead), em seções. */
 export interface DetalheLead {
   id: string;
@@ -113,6 +123,7 @@ export interface DetalheLead {
     boasVindasEnviadaEm: string | null;
     esgotadoEm: string | null;
     optOutEm: string | null;
+    comunicacoes?: ComunicacaoEnviada[];
   };
   crm: { empresaId: string | null; contatoId: string | null; oportunidadeId: string | null };
   timeline: ItemTimeline[];

@@ -63,6 +63,22 @@ spring:
         jwt:
           jwk-set-uri: ${JWKS_URI:http://localhost:8081/api/identity/.well-known/jwks.json}
 
+  # E-mail (E8/E9): Mailpit local por padrão (localhost:1025)
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+          connectiontimeout: 3000
+          timeout: 3000
+          writetimeout: 3000
+
 # Swagger UI em /swagger-ui.html e OpenAPI em /v3/api-docs. O gateway da plataforma só encaminha
 # /api/marketing/**, então esses caminhos não saem pela plataforma; SWAGGER_HABILITADO=false desliga.
 springdoc:
@@ -92,6 +108,12 @@ marketing:
     # Simulador da localização por IP; trocar por uma base GeoIP é outra implementação de LocalizacaoPorIp
     localizacao-simulada:
       habilitada: ${RASTREAMENTO_LOCALIZACAO_SIMULADA:true}
+
+  # Segredos dos canais de anúncio cifrados em repouso (D6) e remetente de e-mails (E8/E9)
+  seguranca:
+    chave-cifra: ${MARKETING_CHAVE_CIFRA:marketing-dev-chave-local-2026}
+  comunicacao:
+    remetente: ${MAIL_FROM:marketing@centinela.local}
 
 logging:
   pattern:

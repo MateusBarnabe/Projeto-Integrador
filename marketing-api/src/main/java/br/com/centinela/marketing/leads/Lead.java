@@ -165,7 +165,7 @@ public class Lead extends EntidadeBase {
     @Column(name = "opt_out_em")
     private OffsetDateTime optOutEm;
 
-    @Column(name = "token_descadastro", nullable = false, updatable = false)
+    @Column(name = "token_descadastro")
     private String tokenDescadastro;
 
     @Column(name = "anonimizado", nullable = false)
@@ -743,4 +743,70 @@ public class Lead extends EntidadeBase {
     }
 
     // --- fim de R1 -------------------------------------------------------------------------------
+
+    // --- E7, E8, E9 e E10: descadastro, boas-vindas, aquecimento e anonimização (LGPD) -----------
+
+    /**
+     * Efetiva o opt-out (E7, norteador §6): suspende o aquecimento e revoga o consentimento atual.
+     *
+     * @return {@code true} se o lead entrou em opt-out agora (idempotente para cliques repetidos)
+     */
+    public boolean registrarOptOut(OffsetDateTime em) {
+        Objects.requireNonNull(em, "em");
+        boolean novoOptOut = statusAquecimento != StatusAquecimento.OPT_OUT || consentimentoMarketing;
+        statusAquecimento = StatusAquecimento.OPT_OUT;
+        if (optOutEm == null) {
+            optOutEm = em;
+        }
+        consentimentoMarketing = false;
+        return novoOptOut;
+    }
+
+    /** Marca que a confirmação de boas-vindas foi enviada (job 4.5, E8). Não conta em tentativas de aquecimento. */
+    public void registrarBoasVindas(OffsetDateTime enviadaEm) {
+        this.boasVindasEnviadaEm = Objects.requireNonNull(enviadaEm, "enviadaEm");
+        this.ultimaComunicacaoEm = maisRecente(this.ultimaComunicacaoEm, enviadaEm);
+    }
+
+    /**
+     * Registra um envio da cadência de aquecimento (job 4.2, E9) e esgota o lead se atingiu o máximo de
+     * tentativas do tenant ou se não há próximo modelo na sequência.
+     */
+    public void registrarEnvioAquecimento(OffsetDateTime enviadoEm, int maxTentativas, boolean haProximoModelo) {
+        Objects.requireNonNull(enviadoEm, "enviadoEm");
+        if (statusAquecimento == StatusAquecimento.OPT_OUT) {
+            throw new IllegalStateException("Lead em opt-out não pode receber comunicação de aquecimento.");
+        }
+        this.tentativasAquecimento++;
+        this.ultimaComunicacaoEm = enviadoEm;
+        if (this.tentativasAquecimento >= maxTentativas || !haProximoModelo) {
+            esgotarAquecimento(enviadoEm);
+        }
+    }
+
+    /** Marca o fim da cadência de aquecimento (job 4.2, E9). */
+    public void esgotarAquecimento(OffsetDateTime em) {
+        Objects.requireNonNull(em, "em");
+        if (statusAquecimento == StatusAquecimento.ATIVO) {
+            statusAquecimento = StatusAquecimento.ESGOTADO;
+            esgotadoEm = em;
+        }
+    }
+
+    /**
+     * Anonimiza o lead após o prazo de retenção (job 4.3, E10, norteador §4.3): remove dados pessoais
+     * identificáveis, token de descadastro, respostas do formulário e rastro da visita, preservando os
+     * dados estatísticos (etapa, origem, canal, UTM, pontuação, faixa e datas).
+     */
+    public void anonimizar() {
+        this.nome = null;
+        this.email = null;
+        this.telefone = null;
+        this.whatsapp = null;
+        this.tokenDescadastro = null;
+        this.dadosFormulario = null;
+        this.contextoTecnico = null;
+        this.comportamento = null;
+        this.anonimizado = true;
+    }
 }
