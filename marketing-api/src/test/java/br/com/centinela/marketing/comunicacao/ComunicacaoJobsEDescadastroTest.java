@@ -1,12 +1,16 @@
 package br.com.centinela.marketing.comunicacao;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -148,6 +153,46 @@ class ComunicacaoJobsEDescadastroTest extends IntegracaoDeTeste {
                 .andExpect(jsonPath("$.success").value(true));
         assertThat(TenantContexto.calcular(tenant,
                 () -> consentimentos.findByLeadIdOrderByRegistradoEmDescCriadoEmDesc(lead.getId()))).hasSize(1);
+    }
+
+    @Test
+    void descadastroPeloNavegadorMostraAPaginaComOBotaoEEfetivaNoPost() throws Exception {
+        Lead lead = TenantContexto.calcular(tenant, () -> {
+            Lead novo = new Lead(OrigemLead.LANDING_PAGE, 1);
+            novo.atualizarContato("Gil Rocha", "gil@exemplo.dev", null, null);
+            novo.registrarConsentimento(true, OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+            return leads.save(novo);
+        });
+        String token = lead.getTokenDescadastro();
+        String navegador = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+        // GET: página com o formulário que faz POST na própria URL, sem nada do lead e sem o token
+        mvc.perform(get("/public/marketing/descadastro/" + token).header("Accept", navegador))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(containsString("<form method=\"post\">")))
+                .andExpect(content().string(not(containsString(token))))
+                .andExpect(content().string(not(containsString("gil@exemplo.dev"))))
+                .andExpect(header().string("Content-Security-Policy", containsString("form-action 'self'")))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        assertThat(TenantContexto.calcular(tenant, () -> leads.findById(lead.getId())).orElseThrow()
+                .getStatusAquecimento()).isEqualTo(StatusAquecimento.ATIVO);
+
+        // POST do formulário: efetiva e responde a página de concluído
+        mvc.perform(post("/public/marketing/descadastro/" + token).header("Accept", navegador)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .header("User-Agent", "Mozilla/5.0 Navegador"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(containsString("Descadastro registrado")));
+        assertThat(TenantContexto.calcular(tenant, () -> leads.findById(lead.getId())).orElseThrow()
+                .getStatusAquecimento()).isEqualTo(StatusAquecimento.OPT_OUT);
+
+        // Token inválido recebe a mesma página neutra
+        mvc.perform(post("/public/marketing/descadastro/token-inexistente").header("Accept", navegador))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Descadastro registrado")));
     }
 
     @Test
