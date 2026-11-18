@@ -30,7 +30,7 @@ import br.com.centinela.marketing.leads.TipoEventoLead;
  * Pontuação com a matriz inicial das Regras de Negócio (7.1), um lead de cada faixa, só com as
  * regras do formulário do envio, contra o PostgreSQL real.
  */
-@Import(PontuacaoDeLeads.class)
+@Import({ PontuacaoDeLeads.class, RegrasIniciais.class })
 class PontuacaoDeLeadsTest extends BancoDeTeste {
 
     private static final OffsetDateTime AGORA = OffsetDateTime.of(2026, 11, 5, 12, 0, 0, 0, ZoneOffset.UTC);
@@ -152,6 +152,39 @@ class PontuacaoDeLeadsTest extends BancoDeTeste {
 
         assertThatThrownBy(() -> TenantContexto.executar(UUID.randomUUID(), () -> pontuacao.pontuar(lead)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void primeiroLeadDeUmTenantSemRegrasPontuaComAsRegrasIniciaisUmaVezSo() {
+        UUID tenantNovo = UUID.randomUUID();
+        Lead lead = TenantContexto.calcular(tenantNovo, () -> leads.save(new Lead(OrigemLead.LANDING_PAGE, 1)));
+        jdbc.update("UPDATE marketing.leads SET utm_source = 'google', utm_medium = 'cpc' WHERE id = ?", lead.getId());
+        Lead comUtm = TenantContexto.calcular(tenantNovo, () -> leads.findById(lead.getId())).orElseThrow();
+
+        ResultadoPontuacao primeira = TenantContexto.calcular(tenantNovo, () -> pontuacao.pontuar(comUtm));
+        TenantContexto.calcular(tenantNovo, () -> pontuacao.pontuar(comUtm));
+
+        assertThat(primeira.pontuacao()).as("google/cpc da matriz inicial").isEqualTo(15);
+        assertThat(regrasDoTenant(tenantNovo)).as("2 de utm e 4 de comportamento, criadas uma vez").isEqualTo(6);
+    }
+
+    @Test
+    void tenantQueExcluiuAsRegrasNaoRecebeAsIniciaisDeNovo() {
+        UUID tenantNovo = UUID.randomUUID();
+        TenantContexto.executar(tenantNovo, () -> regras.delete(regras.save(
+                RegraPontuacao.porUtm("Origem", List.of(Map.of("direto", true)), 15))));
+        Lead lead = TenantContexto.calcular(tenantNovo, () -> leads.save(new Lead(OrigemLead.LANDING_PAGE, 1)));
+
+        ResultadoPontuacao resultado = TenantContexto.calcular(tenantNovo, () -> pontuacao.pontuar(lead));
+
+        assertThat(resultado.pontuacao()).isZero();
+        assertThat(regrasDoTenant(tenantNovo)).as("só a excluída").isEqualTo(1);
+    }
+
+    private int regrasDoTenant(UUID tenantDasRegras) {
+        Integer total = jdbc.queryForObject("SELECT count(*) FROM marketing.regras_pontuacao WHERE tenant_id = ?",
+                Integer.class, tenantDasRegras);
+        return total == null ? 0 : total;
     }
 
     private ResultadoPontuacao pontuar(Lead lead) {

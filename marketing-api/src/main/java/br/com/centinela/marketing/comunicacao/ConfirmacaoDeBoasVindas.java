@@ -24,7 +24,8 @@ import br.com.centinela.marketing.leads.TipoEventoLead;
  * Job 4.5, confirmação de boas-vindas (E8, norteador §4.5): envia uma única vez por lead o modelo
  * {@code boas_vindas} ativo do tenant para quem enviou o formulário (etapa 3), tem e-mail, não está
  * anonimizado e não fez opt-out. Recebe mesmo sem {@code consentimento_marketing}, porque confirma o
- * pedido que a própria pessoa fez.
+ * pedido que a própria pessoa fez. O modelo é obrigatório: se o tenant ainda não tem, entra o padrão
+ * ({@link ModeloDeBoasVindas}).
  *
  * <p>Em falha de SMTP, grava {@code lead_comunicacoes} com {@code status = 'falhou'} e tenta na
  * execução seguinte; depois de {@value #MAXIMO_FALHAS} falhas do mesmo lead, desiste.
@@ -38,18 +39,18 @@ public class ConfirmacaoDeBoasVindas {
     static final int LOTE = 50;
 
     private final TravasDeComunicacao travas;
-    private final ModeloMensagemRepository modelos;
+    private final ModeloDeBoasVindas modeloDeBoasVindas;
     private final LeadComunicacaoRepository comunicacoes;
     private final LeadRepository leads;
     private final LeadEventoRepository eventos;
     private final EnviadorDeEmail enviador;
     private final TransactionTemplate transacao;
 
-    ConfirmacaoDeBoasVindas(TravasDeComunicacao travas, ModeloMensagemRepository modelos,
+    ConfirmacaoDeBoasVindas(TravasDeComunicacao travas, ModeloDeBoasVindas modeloDeBoasVindas,
             LeadComunicacaoRepository comunicacoes, LeadRepository leads, LeadEventoRepository eventos,
             EnviadorDeEmail enviador, TransactionTemplate transacao) {
         this.travas = travas;
-        this.modelos = modelos;
+        this.modeloDeBoasVindas = modeloDeBoasVindas;
         this.comunicacoes = comunicacoes;
         this.leads = leads;
         this.eventos = eventos;
@@ -110,8 +111,7 @@ public class ConfirmacaoDeBoasVindas {
                 || lead.getEmail() == null || lead.getEmail().isBlank()) {
             return Situacao.PULADO;
         }
-        ModeloMensagem modelo = modelos.findFirstByTipoAndAtivoTrue(TipoModeloMensagem.BOAS_VINDAS)
-                .orElseGet(() -> modelos.save(ModeloMensagem.boasVindasPadrao()));
+        ModeloMensagem modelo = modeloDeBoasVindas.garantir();
         OffsetDateTime agora = OffsetDateTime.now(ZoneOffset.UTC);
         try {
             enviador.enviar(modelo, lead);
