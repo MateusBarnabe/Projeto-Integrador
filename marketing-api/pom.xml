@@ -71,6 +71,12 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- Painel (A4): cache local das agregações, por tenant e filtros, com TTL curto (norteador §9.1) -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- Documentação: OpenAPI gerado dos controllers e Swagger UI (liga/desliga por SWAGGER_HABILITADO) -->
         <dependency>
             <groupId>org.springdoc</groupId>
