@@ -39,6 +39,13 @@
   --titulo: #0C1A2E;
 }
 
+/* Área do iframe que o usuário está vendo. A camada plataforma/ (altura.ts) atualiza os dois valores
+   com a rolagem da casca; fora do iframe valem os padrões, que são a janela inteira. O Modal usa. */
+:root {
+  --area-topo: 0px;
+  --area-altura: 100%;
+}
+
 [data-tema="escuro"] {
   color-scheme: dark;
   --fundo: #07111E;

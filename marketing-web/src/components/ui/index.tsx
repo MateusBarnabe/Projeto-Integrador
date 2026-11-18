@@ -284,54 +284,67 @@ export function Modal({ open, onClose, title, subtitle, size = 'xl', footer, noP
 
   const comCabecalho = !noPad && title;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
-      <div aria-hidden className="fixed inset-0 bg-brand-950/60" onClick={noPad ? onClose : undefined} />
+    // Dentro do iframe da casca, a "tela" do usuário é só uma faixa do iframe, que tem a altura do
+    // conteúdo e rola com a página da casca. A camada plataforma/ publica essa faixa em --area-topo e
+    // --area-altura (padrão: a janela inteira); o painel é centralizado nela, não no iframe todo.
+    // data-sobreposicao faz a altura informada à casca caber o modal inteiro (plataforma/altura.ts).
+    <div data-sobreposicao className="fixed inset-0 z-50">
+      <div aria-hidden className="absolute inset-0 bg-brand-950/60" />
       <div
-        ref={painel}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={comCabecalho ? `${id}-titulo` : undefined}
-        aria-describedby={comCabecalho && subtitle ? `${id}-subtitulo` : undefined}
-        aria-label={noPad ? title : undefined}
-        tabIndex={-1}
-        className={cx(
-          'relative flex max-h-full w-full flex-col overflow-hidden rounded-xl bg-superficie text-texto shadow-2xl outline-none',
-          larguraDoModal[size],
-        )}
+        className="absolute inset-x-0 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6"
+        style={{ top: 'var(--area-topo)', height: 'var(--area-altura)' }}
+        onClick={(evento) => {
+          // O painel ocupa só o centro; o clique na folga ao redor vale como clique no fundo
+          if (noPad && evento.target === evento.currentTarget) onClose();
+        }}
       >
-        {comCabecalho && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-borda px-6 pt-5 pb-4">
-            <div className="min-w-0">
-              <h2 id={`${id}-titulo`} className="text-lg font-bold text-titulo">
-                {title}
-              </h2>
-              {subtitle && (
-                <p id={`${id}-subtitulo`} className="mt-0.5 text-sm text-texto-3">
-                  {subtitle}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar"
-              className="-mr-1.5 shrink-0 rounded-lg p-1.5 text-texto-3 hover:bg-superficie-2 hover:text-texto"
-            >
-              <X aria-hidden className="h-4 w-4" />
-            </button>
-          </div>
-        )}
         <div
-          ref={conteudo}
-          className={noPad ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto px-6 py-5'}
+          ref={painel}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={comCabecalho ? `${id}-titulo` : undefined}
+          aria-describedby={comCabecalho && subtitle ? `${id}-subtitulo` : undefined}
+          aria-label={noPad ? title : undefined}
+          tabIndex={-1}
+          className={cx(
+            'relative flex max-h-full w-full flex-col overflow-hidden rounded-xl bg-superficie text-texto shadow-2xl outline-none',
+            larguraDoModal[size],
+          )}
         >
-          {children}
-        </div>
-        {footer && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-borda bg-superficie-2 px-6 py-3.5">
-            {footer}
+          {comCabecalho && (
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-borda px-6 pt-5 pb-4">
+              <div className="min-w-0">
+                <h2 id={`${id}-titulo`} className="text-lg font-bold text-titulo">
+                  {title}
+                </h2>
+                {subtitle && (
+                  <p id={`${id}-subtitulo`} className="mt-0.5 text-sm text-texto-3">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Fechar"
+                className="-mr-1.5 shrink-0 rounded-lg p-1.5 text-texto-3 hover:bg-superficie-2 hover:text-texto"
+              >
+                <X aria-hidden className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          <div
+            ref={conteudo}
+            className={noPad ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto px-6 py-5'}
+          >
+            {children}
           </div>
-        )}
+          {footer && (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-borda bg-superficie-2 px-6 py-3.5">
+              {footer}
+            </div>
+          )}
+        </div>
       </div>
     </div>,
     document.body,
