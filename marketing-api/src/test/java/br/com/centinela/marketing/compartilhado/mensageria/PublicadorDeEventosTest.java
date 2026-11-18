@@ -2,6 +2,7 @@ package br.com.centinela.marketing.compartilhado.mensageria;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.Instant;
 import java.util.Map;
@@ -89,7 +90,7 @@ class PublicadorDeEventosTest extends IntegracaoDeTeste {
                 Map.of("leadId", lead, "pontuacao", 85)));
 
         Message mensagem = observador.receive(filaEventos.getName(), 5_000);
-        assertThat(mensagem).as("mensagem em marketing.eventos").isNotNull();
+        assertNotNull(mensagem, "mensagem em marketing.eventos");
         var propriedades = mensagem.getMessageProperties();
         assertThat(propriedades.getReceivedUserId()).isEqualTo("mq_marketing");
         assertThat(propriedades.getReceivedRoutingKey()).isEqualTo("marketing.lead.qualificado");
@@ -129,7 +130,7 @@ class PublicadorDeEventosTest extends IntegracaoDeTeste {
                 Map.of("categoria", "NOVO_LEAD")));
 
         Message mensagem = observador.receive(filaPlataforma.getName(), 5_000);
-        assertThat(mensagem).as("mensagem em identity.entrada").isNotNull();
+        assertNotNull(mensagem, "mensagem em identity.entrada");
         assertThat(mensagem.getMessageProperties().getReceivedUserId()).isEqualTo("mq_marketing");
         assertThat(json.readTree(mensagem.getBody()).get("usuarioId").asText()).isEqualTo(USUARIO.toString());
         assertThat(observador.receive(filaEventos.getName(), 500)).isNull();

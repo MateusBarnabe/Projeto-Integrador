@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.lang.NonNull;
 import org.springframework.test.context.TestContext;
 import org.springframework.test.context.TestExecutionListener;
 
@@ -29,7 +30,7 @@ public class ConsumidoresDoContextoAtual implements TestExecutionListener {
     private static ApplicationContext atual;
 
     @Override
-    public void beforeTestClass(TestContext testContext) {
+    public void beforeTestClass(@NonNull TestContext testContext) {
         ApplicationContext contexto = testContext.getApplicationContext();
         synchronized (PARADOS) {
             if (contexto == atual) {

@@ -1,10 +1,12 @@
 package br.com.centinela.marketing.compartilhado.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 
 class PaginacaoTest {
 
@@ -14,7 +16,9 @@ class PaginacaoTest {
 
         assertThat(pedido.getPageNumber()).isZero();
         assertThat(pedido.getPageSize()).isEqualTo(100);
-        assertThat(pedido.getSort().getOrderFor("nome").isAscending()).isTrue();
+        Sort.Order ordem = pedido.getSort().getOrderFor("nome");
+        assertNotNull(ordem);
+        assertThat(ordem.isAscending()).isTrue();
     }
 
     @Test
@@ -23,6 +27,8 @@ class PaginacaoTest {
 
         assertThat(pedido.getPageNumber()).isZero();
         assertThat(pedido.getPageSize()).isEqualTo(Paginacao.TAMANHO_PADRAO);
-        assertThat(pedido.getSort().getOrderFor("criadoEm").isAscending()).isTrue();
+        Sort.Order ordem = pedido.getSort().getOrderFor("criadoEm");
+        assertNotNull(ordem);
+        assertThat(ordem.isAscending()).isTrue();
     }
 }

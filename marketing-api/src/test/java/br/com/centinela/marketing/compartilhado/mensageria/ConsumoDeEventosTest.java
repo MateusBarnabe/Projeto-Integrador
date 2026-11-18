@@ -23,6 +23,7 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.support.ListenerExecutionFailedException;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.lang.NonNull;
 import org.springframework.retry.RetryContext;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetrySynchronizationManager;
@@ -251,23 +252,24 @@ class ConsumoDeEventosTest {
         int rollbacks;
 
         @Override
+        @NonNull
         protected Object doGetTransaction() {
             return new Object();
         }
 
         @Override
-        protected void doBegin(Object transacao, TransactionDefinition definicao) {
+        protected void doBegin(@NonNull Object transacao, @NonNull TransactionDefinition definicao) {
             ativa = true;
         }
 
         @Override
-        protected void doCommit(DefaultTransactionStatus status) {
+        protected void doCommit(@NonNull DefaultTransactionStatus status) {
             ativa = false;
             commits++;
         }
 
         @Override
-        protected void doRollback(DefaultTransactionStatus status) {
+        protected void doRollback(@NonNull DefaultTransactionStatus status) {
             ativa = false;
             rollbacks++;
         }
