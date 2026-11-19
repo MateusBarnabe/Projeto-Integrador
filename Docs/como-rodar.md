@@ -137,6 +137,8 @@ console.log('webhook', r.status);
 
 Resultados esperados (conferidos em 19/11): handshake certo `200` em `text/plain`; token errado `403`; assinatura errada `401`; sem segredo configurado, ou subdomínio desconhecido, `404`; a mesma `leadgen_id` enviada de novo continua `200`, sem linha nova. Para ver o buffer: `docker exec plataforma-postgres-1 psql -U postgres -d plataforma -c "select meta_lead_id, processado, tentativas from marketing.leads_entrada_buffer"`.
 
+**O que esse teste deixa no seu banco local:** o *Verify Token* e o *App Secret* inventados ficam gravados (cifrados) no canal `meta_ads` do tenant, e cada execução do script acrescenta uma linha pendente no buffer (`processado = false`). Sem o token da página, o job 4.1 a deixa esperando, sem gastar tentativas, e ela fica ali. É inofensivo, mas aparece em consultas ao buffer. Para tirar as linhas de teste: `docker exec plataforma-postgres-1 psql -U postgres -d plataforma -c "delete from marketing.leads_entrada_buffer where not processado"`. Os segredos só saem ao serem substituídos por outro valor na tela (campo vazio mantém o que já está gravado) ou ao zerar o banco (seção 8). Não faça isso num banco que tenha dados que você queira guardar.
+
 O **job 4.1** (a cada 5 minutos) é quem busca o lead na Graph API e o grava na etapa 0. Ele só foi exercitado nos testes automatizados, contra WireMock. Para testá-lo à mão, aponte `META_GRAPH_BASE_URL` para um servidor seu que imite `GET /v23.0/{leadgen_id}` e salve também o token da página. Contra a Graph API real, depende do token do Meta e da saída do container para a internet (ver [pendências](pendencias-e-dependencias.md)).
 
 ## 8. Parar e recomeçar

@@ -105,6 +105,15 @@ Jornada refeita à mão no Chrome, pela casca (login, link de campanha, clique, 
 | Gateway local encaminha `/public/marketing/**` | ok |
 | Console e rede | sem erros; só o `favicon.ico` do placeholder (A5) |
 
+### O que a validação deixou no ambiente de quem a fez
+
+Estado da máquina de quem rodou a validação de 19/11, e não do projeto. Anotado para quem for repetir os testes e achar dados "estranhos":
+
+- **No banco local do Marketing (tenant Empresa A):** o lead `Helena Chrome Rodada2` (`helena.chrome.r2@exemplo.com`, atribuído a um vendedor da escala), o link de campanha `Teste Chrome rodada 2` (`utm_campaign=teste-chrome-r2`, com os cliques da jornada), o canal `meta_ads` com *Verify Token* e *App Secret* inventados, e uma linha pendente no buffer do Meta (sem token da página, então o job 4.1 a deixa esperando). Como limpar: [como-rodar.md](como-rodar.md), seção 7.
+- **No Mailpit:** a mensagem de boas-vindas dessa Helena.
+- **Nos containers:** a plataforma (Postgres, RabbitMQ, Mailpit, identity, gateway e casca) ficou de pé; os quatro apps do repositório foram encerrados com `-Parar`. Para parar os containers: `docker compose --profile plataforma stop`, na pasta do infra.
+- **No Landing e no CRM de teste:** nada a limpar, porque guardam tudo em memória e perdem os dados ao reiniciar.
+
 ## 6. Validações manuais que ainda faltam (V2 a V5)
 
 Sem código novo, a menos que apareça defeito. A V1 (configurações sem permissão de edição) foi corrigida, mesclada e conferida em 19/11 (seção 5).
