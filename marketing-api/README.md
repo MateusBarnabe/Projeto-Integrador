@@ -2,7 +2,7 @@
 
 API do módulo de Marketing (Grupo 4). Recebe os leads, guarda o funil, qualifica, distribui entre vendedores e atende o front do módulo e os outros módulos da plataforma.
 
-> **Estado atual (18/11/2026): back pronto, falta o Meta e levar o vendedor ao CRM.** Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API já consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. A comunicação (descadastro, boas-vindas, aquecimento e anonimização, E7 a E10), as tabelas de e-mail e as configurações (D3, D6, D7, A3) e o painel com o fluxo SSE (A4) também estão prontos. Faltam o Meta (D2, E3, E4) e levar o vendedor ao CRM (C1). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (19/11/2026): back pronto, com o Meta; falta levar o vendedor ao CRM.** Desde a rodada 2, o webhook do Meta (E3), o job 4.1 (E4), o buffer (`V3`) e a localização por IP real (R4) estão prontos. O texto abaixo é da revisão de 18/11. Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API já consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. A comunicação (descadastro, boas-vindas, aquecimento e anonimização, E7 a E10), as tabelas de e-mail e as configurações (D3, D6, D7, A3) e o painel com o fluxo SSE (A4) também estão prontos. Faltam o Meta (D2, E3, E4) e levar o vendedor ao CRM (C1). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|
@@ -76,6 +76,8 @@ Todo endereço e credencial vem de variável de ambiente (Contrato §9.1). **Os 
 | `SWAGGER_HABILITADO` | `true` | `false` desliga o Swagger UI e o `/v3/api-docs` |
 | `MARKETING_URL_PUBLICA` | `http://localhost:8087` | endereço que o navegador do visitante alcança (o gateway, na plataforma): monta a URL do link de campanha e a tag do script de rastreamento (R1). Ainda não está no compose da plataforma (X19) |
 | `RASTREAMENTO_LOCALIZACAO_SIMULADA` | `true` | `false` desliga a localização simulada da visita (R1) |
+| `RASTREAMENTO_GEOIP_ARQUIVO` | vazio | caminho de uma base GeoLite2 City (`.mmdb`) local (R4). Existindo o arquivo, a localização é real (`LocalizacaoPorGeoIp`); vazio mantém a simulada. A base não vai para o git (licença da MaxMind): baixe com uma conta gratuita e monte no container |
+| `META_GRAPH_BASE_URL`, `META_GRAPH_VERSAO` | `https://graph.facebook.com`, `v23.0` | Graph API do Meta, usada pelo job 4.1 (E4). O container precisa poder sair para a internet (X5) |
 | `MAIL_HOST`, `MAIL_PORT` | `localhost`, `1025` | servidor SMTP dos e-mails de boas-vindas e de aquecimento (o Mailpit, localmente). Ainda não estão no compose da plataforma (X3) |
 | `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` | vazio, vazio, `false`, `false` | autenticação e TLS do SMTP fora do desenvolvimento |
 | `MAIL_FROM` | `marketing@centinela.local` | remetente dos e-mails |
@@ -345,7 +347,7 @@ Pacote `rastreamento`, que segue o norteador (seção 2, "Lead 0", e seções 3,
 | `VinculoDeVisitas` | chamado por `entrada/LeituraDoEnvio` antes da pontuação: acha o `mkt_visita` nas páginas de entrada do envio, converte a visita e copia a interação para o lead |
 | `DescarteDeVisitas`, `AgendaDoDescarteDeVisitas` | job 4.7: zera as visitas ativas vencidas, em lotes com `SKIP LOCKED` (`marketing.rastreamento.descarte.intervalo`, padrão `PT1M`) |
 | `LeitorDeUserAgent` | tipo de dispositivo, sistema e navegador a partir do *User-Agent*, que não é guardado |
-| `LocalizacaoPorIp`, `LocalizacaoSimulada` | contrato da localização por IP e o **simulador** atual. A versão real é outra implementação com `@Primary` (R4) |
+| `LocalizacaoPorIp`, `LocalizacaoSimulada` | contrato da localização por IP e o **simulador** padrão. `LocalizacaoPorGeoIp` (R4) é `@Primary` só com `RASTREAMENTO_GEOIP_ARQUIVO` apontando para um arquivo existente |
 | `AcessoPublico` | consultas em SQL sem o filtro de tenant do Hibernate: tenant pelo código ou pela visita, trava e descarte |
 | `api/RastreamentoPublicoController`, `api/RastreamentoController` | rotas públicas (clique, sinais, `rastreamento.js`) e as de configuração, links e visitas |
 

@@ -1,6 +1,6 @@
 # Documento Norteador — Módulo de Marketing (Grupo 4)
 
-Código `marketing` · Schema `marketing` · Projeto Integrador 2026 · Grupo 4 · Revisão de 18/11/2026
+Código `marketing` · Schema `marketing` · Projeto Integrador 2026 · Grupo 4 · Revisão de 19/11/2026
 
 *Documento norteador — incrementado conforme o projeto avança · Alinhado ao Contrato de Integração v0.7 e aos contratos publicados do Landing e do CRM*
 
@@ -172,6 +172,7 @@ Registro central do lead. Existe quando há um identificador de contato: leads d
 | consentimento_em | timestamptz, nullable | quando o consentimento atual foi aceito no Landing (`aceitoEm`) |
 | boas_vindas_enviada_em | timestamptz, nullable | quando o e-mail de boas-vindas saiu (4.5). Garante um envio só por lead |
 | meta_lead_id | varchar, nullable | `leadgen_id` do Meta, para dedupe de reentrega do webhook. **UNIQUE (tenant_id, meta_lead_id)** |
+| respostas_meta **[Novo]** | jsonb, nullable | respostas do formulário instantâneo do Meta, pelo nome da pergunta, sem nome, e-mail nem telefone (`V13`). Alimenta as regras `campo_meta` em qualquer nova pontuação; a anonimização (4.3) zera a coluna |
 | crm_empresa_id / crm_contato_id | uuid, nullable | `empresaId` e `contatoId` de `landing.formulario.recebido`. Só o UUID, nunca FK entre schemas |
 | crm_oportunidade_id | uuid, nullable | `oportunidadeId` de `crm.oportunidade.criada` (9.6). Só o UUID |
 | pontuacao **[Etapa 2]** | int, nullable | soma das regras de pontuação (9.3). Nula até o primeiro cálculo; um lead calculado sem nenhuma regra que bata fica com 0 |
@@ -231,11 +232,13 @@ Timeline e auditoria da progressão do lead, exigidas pelo Prompt Mestre em todo
 |---|---|---|
 | id / tenant_id | uuid | isolamento por tenant mantido mesmo no buffer |
 | meta_lead_id | varchar, not null | `leadgen_id` do webhook. **UNIQUE (tenant_id, meta_lead_id)**: reentrega do webhook não duplica a linha |
-| payload_bruto | jsonb | corpo do webhook: `leadgen_id`, `page_id`, `form_id` e `ad_id`. **Não tem dado pessoal**: nome, e-mail e respostas vão direto para `leads` |
+| payload_bruto | jsonb, not null | corpo do webhook: `leadgen_id`, `page_id`, `form_id` e `ad_id`. **Não tem dado pessoal**: nome, e-mail e respostas vão direto para `leads` |
 | processado / processado_em | boolean default false / timestamptz | o momento do recebimento é o `created_at` |
 | tentativas | int, default 0 | incrementado a cada falha de processamento |
-| falha_permanente | boolean, default false | marcado após N tentativas, para investigação manual |
+| falha_permanente | boolean, default false | marcado na 5ª tentativa (`marketing.meta.leads.maximo-de-tentativas`), para investigação manual |
 | colunas obrigatórias | §7.2 | |
+
+Criada na `V3`, com o índice parcial `ix_leads_entrada_buffer_pendentes` em `(tenant_id, created_at)` para as linhas ainda não processadas.
 
 Saíram `origem`, `etapa`, `tipo_origem` e `visitante_id`: com só o Meta passando pelo buffer, eles são sempre os mesmos ou não existem.
 
@@ -439,12 +442,14 @@ CREATE TABLE marketing.eventos_processados (
 
 - **Frequência:** a cada 5 minutos (`@Scheduled`), em lotes de até 500 linhas por execução
 - **Concorrência segura:** `SELECT ... FOR UPDATE SKIP LOCKED` ao puxar linhas não processadas, para evitar processamento duplicado entre execuções sobrepostas ou várias instâncias
-- **Dados do lead:** o webhook traz só o `leadgen_id`. O job busca os campos em `GET https://graph.facebook.com/{versão}/{leadgen_id}` com o `meta_page_access_token` do tenant, com timeout de 3 s. Uma falha conta como tentativa
+- **Dados do lead:** o webhook traz só o `leadgen_id`. O job busca os campos em `GET {META_GRAPH_BASE_URL}/{versão}/{leadgen_id}` (versão `v23.0`, em `marketing.meta.graph-versao`) com o `meta_page_access_token` do tenant no cabeçalho `Authorization: Bearer`, nunca na URL, com timeout de 3 s. Uma falha, de qualquer tipo, conta como tentativa. **Exceção:** tenant sem token da página (ou sem `MARKETING_CHAVE_CIFRA`) espera sem gastar tentativa
+- **Respostas do formulário:** guardadas em `leads.respostas_meta` (seção 3), para uma nova pontuação continuar somando as regras `campo_meta`. Registra `respostas_lidas` na timeline, sem dado pessoal
 - **Resolução de identidade**, sempre dentro do mesmo tenant:
   1. `meta_lead_id` já existe em `leads`? É reentrega: atualiza, não duplica
   2. Senão, normaliza e-mail (minúsculas, sem espaços) e telefone (só dígitos, em E.164) e procura em `leads`. Se achar, faz merge sem sobrescrever dado já preenchido com dado mais pobre. Se não achar, cria um lead novo na etapa 0
-- **Pontuação [Etapa 2]:** depois de gravar, calcula a pontuação com as regras `campo_meta` e `utm` (9.3)
-- **Regra de não-retrocesso:** um lead que já está numa etapa maior continua nela; o Meta só completa dados e registra o evento
+- **Pontuação [Etapa 2]:** depois de gravar, calcula a pontuação com as regras `campo_meta` e `utm` (9.3) e atribui o vendedor pelo rodízio, como no envio do Landing
+- **Consentimento (X11):** o lead do Meta fica com `consentimento_marketing = false`, então não entra no aquecimento (4.2)
+- **Regra de não-retrocesso:** um lead que já está numa etapa maior continua nela; o Meta só completa dados e registra o evento. Achado por e-mail ou telefone, o lead só é completado, sem sobrescrever dado preenchido
 - **Falha e retry:** a falha incrementa `tentativas`; depois de N tentativas, marca `falha_permanente` para investigação manual, sem travar o resto do lote
 
 ### 4.2 Comunicação de aquecimento
@@ -555,9 +560,11 @@ Rotas sem usuário ficam sob `/public/marketing/**`. O gateway as libera de toke
 | POST | `/public/marketing/visitas/{id}/sinais` **[Novo · IoT]** | id da visita (o `mkt_visita`), gerado no clique | Script de rastreamento na landing page |
 | GET | `/public/marketing/rastreamento.js` **[Novo · IoT]** | nenhuma | Landing page (tag `<script>`) |
 
-> **Rastreamento do clique no anúncio [Novo · IoT].** O tenant vem do código do link ou do id da visita, gerados pelo servidor, nunca de parâmetro. O clique (`/c/{codigo}`) registra a visita com o tipo de dispositivo, o sistema e o navegador lidos do *User-Agent* e a localização aproximada do IP (o primeiro do `X-Forwarded-For`), sem guardar nenhum dos dois, e responde `302` para a landing page com as UTM do link e o `mkt_visita`; link desconhecido, desligado ou excluído responde `404` com envelope. Os sinais chegam em `text/plain` (o `navigator.sendBeacon` não dispara a checagem de CORS) ou JSON, até 8 KB, sempre com os totais da visita: o servidor guarda o maior tempo e a maior rolagem e junta as listas, com limites de tamanho, e tira a consulta das páginas. Visita desconhecida responde `404`; convertida ou descartada, `200` sem mudar nada. O script só age com o `mkt_visita` na URL, não lê campos de formulário e não usa cookie. O `302` e o JavaScript são exceções ao envelope, como o `hub.challenge` (seção 11). A localização hoje é simulada (`rastreamento/LocalizacaoSimulada`); a real é outra implementação de `LocalizacaoPorIp`, com base GeoIP local. A URL pública do link e do script vem de `MARKETING_URL_PUBLICA`.
+> **Rastreamento do clique no anúncio [Novo · IoT].** O tenant vem do código do link ou do id da visita, gerados pelo servidor, nunca de parâmetro. O clique (`/c/{codigo}`) registra a visita com o tipo de dispositivo, o sistema e o navegador lidos do *User-Agent* e a localização aproximada do IP (o primeiro do `X-Forwarded-For`), sem guardar nenhum dos dois, e responde `302` para a landing page com as UTM do link e o `mkt_visita`; link desconhecido, desligado ou excluído responde `404` com envelope. Os sinais chegam em `text/plain` (o `navigator.sendBeacon` não dispara a checagem de CORS) ou JSON, até 8 KB, sempre com os totais da visita: o servidor guarda o maior tempo e a maior rolagem e junta as listas, com limites de tamanho, e tira a consulta das páginas. Visita desconhecida responde `404`; convertida ou descartada, `200` sem mudar nada. O script só age com o `mkt_visita` na URL, não lê campos de formulário e não usa cookie. O `302` e o JavaScript são exceções ao envelope, como o `hub.challenge` (seção 11). A localização é simulada (`rastreamento/LocalizacaoSimulada`) até `RASTREAMENTO_GEOIP_ARQUIVO` apontar para uma base GeoLite2 City (`.mmdb`) existente; então vale `LocalizacaoPorGeoIp`, que lê só a base local, devolve vazio para IP privado ou desconhecido e marca a visita com `simulada = false`. A base não vai para o git (licença da MaxMind): cada ambiente baixa a sua. A URL pública do link e do script vem de `MARKETING_URL_PUBLICA`.
 
-> **Como o tenant do webhook é resolvido.** O slug do caminho é o subdomínio do tenant. O módulo pergunta à plataforma a qual tenant ele pertence, em `GET /api/identity/tenants/resolver?subdominio=`, com o próprio token de serviço. A permissão `identity.tenant.ver` já foi concedida ao marketing em `permissoes/identity.yaml`. Subdomínio desconhecido responde `404`.
+> **Como o tenant do webhook é resolvido.** O slug do caminho é o subdomínio do tenant. O módulo pergunta à plataforma a qual tenant ele pertence, em `GET /api/identity/tenants/resolver?subdominio=`, com o próprio token de serviço. A permissão `identity.tenant.ver` já foi concedida ao marketing em `permissoes/identity.yaml`. Subdomínio desconhecido responde `404`. O resultado fica em cache por 60 s (inclusive o `404`).
+>
+> **Respostas do webhook do Meta [E3].** `GET`: `200` com o `hub.challenge` em texto puro (só `[0-9A-Za-z_-]`, até 200 caracteres, senão `400`); `403` com envelope para modo ou `hub.verify_token` errados. `POST`: valida o `X-Hub-Signature-256` sobre o corpo bruto, em tempo constante; `200` na hora depois de gravar uma linha por `leadgen_id` no buffer (a reentrega não duplica), `401` para assinatura inválida, `400` para corpo ilegível, `413` acima de 256 KB. Tenant sem segredo configurado e subdomínio desconhecido respondem o mesmo `404`, sem revelar o motivo; identity fora do ar responde `503`, para o Meta reentregar. Nenhum segredo, token nem corpo vai para o log.
 >
 > Trocar o slug não dá acesso a outro tenant: a assinatura HMAC só confere com o App Secret daquele tenant. A chamada ao identity segue o timeout de 3 s (§9.6); a resposta pode ficar em cache curto.
 >
@@ -646,7 +653,9 @@ Todas com token de serviço e `X-Tenant-Id`, direto pelo nome do container, com 
 | `IDENTITY_BASE_URL` | `http://identity:8081` | já vem do compose da plataforma |
 | `LANDING_BASE_URL` | `http://landing:8088` | **[Pendente · Grupo 2]** pedir no compose do `marketing` |
 | `CRM_BASE_URL` | `http://crm:8082` | **[Pendente · Grupo 2]** pedir no compose do `marketing` |
-| `META_GRAPH_BASE_URL` | `https://graph.facebook.com` | só a partir da E4; nos testes aponta para o WireMock |
+| `META_GRAPH_BASE_URL` | `https://graph.facebook.com` | usada pelo job 4.1 (E4); nos testes aponta para o WireMock |
+| `META_GRAPH_VERSAO` | `v23.0` | versão da Graph API (`marketing.meta.graph-versao`) |
+| `RASTREAMENTO_GEOIP_ARQUIVO` | vazio | caminho da base GeoLite2 City; vazio mantém a localização simulada (seção 6, rastreamento) |
 
 - O token de serviço (`POST /api/identity/auth/token-servico`) fica em memória e é renovado 60 s antes de vencer. Se o destino responder `401`, o cliente pede outro token e repete a chamada uma vez
 - Toda falha vira `FalhaNaChamadaDeModulo`, com o motivo (`INDISPONIVEL`, `NAO_ENCONTRADO`, `NAO_AUTENTICADO`, `SEM_PERMISSAO`, `REJEITADA`, `RESPOSTA_INVALIDA`, `NAO_CONFIGURADO`). Cada rota trata a falha e mostra o que conseguiu; a que não tratar responde `503` com o código `INTEGRACAO_<MOTIVO>`
@@ -1195,7 +1204,8 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | `servicos` em `marketing.lead.ver_resumo`, para outros módulos lerem o resumo do lead com token de serviço (9.6). A API já aceita; falta declarar nas quatro cópias da permissão e no infra, e saber quem consome | Grupo 4, Grupo 2 | A definir |
 | Qual sessão o lead guarda quando a captura do chatbot o acha por e-mail ou telefone: hoje fica a mais recente, e a sessão antiga deixa de achá-lo | Grupo 4 | Proposta a confirmar |
 | Desistência da leitura do envio depois de 10 falhas (cerca de 10 minutos de Landing fora do ar): avaliar uma espera crescente entre as tentativas | Grupo 4 | A avaliar |
-| Onde guardar as respostas do formulário instantâneo do Meta: sem elas, uma nova pontuação do lead (por exemplo, quando ele envia um formulário do Landing) deixa de somar as regras `campo_meta` | Grupo 4 | A definir na E4 |
+| **[Resolvida na E4, 19/11]** Respostas do formulário instantâneo do Meta: ficam em `leads.respostas_meta` (`V13`), para uma nova pontuação continuar somando as regras `campo_meta`. Uma regra `{"direto": true}` deixa de valer para o lead que também veio do Meta | Grupo 4 | Concluída |
+| Canal `meta_ads` com `ativo = false` não impede o webhook de gravar; token da página expirado esgota as 5 tentativas e a linha vira `falha_permanente`, sem rota para reenfileirar; o lead do Meta não traz UTM | Grupo 4 | A avaliar |
 | SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao `marketing` (o módulo lê `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` e `MAIL_FROM`; sem elas, tenta `localhost:1025`, e o envio falha), e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
 | SSE pelo gateway (X8): testado em 19/11 com o gateway real, o `504` vem quando o primeiro byte demora mais de ~3 s; por isso o módulo manda `: conectado` na abertura, além do `: ping` a cada 15 s, e a conexão do painel passou de 40 s dentro da casca. Falta o Grupo 2 confirmar que a regra de 3 s vale só para o primeiro byte e se há teto de duração; o módulo fecha a conexão no `exp` do token e, sem o fluxo, a tela relê o resumo a cada 30 s | Grupo 2 | A confirmar |
 | Rate limit de 120 req/min por IP em `/public/**` pode barrar rajadas do webhook do Meta | Grupo 2 | A confirmar |
@@ -1213,7 +1223,7 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | **[Novo · IoT]** Base legal e aviso do rastreamento do lead 0 antes do aceite (legítimo interesse, sem cookie, dados apagados no prazo) e o aviso na landing page | Grupo 4, Grupo 7, professores | Proposta a confirmar |
 | **[Novo · IoT]** Exceção ao envelope para o `302` do link de campanha, para o `rastreamento.js` e para a página HTML do descadastro, como o `hub.challenge` | Grupo 2 | Pedir exceção registrada |
 | **[Novo · IoT]** `MARKETING_URL_PUBLICA` (endereço do gateway que o navegador alcança) no serviço `marketing` do compose da plataforma; até lá vale `http://localhost:8087` | Grupo 2 | A pedir |
-| **[Novo · IoT]** Localização por IP real (base GeoIP local, como a GeoLite2, sem chamar serviço externo); hoje é simulada | Grupo 4 | A fazer |
+| **[Novo · IoT]** Localização por IP real: implementada em 19/11 (R4, `LocalizacaoPorGeoIp`). Falta cada ambiente baixar a GeoLite2 City, montá-la no container e definir `RASTREAMENTO_GEOIP_ARQUIVO` | Grupo 4, Grupo 2 | Código pronto; falta a base no ambiente |
 | Custo real e ROI/ROAS: hoje o custo por lead é estimado pelo orçamento informado; ROI precisa do valor do contrato | Grupo 4, professores | Evolução futura |
 | Construtor visual de automação (60), gatilhos e ações (61–62) e campanhas de e-mail (63), atribuídos ao Grupo 4 pelo Mapa e não cobertos aqui | Grupo 4, professores | Lacuna de escopo a definir |
 | WhatsApp e telefonia (65–67), sem dono no Mapa | — | Fora desta fase; evolução futura |
@@ -1226,6 +1236,19 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 ---
 
 ## 12. Registro de alterações
+
+### 19/11/2026 · fase 3 (rodada 2): Meta Ads, localização real e ponta a ponta
+
+Entrega da rodada 2: D2, E3, E4, R4 e I4.
+
+- **Tabelas (seção 3):** `V3` cria `leads_entrada_buffer` (`payload_bruto` obrigatório, índice parcial das linhas pendentes); `V13` acrescenta `leads.respostas_meta` (jsonb), zerada na anonimização
+- **Webhook do Meta (seção 6, E3):** `GET`/`POST /public/marketing/{subdominio}/meta/leads`, com o tenant resolvido no identity (cache de 60 s), handshake com `hub.challenge` em texto puro, HMAC `X-Hub-Signature-256` sobre o corpo bruto e `200` na hora depois de gravar no buffer. Respostas `401`, `400`, `413`, `403`, `404` e `503` descritas na seção 6
+- **Job 4.1 (seção 4.1, E4):** a cada 5 min, 500 linhas por tenant, `FOR UPDATE SKIP LOCKED`, uma transação por linha; busca na Graph API `v23.0` com o token da página em `Authorization: Bearer` (timeout 3 s), cria o lead na etapa 0 com `origem = meta_ads` (ou completa o que já existe por `meta_lead_id`, e-mail ou telefone), pontua com `campo_meta` e `utm` e atribui pelo rodízio; 5 falhas viram `falha_permanente`. Lead do Meta sem consentimento de marketing (X11), fora do aquecimento. Pacote `meta/` e `entrada/EntradaDoMeta`
+- **Localização real (seção 6, R4):** `LocalizacaoPorGeoIp` com base GeoLite2 City local, ativa só com `RASTREAMENTO_GEOIP_ARQUIVO`; senão vale a simulada
+- **Variáveis (seção 6):** `META_GRAPH_VERSAO` e `RASTREAMENTO_GEOIP_ARQUIVO`; `META_GRAPH_BASE_URL` passa a ser usada
+- **Ponta a ponta (I4):** `scripts/ponta-a-ponta.mjs` percorre login, link de campanha, clique, sinais, formulário no placeholder, CRM, lead na etapa 3, pontuação por comportamento, rodízio, visita convertida, boas-vindas no Mailpit, detalhe e, com `--descarte`, o descarte da visita. Executado em 19/11 contra a plataforma real: 64 conferências, 0 falhas. Roteiro em `Docs/roteiro-ponta-a-ponta.md`
+- Decisão da seção 11 fechada: onde guardar as respostas do Meta (`leads.respostas_meta`)
+- Nenhuma rota de contrato do infra nem permissão mudou. O webhook do Meta continua fora do envelope só no `hub.challenge` (X4)
 
 ### 19/11/2026 · validação ao vivo da rodada 1
 
