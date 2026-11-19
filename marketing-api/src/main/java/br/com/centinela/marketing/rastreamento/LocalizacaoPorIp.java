@@ -6,9 +6,9 @@ import java.util.Optional;
  * Localização aproximada (cidade, UF, país) do IP do clique no anúncio (R1). O IP não é guardado: só
  * a localização que sai dele, e só na visita.
  *
- * <p>Hoje a implementação é a {@link LocalizacaoSimulada}. Para a real, basta outra implementação
- * deste contrato (uma base GeoIP local, como a GeoLite2, sem chamar serviço externo) marcada como
- * {@code @Primary}; quem usa não muda.
+ * <p>A implementação padrão é a {@link LocalizacaoSimulada}. Com {@code RASTREAMENTO_GEOIP_ARQUIVO}
+ * apontando para uma base GeoLite2 City existente, vale a {@link LocalizacaoPorGeoIp} (R4), marcada
+ * como {@code @Primary}; quem usa não muda.
  */
 public interface LocalizacaoPorIp {
 
