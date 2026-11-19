@@ -1,6 +1,6 @@
 # Próximos passos · Módulo de Marketing
 
-Plano de trabalho a partir do alicerce criado em 25/09/2026, **revisado em 05/11/2026** depois do alinhamento com os contratos do Landing e do CRM: o Landing é o dono dos formulários, os eventos dele não trazem mais a etapa do funil e quem cria a oportunidade no CRM é o Landing (norteador, seção 12). Atualizado em 06/11/2026 com o fechamento da fase 1 (F4, F5, F6, Q1, W1, L1, L2, L5 e I2) e da fase 2, "lead qualificado e ligado ao CRM" (N1, Q2, E1, A2, L3, L4, E5, E6 e E11). Atualizado em 09/11/2026 com o ponto de IoT, o "lead 0" (R1 a R3), e a parte essencial da tela Leads (W5).
+Plano de trabalho a partir do alicerce criado em 25/09/2026, **revisado em 05/11/2026** depois do alinhamento com os contratos do Landing e do CRM: o Landing é o dono dos formulários, os eventos dele não trazem mais a etapa do funil e quem cria a oportunidade no CRM é o Landing (norteador, seção 12). Atualizado em 06/11/2026 com o fechamento da fase 1 (F4, F5, F6, Q1, W1, L1, L2, L5 e I2) e da fase 2, "lead qualificado e ligado ao CRM" (N1, Q2, E1, A2, L3, L4, E5, E6 e E11). Atualizado em 09/11/2026 com o ponto de IoT, o "lead 0" (R1 a R3), e a parte essencial da tela Leads (W5). Atualizado em 18/11/2026 com o PR #22 (D3, D6, D7, E7 a E10, A3, W4 e R5) e com a rodada 1 da fase 3: o painel (A4, W6 e R6), a integração com a casca real (W2), a tela Leads completa (W5) e os testes do checklist da plataforma (F7).
 
 O repositório já tem:
 
@@ -19,7 +19,11 @@ O repositório já tem:
 - o placeholder do Landing com a página, o formulário de exemplo, o chatbot, os dois eventos, a leitura do envio e a criação de empresa, contato e oportunidade no stub do CRM (L1 a L5);
 - o CI que testa e publica as imagens (I2);
 - o rastreamento do clique no anúncio, o "lead 0" (R1 a R3): link de campanha, script na landing page, ligação da visita ao lead no envio, pontuação por comportamento, descarte no prazo e a aba Rastreamento em Configurações;
-- a tela Leads, com lista, filtros e o detalhe em abas (W5, parte essencial);
+- a comunicação, o ciclo de vida e as configurações (PR #22): descadastro, boas-vindas, aquecimento, anonimização, canais de anúncio com segredos cifrados, modelos de mensagem, valores iniciais, APIs de configuração e a tela Configurações (D3, D6, D7, E7 a E10, A3, W4 e R5);
+- a tela Leads completa (W5): lista com filtros de campanha, vendedor e período, detalhe em abas, reatribuição do vendedor, histórico de consentimentos e resumos do CRM;
+- o painel (A4, W6 e R6): `GET /painel` com cache, o fluxo SSE `/painel/eventos`, a tela com o cartão do lead 0 e a atualização em tempo real (`V12`);
+- a integração com a casca real (W2): sessão, tema, abas por permissão, aviso à casca e modal dentro do iframe;
+- os testes do checklist da plataforma (F7), em `conformidade/ChecklistDaPlataformaTest`;
 - o ambiente local em Docker.
 
 Cada pasta tem um README com o que já existe: [marketing-api](marketing-api/README.md), [marketing-web](marketing-web/README.md), [landing-web](landing-web/README.md), [crm-stub](crm-stub/README.md) e [infra](infra/README.md).
@@ -42,21 +46,17 @@ Tarefas da mesma onda podem ser feitas **ao mesmo tempo**, por pessoas diferente
 
 | Onda | Tarefas | O que destrava |
 |---|---|---|
-| **0** · sem dependência pendente | F7, D2, D3, E7, A4, W5 (e D6 assim que X6 for resolvida; W2 assim que X9 for; C1 assim que X2 for) | os testes do checklist, o buffer do Meta, as tabelas de e-mail, o descadastro, o painel e a tela de leads |
-| **1** | D7, E3, E10, W6, I3, I4 | os valores iniciais, o webhook do Meta, a anonimização, a tela do Painel, a entrega na plataforma e o teste de ponta a ponta |
-| **2** | E4, E8, A3 | os leads do Meta, a boas-vindas e as configurações |
-| **3** | E9, W4 | o aquecimento e a tela de Configurações |
+| **0** · sem dependência pendente | D2, R4, I3, I4 (e C1 assim que X2 for) | o buffer do Meta, a localização real, a entrega na plataforma (com o checklist) e o teste de ponta a ponta |
+| **1** | E3 | o webhook do Meta |
+| **2** | E4 | os leads do Meta |
 
-**Caminhos críticos.** As cadeias mais longas têm 4 passos:
+**Caminhos críticos.** A cadeia mais longa tem 3 passos:
 
 ```
-D3 → D7 → A3 → W4           configurações
-D3 → D7 → E8 → E9           boas-vindas e aquecimento
-A4 → W6                     painel
-W5 → I4                     teste de ponta a ponta
+D2 → E3 → E4                leads do Meta
 ```
 
-**Mais urgentes:** **D3**, que está nos dois caminhos mais longos, e **W5**, que fecha o teste de ponta a ponta (I4): o back da jornada do lead já está pronto.
+**Mais urgentes:** **I4**, o teste de ponta a ponta, que agora tem a tela de leads e o painel para conferir, e **I3**, a entrega no `infra-integrador-2026`, que fecha o checklist de 19 itens com o Grupo 2 (F7 e W2 estão prontas; a X14 bloqueia só em parte).
 
 ## Divisão sugerida em trilhas
 
@@ -64,11 +64,11 @@ Cada trilha pode ser de uma pessoa ou dupla.
 
 | Trilha | Tarefas | Começa por |
 |---|---|---|
-| **1 · Back: fundação e dados** | F7, D2, D3, D6, D7 | D3 |
-| **2 · Back: entrada de leads e Etapa 1** | E3, E4, E7–E10, C1 | E7 (e E3 depois da D2) |
-| **3 · Back: Etapa 2 (qualificação e APIs)** | A3, A4 | A4 |
-| **4 · Front** | W2, W4–W6 | W5 |
-| **5 · Placeholder, integração e entregas** | I3, I4 | I4, quando a W5 ficar pronta |
+| **1 · Back: fundação e dados** | D2 | D2 |
+| **2 · Back: entrada de leads e Etapa 1** | E3, E4, C1, R4 | E3, depois da D2 (R4 pode ir antes) |
+| **3 · Back: Etapa 2 (qualificação e APIs)** | — (A2 a A4 prontas) | — |
+| **4 · Front** | — (W1 a W6 prontas) | — |
+| **5 · Placeholder, integração e entregas** | I3, I4 | I4, agora que a W5 e o painel estão prontos |
 | **Articulação com outros grupos** | X1–X16 | enviar logo X1 e X2, porque eles demoram |
 
 ## Tarefas
@@ -83,12 +83,12 @@ Cada trilha pode ser de uma pessoa ou dupla.
 | **F4** | **[concluída]** Base de consumo: filas `marketing.landing-leads` (ligada a `landing.eventos` por `landing.formulario.recebido` e `landing.chatbot.lead_capturado`) e `marketing.crm-oportunidades` (ligada a `crm.eventos` por `crm.oportunidade.criada`), declaradas pela API, cada uma com a DLQ `.dlq` (via `marketing.dlx`) depois de 3 tentativas; conferência do envelope e de `user_id = mq_<moduloOrigem>`; consumo idempotente com `eventos_processados` na mesma transação do efeito (`ConsumoDeEventos`, `TopologiaDeConsumo`) | — | — | 8 |
 | **F5** | **[concluída]** Cliente HTTP para outros módulos (`compartilhado/http`): token de serviço (`clientId = marketing`) em cache, `X-Tenant-Id`, timeout de 3 s, uma nova tentativa depois de `401`, endereço por variável de ambiente (`LANDING_BASE_URL`, `CRM_BASE_URL`, `IDENTITY_BASE_URL`), chamando direto pelo nome do container; falha vira `FalhaNaChamadaDeModulo` | — | — | 6 |
 | **F6** | **[concluída]** Infra de testes (`compartilhado/teste`): `IntegracaoDeTeste` com Postgres e RabbitMQ no Testcontainers e WireMock para Landing, CRM, identity e Graph API do Meta (`ModulosSimulados`, `Envelopes`) | — | — | 10 |
-| **F7** | Testes do checklist da plataforma: `403` sem permissão, cabeçalho de 32 KB, `404` para lead de outro tenant e `tenantId` do corpo ignorado. A `LeadsApiTest` (A2) já cobre `403`, `404` de outro tenant e `tenantId` ignorado nas rotas de leads; falta o cabeçalho de 32 KB e juntar tudo num teste do checklist | — | I3 | 10 |
+| **F7** | **[concluída]** Testes do checklist da plataforma em `conformidade/ChecklistDaPlataformaTest`, um teste por item (`itemNN_...`): health sem token (2), `401` (3), `403` em 25 rotas (4), `404` de outro tenant (5), `tenantId` do corpo, da query e do cabeçalho ignorado (6), sete colunas (7), nenhuma FK para outro schema (8), envelope em todos os códigos e nas rotas públicas (9), listas com tamanho máximo 100 (10), migrations com `own_marketing` e app com `usr_marketing` (16) e cabeçalho de 32 KB com o Tomcat de verdade (19); os itens 17 e 18 já eram cobertos por `PublicadorDeEventosTest` e `ConsumoDeEventosIntegracaoTest`. O teste achou duas falhas de produção, já corrigidas em `TratadorDeErros`: `Content-Type` não suportado agora responde `415` e `Accept` que a API não produz responde `406`, ambos com envelope | — | — | 10 |
 | **F8** | **[concluída]** Variáveis de ambiente com os nomes do `docker-compose.yml` da plataforma (`SERVER_PORT`, `DB_URL`, `DB_APP_USER`, `DB_OWNER_USER`, `RABBITMQ_USER`, `JWKS_URI`...), no `application.yml`, no compose local e nos READMEs (PR #16) | — | — | 1 |
 
 ### Dados: migrations do Flyway (D)
 
-Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador. Fora das tarefas D, a fase 2 usou a `V9` (Q2: índice dos leads aguardando vendedor) e a `V10` (E5/E11: colunas e índice da leitura pendente do envio), e o IoT usou a `V11` (R1: rastreamento do anúncio); o próximo número livre é o `V12`.
+Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador. Fora das tarefas D, a fase 2 usou a `V9` (Q2: índice dos leads aguardando vendedor) e a `V10` (E5/E11: colunas e índice da leitura pendente do envio), e o IoT usou a `V11` (R1: rastreamento do anúncio) e o painel usou a `V12` (A4: índice `ix_lead_eventos_tenant_sequencia` do fluxo SSE); o próximo número livre é o `V13`. A `V3` segue reservada para a D2.
 
 O número da migration é da tarefa, não da ordem de merge: cada tarefa sai numa branch própria e os PRs podem entrar fora de ordem. Na plataforma e nos testes o banco sobe do zero e aplica tudo em ordem. No banco local, o perfil `dev` liga o `out-of-order` do Flyway para aplicar uma versão menor que chegou depois (ver o [README da API](marketing-api/README.md#banco-e-migrations)).
 
@@ -130,9 +130,9 @@ A entrada fica no pacote `entrada/`: `NormalizacaoDeContato`, `ChavesDeIdentidad
 | **Q1** | **[concluída]** Motor de pontuação (`MotorDePontuacao`, `PontuacaoDeLeads`): soma as regras ativas que valem para o lead (as de campo só do `formulario_id` dele, as de `campo_meta` para o Meta e as de `utm` para todos), cada critério uma vez, valendo a de mais pontos; define a faixa pelos limites do tenant (padrão `mql_quente` ≥ 70, `mql_morno` 40–69, `nutricao` < 40), grava o detalhe e registra `qualificacao_alterada` na timeline | — | — | 9.3 |
 | **Q2** | **[concluída]** Rodízio (`RodizioDeVendedores`): atribui o vendedor ativo que recebeu há mais tempo e notifica pela N1; fora do horário comercial ou sem vendedor, o lead fica "aguardando"; job 4.4 de atribuição pendente (`AtribuicaoPendente`, `V9`); reatribuição manual (`PUT /leads/{id}/vendedor`). Vendedores cadastrados à mão em `vendedores_rodizio` até a X7; transbordo depende do Grupo 6 | — | — | 9.3, 4.4 |
 | **A1** | **[cancelada]** API de formulários. O formulário é do Landing | — | — | 9.5 |
-| **A2** | **[concluída]** API de leads (`leads/api`): lista paginada com filtros (inclusive `canal`) e ordenação, detalhe em seções, `GET /leads/{id}/resumo` e `/leads/resumo?ids=` (sem dado pessoal) e busca global `GET /busca?q=`. O detalhe ainda não mostra as comunicações (D3), o nome do formulário, os resumos do CRM e o nome do vendedor | — | — | 9.2, 9.6 |
+| **A2** | **[concluída]** API de leads (`leads/api`): lista paginada com filtros (inclusive `canal`) e ordenação, detalhe em seções, `GET /leads/{id}/resumo` e `/leads/resumo?ids=` (sem dado pessoal) e busca global `GET /busca?q=`. O nome do vendedor no detalhe espera a X7 | — | — | 9.2, 9.6 |
 | **A3** | **[concluída]** APIs de configuração (`ConfiguracoesController`, `FormulariosDaQualificacao`): canais de anúncio, modelos de mensagem, ciclo de vida, qualificação, regras de pontuação, vendedores do rodízio e `GET /qualificacao/formularios` (formulários do Landing que já trouxeram lead, com o resumo lido no Landing) | — | — | 9.4 |
-| **A4** | API do painel: `GET /painel` com as agregações (cache Caffeine por tenant), sem visitantes, e SSE em `/painel/eventos` | X8 (parcial) | W6 | 9.1 |
+| **A4** | **[concluída]** API do painel (`painel/`, `V12`): `GET /painel` (`marketing.dashboard.ver`; filtros `periodo`, `origem` e `campanha`, com `400` por campo) com funil, qualificação, série temporal, conversão, campanhas, canais com custo estimado, distribuição, leads recentes e o bloco `leadZero` (R6), com cache Caffeine por tenant e filtros (30 s, `marketing.painel.cache`), e o SSE `GET /painel/eventos` (`id = lead_eventos.sequencia`, `Last-Event-ID`, `: ping` a cada 15 s, `lead_zero_atualizado`, limite de 20 conexões por tenant com `429`). Limitação: transação que confirma depois de outra com `sequencia` maior pode não chegar ao fluxo aberto; a releitura do resumo corrige. Resta a X8 (o gateway sustentar a conexão longa) | — | — | 9.1 |
 
 ### Front-end (W)
 
@@ -141,11 +141,11 @@ As telas podem começar antes da API ficar pronta, com dados fictícios no forma
 | ID | Tarefa | Bloqueado por | Bloqueia | § |
 |---|---|---|---|---|
 | **W1** | **[concluída]** Componentes do Design System em `components/ui`: `Modal`, `Input`, `Select`, `Textarea`, `FormSection`, `FormField`, `SearchBar`, `FilterBar`, `Pagination`, `ViewToggle`, `DetailField`, `DetailSection`, `Stepper` e `statusBadge`, com os neutros e o tema escuro do `ui/plataforma.css` | — | — | DS |
-| **W2** | Integração com a casca real: conferir o formato das mensagens com o `exemplo-modulo`, o tema (`data-tema`) e a altura; esconder as abas sem permissão. Levar os neutros e o `dark:` ao `LayoutModulo` e ao `EmConstrucao` e conferir o `Modal` dentro do iframe (a altura acompanha o conteúdo) | X9 | I3 | 9 |
+| **W2** | **[concluída]** Integração com a casca real (`plataforma/` e `LayoutModulo`): trata `plataforma:sessao`, `plataforma:token` e `plataforma:tema`, envia `modulo:notificar`, expõe `temPermissao`, `notificar` e os hooks `usarPermissao` e `usarTemSessao`; esconde as abas sem permissão e mostra "sem acesso" se não houver nenhuma; embutido não há abas internas (a casca abre os itens do `itensSubmenu`); tema escuro pelos neutros; `Modal` centralizado na parte visível do iframe, com a altura incluindo o modal aberto; `scripts/dev-plataforma.ps1 -ComCasca` sobe a casca | — | — | 9 |
 | **W3** | **[cancelada]** Tela Formulários. A aba saiu do front; as respostas aparecem no detalhe do lead (W5) | — | — | 9.5 |
 | **W4** | **[concluída]** Tela **Configurações**, com as cinco abas completas: rastreamento (R2), canais de anúncio (segredos do Meta só de escrita e URL do webhook), modelos de mensagem (com pré-visualização), ciclo de vida, e qualificação e distribuição (regras escolhendo formulário e campo do Landing, pergunta do Meta, UTM ou comportamento do lead 0) | — | — | 9.4 |
-| **W5** | **[parcial]** Tela **Leads**: lista com filtros (busca, etapa, faixa, origem, canal) e paginação, e detalhe em modal (rota `/leads/{id}`, a da busca global) com as abas Dados, Origem, Interação (visita do anúncio, R1), Respostas (inclusive "aguardando Landing" e "indisponíveis"), Pontuação e Timeline; `Tabs`, `Spinner` e `EmptyState` entraram no Design System. **Falta:** reatribuir o vendedor (`PUT /leads/{id}/vendedor`), o histórico de consentimentos, os e-mails (D3), o nome do vendedor (X7) e os resumos do CRM, e os filtros de campanha, vendedor e período | — | I4 | 9.2 |
-| **W6** | Tela **Painel**: funil, qualificação, série temporal, campanhas, canais, distribuição e leads recentes, com atualização por SSE | A4 | — | 9.1 |
+| **W5** | **[concluída]** Tela **Leads**: lista com filtros (busca, etapa, faixa, origem, canal, campanha, vendedor e período, na URL) e paginação, e detalhe em modal (rota `/leads/{id}`, a da busca global) com as abas Dados, Origem, Interação (visita do anúncio, R1), Respostas (inclusive "aguardando Landing" e "indisponíveis"), Pontuação e Timeline; reatribuição do vendedor (`PUT /leads/{id}/vendedor`, botão escondido sem `marketing.qualificacao.editar`, aviso à casca), histórico de consentimentos (IP e *User-Agent* só ali), e-mails enviados (D3) e resumos de empresa e contato buscados no CRM pelo front com o token do usuário (`requisitarModulo('crm', ...)`; falha vira "indisponível no CRM" só naquele campo); `Tabs`, `Spinner` e `EmptyState` entraram no Design System. O nome do vendedor segue indisponível até a X7 (mostra o id encurtado) | — | — | 9.2 |
+| **W6** | **[concluída]** Tela **Painel** (`features/painel` e `api/eventos.ts`): filtros, funil, qualificação, série por origem, campanhas, canais com custo "estimado", distribuição, leads recentes com link para o lead, conversão 1 → 3 e o cartão do lead 0 (R6); busca o resumo uma vez e aplica os eventos do SSE localmente, relê a cada 60 s com o fluxo e a cada 30 s sem ele ("Atualização em tempo real indisponível"); `fetch` + `ReadableStream` com reconexão e `Last-Event-ID`; gráficos em SVG e CSS | — | — | 9.1 |
 
 ### Placeholder do Landing (L)
 
@@ -172,7 +172,7 @@ Decisão de 09/11/2026 (norteador, seção 12): o IoT do Marketing é o **lead 0
 | **R3** | **[concluída]** Placeholder do Landing carrega o script do Marketing (`VITE_MARKETING_URL`), tem a seção de preços e os `data-rastreio`, e mostra o `mkt_visita` no rodapé de teste | — | — | 06* |
 | **R4** | Localização por IP real: outra implementação de `LocalizacaoPorIp` com base GeoIP local (GeoLite2), marcada `@Primary` | — | — | 6 |
 | **R5** | **[concluída]** Regras de comportamento na tela de qualificação (W4) e valores iniciais delas (D7) | — | — | 9.3 |
-| **R6** | Painel: cliques, lead 0, conversão e descarte por campanha e por dispositivo (A4/W6), com a atualização das visitas pelo SSE no lugar da releitura a cada 5 s | A4 | — | 9.1 |
+| **R6** | **[concluída]** Painel: bloco `leadZero` (cliques, ativas, convertidas, descartadas, taxa e quebras por campanha e por dispositivo) no `GET /painel`, evento `lead_zero_atualizado` no SSE e o cartão na tela (back e front). A aba Rastreamento de Configurações continua relendo as visitas a cada 5 s | — | — | 9.1 |
 
 ### Integração e entregas (I)
 
@@ -180,8 +180,22 @@ Decisão de 09/11/2026 (norteador, seção 12): o IoT do Marketing é o **lead 0
 |---|---|---|---|---|
 | **I1** | **[concluída]** Contratos no infra: `marketing.yaml` 0.2.0 (saúde, busca e resumo do lead) e `marketing.asyncapi.yaml` sem mensagens (PR #29 do infra). Daqui em diante, manter as cópias de `Docs/contratos/` iguais e publicar um evento só quando ele tiver consumidor | — | — | 10 |
 | **I2** | **[concluída]** CI (`.github/workflows/ci.yml`): testa a API e o front em todo PR e, no push na `main`, publica `ghcr.io/mateusbarnabe/marketing` e `marketing-front` com o workflow reutilizável `publicar-imagem.yml`. Depois do primeiro push, deixar os dois pacotes públicos no GitHub | — | — | 10 |
-| **I3** | Entrega no `infra-integrador-2026`: variáveis de imagem no `.env.example` (`IMAGEM_MARKETING=ghcr.io/mateusbarnabe/marketing:latest`, `IMAGEM_MARKETING_FRONT=ghcr.io/mateusbarnabe/marketing-front:latest`), seguidas da sessão do checklist (19 itens) com o Grupo 2. Contratos, permissões e menu já estão lá | F7, W2, X14 (parcial) | — | 10 |
-| **I4** | Teste de ponta a ponta no ambiente local: anúncio → formulário no placeholder → empresa, contato e oportunidade no stub do CRM → eventos → lead → pontuação → vendedor → oportunidade ligada → lead visível na tela. Tudo até "oportunidade ligada" já funciona; falta a tela (W5) | W5 | — | — |
+| **I3** | Entrega no `infra-integrador-2026`: variáveis de imagem no `.env.example` (`IMAGEM_MARKETING=ghcr.io/mateusbarnabe/marketing:latest`, `IMAGEM_MARKETING_FRONT=ghcr.io/mateusbarnabe/marketing-front:latest`), seguidas da sessão do checklist (19 itens) com o Grupo 2. Contratos, permissões e menu já estão lá; os testes do checklist (F7) e a integração com a casca (W2) estão prontos | X14 (parcial) | — | 10 |
+| **I4** | Teste de ponta a ponta no ambiente local: anúncio → formulário no placeholder → empresa, contato e oportunidade no stub do CRM → eventos → lead → pontuação → vendedor → oportunidade ligada → lead visível na tela e no painel. Tudo já funciona, inclusive a tela de leads (W5) e o painel; falta rodar o roteiro inteiro e registrar o resultado | — | — | — |
+
+## Pendências da validação ao vivo (19/11)
+
+O que a validação no navegador (Chrome, contra a plataforma real e a casca) não cobriu ou encontrou e deixou para depois. São do Grupo 4 e não dependem de outro grupo. O que ela cobriu e passou: painel com SSE ao vivo (inclusive pelo gateway), leads (lista, detalhe, consentimento, pontuação, reatribuição), resumos do CRM, configurações, módulo embutido na casca com tema claro e escuro, altura do iframe com o modal aberto (1280×720) e o botão de reatribuir escondido para quem não tem `marketing.qualificacao.editar`.
+
+| ID | O que falta | Como conferir |
+|---|---|---|
+| **V1** | **Configurações sem permissão de edição.** Quem só tem `marketing.configuracao.ver` (o `gestor@empresa-a.dev`) ainda vê o interruptor "Registrar as visitas", "Novo link" e os ícones de editar e excluir. A API responde `403 Sem permissão para esta ação.`, então é só usabilidade: esconder ou desabilitar com `usarPermissao` (`marketing.configuracao.editar`; `marketing.qualificacao.editar` para regras e escala; `marketing.template.*` para os modelos) | entrar como `gestor@` na casca, abrir Configurações e ver que nada pede uma ação que ele não pode fazer |
+| **V2** | **Reconexão do SSE na tela.** Só foram testados a abertura, os eventos ao vivo e 40 s de conexão. Falta: derrubar a API com o painel aberto e ver o selo voltar a "Ao vivo" com `Last-Event-ID`, sem repetir lead; e o fim da conexão no `exp` do token (15 min) com a casca entregando o token novo e o fluxo reabrindo | painel aberto na casca por mais de 15 min; `-Parar` e subir a API de novo |
+| **V3** | **Painel ao vivo com filtro.** Os contadores só mudam na hora quando o evento cabe no filtro; senão a tela relê o resumo (`podeAplicarLocalmente`). Falta enviar leads dentro e fora de uma campanha filtrada e conferir os números | filtrar por `black-friday-2026`, enviar um lead com outra `utm_campaign` e outro com essa |
+| **V4** | **Modal maior que a janela.** A altura do iframe e a posição do modal foram medidas só com 1280×720 e o detalhe do lead cabendo. Falta uma janela baixa ou estreita, em que o modal passa da área visível | casca com a janela em 1024×600 e o detalhe de um lead aberto |
+| **V5** | **Abas por permissão com um perfil parcial de verdade.** Foi testado com token sem assinatura e a API bloqueada (as abas somem e `/painel` vai para `/leads`), porque o identity de desenvolvimento só tem perfis completos (`marketing@`, `administrador@`), de leitura (`gestor@`) ou sem nenhuma permissão do Marketing (os demais; para esses a própria casca esconde o módulo). Falta repetir na casca com um perfil criado em Administração › Perfis de acesso, por exemplo só `marketing.lead.ver` | criar o perfil e um usuário no identity e entrar na casca |
+
+O stub do CRM e o placeholder do Landing guardam tudo em memória: ao reiniciar, os leads antigos continuam no banco do Marketing, mas o resumo deles no CRM responde `404` e a tela mostra "indisponível no CRM" (esperado).
 
 ## Dependências externas e decisões em aberto
 
@@ -196,8 +210,8 @@ Estas não se resolvem programando: precisam de resposta de outro grupo, dos pro
 | **X5** | Token da página do Meta e saída do container para a internet (Graph API) | Grupo 4, Grupo 2 | E4 |
 | **X6** | **[resolvida em 18/11]** Segredos do Meta em colunas cifradas de `canais_anuncio` (D6). Falta `MARKETING_CHAVE_CIFRA` no serviço `marketing` do compose da plataforma: sem ela, gravar um segredo responde `503` | Grupo 2 | E3 (parcial: sem a variável, os segredos não podem ser gravados) |
 | **X7** | Listar usuários com perfil VENDEDOR no identity | Grupo 2 | — (parcial: a Q2 usa os ids cadastrados à mão) |
-| **X8** | SSE passando pelo gateway (regra de `504` em 3 s) | Grupo 2 | A4 (parcial: polling como alternativa) |
-| **X9** | Se a casca usa o `itensSubmenu` do `modulos/marketing.json` para desenhar subitens na sidebar (o front já tem as abas) | Grupo 2 | W2 |
+| **X8** | SSE passando pelo gateway. Testado em 19/11 com o gateway real: ele devolve `504` quando o primeiro byte demora mais de ~3 s, e por isso o back agora manda `: conectado` na abertura, além do `: ping` a cada 15 s; a conexão passou de 40 s na casca. Falta confirmar com o Grupo 2 que a regra de 3 s vale só para o primeiro byte e se há teto de duração (o back fecha a conexão no `exp` do token) | Grupo 2 | — (parcial: sem o fluxo, a tela relê o resumo a cada 30 s) |
+| **X9** | **[resolvida do nosso lado em 18/11]** A casca recarrega o iframe em `/modulos/marketing/<rota>` a cada item do `itensSubmenu`; no modo embutido, as abas internas do front ficam escondidas (W2) | Grupo 2 | — |
 | **X10** | **[resolvida em 06/11]** Placeholder: envios em memória; as rotas lidas pelo Marketing exigem Bearer e `X-Tenant-Id`, sem validar a assinatura | Grupo 4 | — |
 | **X11** | Consentimento dos leads do Meta antes do aquecimento; se o aceite do Landing vale para o aquecimento; destinatário da notificação quando não há vendedor (hoje: não notifica); acesso do vendedor ao lead notificado | Grupo 4, professores | E9 (parcial) |
 | **X12** | Uma fonte para a etapa 2 do funil (preenchimento parcial) | Grupo 7 | — (a etapa 2 fica zerada) |
@@ -216,35 +230,20 @@ Uma seta `A --> B` quer dizer que **A bloqueia B**. As tarefas concluídas e can
 ```mermaid
 flowchart LR
   subgraph Fundacao["Fundação e dados"]
-    F7
-    D2 & D3 & D6 & D7
+    D2
   end
   subgraph Etapa1["Entrada e Etapa 1"]
-    E3 & E4 & E7 & E8 & E9 & E10 & C1
-  end
-  subgraph Etapa2["Etapa 2"]
-    A3 & A4
-  end
-  subgraph Front["Front"]
-    W2 & W4 & W5 & W6
+    E3 & E4 & C1 & R4
   end
   subgraph Placeholder["Integração"]
     I3 & I4
   end
 
-  F7 --> I3
   D2 --> E3 & E4
-  D3 --> D7 & E8 & E10 & A3
-  D6 --> E3 & A3
-  D7 --> E8 & A3
   E3 --> E4
-  E7 --> E8
-  E8 --> E9
-  A3 --> W4
-  A4 --> W6
-  W2 --> I3
-  W5 --> I4
 ```
+
+Sobraram sem seta: C1 (espera a X2), R4, I3 (espera a X14, em parte) e I4.
 
 ## Ao terminar uma tarefa
 

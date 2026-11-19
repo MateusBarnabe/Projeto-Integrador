@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => {
           target: env.API_PROXY_ALVO || 'http://localhost:8087',
           changeOrigin: true,
         },
+        // Resumos do CRM no detalhe do lead: na plataforma é a mesma origem do gateway; aqui, o crm-stub
+        '/api/crm': {
+          target: env.CRM_PROXY_ALVO || 'http://localhost:8082',
+          changeOrigin: true,
+        },
       },
     },
   };

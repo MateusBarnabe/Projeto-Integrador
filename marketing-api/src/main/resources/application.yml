@@ -109,6 +109,23 @@ marketing:
     localizacao-simulada:
       habilitada: ${RASTREAMENTO_LOCALIZACAO_SIMULADA:true}
 
+  # Painel (A4 e R6): cache das agregações por tenant e filtros, e fluxo SSE de eventos dos leads
+  painel:
+    cache:
+      # 0 desliga o cache
+      ttl: 30s
+      tamanho-maximo: 500
+    sse:
+      # De quanto em quanto tempo cada conexão consulta lead_eventos e visitas_anuncio
+      intervalo-consulta: 2s
+      # Comentário ": ping", para o gateway não fechar a conexão parada
+      intervalo-ping: 15s
+      limite-por-tenant: 20
+      # Teto da conexão; vale o que vencer primeiro entre ele e a expiração do token
+      duracao-maxima: 30m
+      lote: 200
+      threads: 4
+
   # Segredos dos canais de anúncio cifrados em repouso (D6) e remetente de e-mails (E8/E9). A chave
   # não tem padrão aqui (só no perfil dev): sem ela, a API recusa gravar os segredos do Meta (503).
   seguranca:

@@ -3,17 +3,19 @@ import {
   Activity,
   AlertCircle,
   Award,
-  Building2,
+  CheckCircle2,
   ClipboardList,
   History,
   MapPinned,
   Megaphone,
   User,
+  UserRoundPen,
   X,
 } from 'lucide-react';
 import { ErroApi } from '@/api/cliente';
 import {
   Badge,
+  Button,
   DetailField,
   DetailSection,
   EmptyState,
@@ -24,8 +26,12 @@ import {
   type Aba,
 } from '@/components/ui';
 import { InteracaoVisitante } from '@/components/InteracaoVisitante';
+import { plataforma, usarPermissao } from '@/plataforma';
 import { detalharLead, type DetalheLead } from './api';
+import { ReatribuirVendedorModal } from './ReatribuirVendedorModal';
+import { DadosDoCrm, HistoricoDeConsentimentos } from './SecoesDoDetalhe';
 import {
+  DICA_NOME_DO_VENDEDOR,
   NOME_CANAL,
   NOME_ETAPA,
   NOME_EVENTO,
@@ -35,25 +41,35 @@ import {
   NOME_ORIGEM,
   dataHora,
   valorDaResposta,
+  vendedorEncurtado,
 } from './formatos';
 
 type AbaDetalhe = 'dados' | 'origem' | 'interacao' | 'respostas' | 'pontuacao' | 'timeline';
 
 /**
  * Detalhe do lead (norteador §9.2): Modal xl noPad com cabeçalho brand-950 e abas internas
- * (Design System 5.2). A aba "Interação" mostra a visita do anúncio que converteu (R1).
- * Ficam para depois: e-mails (D3), reatribuição do vendedor e os resumos do CRM.
+ * (Design System 5.2). A aba "Interação" mostra a visita do anúncio que converteu (R1). A aba "Dados"
+ * traz o contato, o vendedor (com a reatribuição manual), o histórico de consentimentos (a evidência
+ * de IP e User-Agent só aparece aqui), os e-mails enviados (D3) e, em "CRM", a oportunidade com os
+ * resumos de empresa e contato, buscados direto no CRM com o token do usuário (§9.2): se o CRM falhar,
+ * só aquele campo diz "indisponível" e o resto do detalhe continua (§9.6).
  */
 export function DetalheLeadModal({ id, onClose }: { id: string | null; onClose: () => void }) {
   const [detalhe, setDetalhe] = useState<DetalheLead | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<AbaDetalhe>('dados');
+  const [reatribuindo, setReatribuindo] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  // Esconder o botão é só usabilidade: a API continua respondendo 403 sem a permissão.
+  const podeReatribuir = usarPermissao('marketing.qualificacao.editar');
 
   useEffect(() => {
     if (!id) return;
     let ativo = true;
     setDetalhe(null);
     setErro(null);
+    setAviso(null);
+    setReatribuindo(false);
     setAba('dados');
     detalharLead(id)
       .then((dados) => ativo && setDetalhe(dados))
@@ -62,6 +78,18 @@ export function DetalheLeadModal({ id, onClose }: { id: string | null; onClose: 
       ativo = false;
     };
   }, [id]);
+
+  /** Relê o detalhe depois de reatribuir, sem voltar para a aba "Dados" nem mostrar o carregando. */
+  function recarregar() {
+    if (!id) return;
+    detalharLead(id)
+      .then((dados) => {
+        setDetalhe(dados);
+        setAviso('Vendedor reatribuído.');
+        plataforma.notificar('sucesso', 'Vendedor reatribuído.');
+      })
+      .catch(() => setAviso('Vendedor reatribuído, mas não foi possível recarregar o lead. Feche e abra de novo.'));
+  }
 
   const temInteracao = !!(detalhe?.interacao?.contextoTecnico || detalhe?.interacao?.comportamento);
   const abas: Aba[] = [
@@ -126,9 +154,34 @@ export function DetalheLeadModal({ id, onClose }: { id: string | null; onClose: 
         ) : !detalhe ? (
           <Spinner />
         ) : (
-          <ConteudoDaAba aba={aba} detalhe={detalhe} />
+          <>
+            {aviso && (
+              <p
+                role="status"
+                className="mb-4 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800 dark:bg-brand-800/20 dark:text-brand-300"
+              >
+                <CheckCircle2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                {aviso}
+              </p>
+            )}
+            <ConteudoDaAba
+              aba={aba}
+              detalhe={detalhe}
+              onReatribuir={podeReatribuir ? () => setReatribuindo(true) : undefined}
+            />
+          </>
         )}
       </div>
+
+      {detalhe && (
+        <ReatribuirVendedorModal
+          aberto={reatribuindo}
+          leadId={detalhe.id}
+          vendedorAtual={detalhe.vendedor.vendedorId}
+          onClose={() => setReatribuindo(false)}
+          onReatribuido={recarregar}
+        />
+      )}
     </Modal>
   );
 }
@@ -138,7 +191,15 @@ function nomeDoLead(detalhe: DetalheLead) {
   return detalhe.contato.nome || detalhe.contato.email || 'Lead sem nome';
 }
 
-function ConteudoDaAba({ aba, detalhe }: { aba: AbaDetalhe; detalhe: DetalheLead }) {
+function ConteudoDaAba({
+  aba,
+  detalhe,
+  onReatribuir,
+}: {
+  aba: AbaDetalhe;
+  detalhe: DetalheLead;
+  onReatribuir?: () => void;
+}) {
   switch (aba) {
     case 'dados':
       return (
@@ -153,23 +214,27 @@ function ConteudoDaAba({ aba, detalhe }: { aba: AbaDetalhe; detalhe: DetalheLead
             <DetailField label="Etapa">{NOME_ETAPA[detalhe.etapa]}</DetailField>
             <DetailField label="Entrou em">{dataHora(detalhe.criadoEm)}</DetailField>
             <DetailField label="Vendedor">
-              {detalhe.vendedor.vendedorId ? (
-                <span className="font-mono text-xs">{detalhe.vendedor.vendedorId}</span>
-              ) : (
-                statusBadge('aguardando_vendedor', 'aguardando vendedor')
-              )}
+              <span className="flex flex-wrap items-center gap-2">
+                {detalhe.vendedor.vendedorId ? (
+                  <span title={DICA_NOME_DO_VENDEDOR}>{vendedorEncurtado(detalhe.vendedor.vendedorId)}</span>
+                ) : (
+                  statusBadge('aguardando_vendedor', 'aguardando vendedor')
+                )}
+                {onReatribuir && (
+                  <Button variant="outline" size="sm" onClick={onReatribuir}>
+                    <UserRoundPen aria-hidden className="h-3 w-3 shrink-0" />
+                    {detalhe.vendedor.vendedorId ? 'Reatribuir' : 'Atribuir'}
+                  </Button>
+                )}
+              </span>
             </DetailField>
             <DetailField label="Atribuído em">{dataHora(detalhe.vendedor.atribuidoEm)}</DetailField>
           </DetailSection>
-          <DetailSection number={3} title="Consentimento">
+          <DetailSection number={3} title="Consentimento" className="mb-3">
             <DetailField label="Marketing">{detalhe.consentimento.marketing ? 'Aceito' : 'Sem aceite'}</DetailField>
             <DetailField label="Aceito em">{dataHora(detalhe.consentimento.aceitoEm)}</DetailField>
-            {detalhe.consentimento.historico[0]?.textoTermo && (
-              <DetailField label="Texto do termo" colSpan={2}>
-                {detalhe.consentimento.historico[0].textoTermo}
-              </DetailField>
-            )}
           </DetailSection>
+          <HistoricoDeConsentimentos historico={detalhe.consentimento.historico} />
           <DetailSection number={4} title="Comunicações e ciclo de vida">
             <DetailField label="Boas-vindas">
               {detalhe.aquecimento.boasVindasEnviadaEm
@@ -200,17 +265,7 @@ function ConteudoDaAba({ aba, detalhe }: { aba: AbaDetalhe; detalhe: DetalheLead
             )}
           </DetailSection>
           <DetailSection number={5} title="CRM">
-            <DetailField label="Oportunidade">
-              {detalhe.crm.oportunidadeId && <span className="font-mono text-xs">{detalhe.crm.oportunidadeId}</span>}
-            </DetailField>
-            <DetailField label="Empresa">
-              {detalhe.crm.empresaId && (
-                <span className="inline-flex items-center gap-1 font-mono text-xs">
-                  <Building2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                  {detalhe.crm.empresaId}
-                </span>
-              )}
-            </DetailField>
+            <DadosDoCrm crm={detalhe.crm} />
           </DetailSection>
         </>
       );

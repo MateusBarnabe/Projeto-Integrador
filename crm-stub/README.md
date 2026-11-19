@@ -4,17 +4,19 @@
 
 Contrato imitado: `contratos/crm.yaml` (0.5.0) e `contratos/crm.asyncapi.yaml` (0.1.0) do `infra-integrador-2026`. Usa o nome de serviço e a porta do CRM real (`crm:8082`), então trocar pelo módulo do Grupo 6 é só desligar este app.
 
-Quem chama: o placeholder do Landing, no envio (empresa, contato e oportunidade, com `origem: landing` e `origemModuloId = envioId`, tarefa L4). O Marketing não cria oportunidade; ele consome `crm.oportunidade.criada`.
+Quem chama: o placeholder do Landing, no envio (empresa, contato e oportunidade, com `origem: landing` e `origemModuloId = envioId`, tarefa L4), e o front do Marketing, nos resumos de empresa e contato do detalhe do lead (W5; em desenvolvimento, pelo proxy `/api/crm` do Vite). O Marketing não cria oportunidade; ele consome `crm.oportunidade.criada`.
 
 ## Rotas
 
-Todas respondem no envelope `{success, data, message, errors}`. O tenant vem do cabeçalho **`X-Tenant-Id`** (UUID; sem ele, `400`). O token não é conferido. Os dados ficam **em memória**, separados por tenant, e somem ao reiniciar.
+Todas respondem no envelope `{success, data, message, errors}`. Nos `POST`, o tenant vem do cabeçalho **`X-Tenant-Id`** (UUID; sem ele, `400`). Nos `GET` de resumo, vem do claim `tenant_id` do `Authorization: Bearer` (o token só é decodificado, a assinatura não é conferida, porque o front do Marketing os chama com o token do usuário); sem token, vale o `X-Tenant-Id`, e sem nenhum dos dois a resposta é `401`. Os dados ficam **em memória**, separados por tenant, e somem ao reiniciar.
 
 | Rota | Corpo (`crm.yaml`) | Respostas |
 |---|---|---|
 | `POST /api/crm/empresas` | `NovaEmpresa` (`razaoSocial`, `origem`, `origemModuloId` obrigatórios) | `201` + `Location`; `409 EMPRESA_DUPLICADA` com `data.empresaId` para CNPJ repetido no tenant; `400` |
 | `POST /api/crm/contatos` | `NovoContato` (`empresaId`, `nome` obrigatórios) | `201` + `Location`; `409 CONTATO_DUPLICADO` com `data.contatoId` para e-mail repetido na empresa; `400` (empresa inexistente inclusive) |
 | `POST /api/crm/oportunidades` | `NovaOportunidade` (`titulo`, `empresaId` obrigatórios) | `201` + `Location` e publica `crm.oportunidade.criada`; `400` para empresa, contato, unidade ou etapa inexistentes e `PRECISAO_EXCEDIDA` |
+| `GET /api/crm/empresas/{id}/resumo` | — | `200` `{id, razaoSocial, cnpj, cidade}`; `401`; `404` para id desconhecido ou de outro tenant |
+| `GET /api/crm/contatos/{id}/resumo` | — | `200` `{id, nome, cargo, email, telefone}`; `401`; `404` para id desconhecido ou de outro tenant |
 | `GET /api/crm/health` | — | `200` `{status: UP}` |
 
 Como na criação por serviço do CRM real: sem `etapaId`, a oportunidade entra na primeira etapa do funil padrão (um funil de mentira por tenant); sem `responsavelId`, fica sem responsável; sem próximo passo, recebe "Fazer o primeiro contato" com a data do dia.
@@ -44,7 +46,7 @@ Da raiz: `npm run dev:crm` (ou junto com os outros em `npm run dev`). Pelo Docke
 | Arquivo | O que tem |
 |---|---|
 | `src/index.ts` | servidor Express, `/api/crm/health`, `404` e erros no envelope |
-| `src/rotas.ts` | as três rotas `POST` e o filtro de `X-Tenant-Id` |
+| `src/rotas.ts` | as três rotas `POST`, as duas de resumo (`GET`) e a leitura do tenant (`X-Tenant-Id` ou claim `tenant_id` do token) |
 | `src/memoria.ts` | tipos e mapas em memória por tenant, com o funil padrão |
 | `src/validacao.ts` | leitura do corpo acumulando os erros `{campo, codigo, detalhe}` |
 | `src/publicador.ts` | conexão `amqplib` como `mq_crm`, canal com confirmação, envelope §9.7 |

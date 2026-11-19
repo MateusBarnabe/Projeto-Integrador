@@ -1,8 +1,11 @@
 /*
- * POST /api/crm/empresas, /contatos e /oportunidades, no formato do crm.yaml (0.5.0).
+ * POST /api/crm/empresas, /contatos e /oportunidades e GET /api/crm/empresas/{id}/resumo e
+ * /contatos/{id}/resumo, no formato do crm.yaml (0.5.0).
  *
- * O tenant vem do cabeçalho X-Tenant-Id, como nas chamadas com token de serviço (§9.2); o stub
- * não confere o token (o identity não é simulado aqui). Registros de outro tenant não existem.
+ * O tenant vem do cabeçalho X-Tenant-Id, como nas chamadas com token de serviço (§9.2), ou do claim
+ * tenant_id do JWT, como nas chamadas com token de usuário (o front do Marketing busca os resumos
+ * assim). O token é só decodificado: o stub não confere a assinatura (o identity não é simulado
+ * aqui). Registros de outro tenant não existem.
  */
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
@@ -15,6 +18,20 @@ export const rotas = Router();
 
 function tenantDe(res: Response): string {
   return res.locals.tenantId as string;
+}
+
+/** Claim tenant_id do `Authorization: Bearer`, decodificado sem validar a assinatura. */
+function tenantDoToken(req: Request): string | null {
+  const autorizacao = req.header('Authorization');
+  const token = autorizacao?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  const payload = token?.split('.')[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { tenant_id?: unknown };
+    return ehUuid(claims.tenant_id) ? claims.tenant_id : null;
+  } catch {
+    return null;
+  }
 }
 
 function exigirTenant(req: Request, res: Response, next: NextFunction): void {
@@ -31,6 +48,21 @@ function exigirTenant(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+/** Resumos: o tenant sai do token do usuário; sem ele, vale o X-Tenant-Id do token de serviço. */
+function exigirTenantDoTokenOuCabecalho(req: Request, res: Response, next: NextFunction): void {
+  const doToken = tenantDoToken(req);
+  if (doToken) {
+    res.locals.tenantId = doToken.toLowerCase();
+    next();
+    return;
+  }
+  if (!req.header('Authorization') && !req.header('X-Tenant-Id')) {
+    res.status(401).json(erro('Não autenticado.'));
+    return;
+  }
+  exigirTenant(req, res, next);
+}
+
 function dadosInvalidos(res: Response, mensagem: string, leitor: Leitor): void {
   res.status(400).json(erro(mensagem, leitor.erros));
 }
@@ -39,9 +71,31 @@ function criado<T>(res: Response, rota: string, id: string, data: T): void {
   res.status(201).location(`${rota}/${id}`).json(ok(data));
 }
 
-rotas.use('/api/crm/empresas', exigirTenant);
-rotas.use('/api/crm/contatos', exigirTenant);
 rotas.use('/api/crm/oportunidades', exigirTenant);
+rotas.use('/api/crm/empresas', (req, res, next) =>
+  req.method === 'GET' ? exigirTenantDoTokenOuCabecalho(req, res, next) : exigirTenant(req, res, next),
+);
+rotas.use('/api/crm/contatos', (req, res, next) =>
+  req.method === 'GET' ? exigirTenantDoTokenOuCabecalho(req, res, next) : exigirTenant(req, res, next),
+);
+
+function naoEncontrado(res: Response, mensagem: string): void {
+  res.status(404).json(erro(mensagem));
+}
+
+rotas.get('/api/crm/empresas/:id/resumo', (req, res) => {
+  const empresa = ehUuid(req.params.id) ? doTenant(tenantDe(res)).empresas.get(req.params.id.toLowerCase()) : undefined;
+  if (!empresa) return naoEncontrado(res, 'Empresa não encontrada.');
+  res.json(ok({ id: empresa.id, razaoSocial: empresa.razaoSocial, cnpj: empresa.cnpj, cidade: empresa.cidade }));
+});
+
+rotas.get('/api/crm/contatos/:id/resumo', (req, res) => {
+  const contato = ehUuid(req.params.id) ? doTenant(tenantDe(res)).contatos.get(req.params.id.toLowerCase()) : undefined;
+  if (!contato) return naoEncontrado(res, 'Contato não encontrado.');
+  res.json(
+    ok({ id: contato.id, nome: contato.nome, cargo: contato.cargo, email: contato.email, telefone: contato.telefone }),
+  );
+});
 
 rotas.post('/api/crm/empresas', (req, res) => {
   const dados = doTenant(tenantDe(res));

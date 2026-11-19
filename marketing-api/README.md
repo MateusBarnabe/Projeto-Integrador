@@ -2,7 +2,7 @@
 
 API do módulo de Marketing (Grupo 4). Recebe os leads, guarda o funil, qualifica, distribui entre vendedores e atende o front do módulo e os outros módulos da plataforma.
 
-> **Estado atual (06/11/2026): jornada do lead pronta no back.** Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API já consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. Faltam as tabelas de e-mail e as configurações (D3, D7, A3), o painel (A4), o Meta (E3, E4), o descadastro e os e-mails (E7 a E10). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (18/11/2026): back pronto, falta o Meta e levar o vendedor ao CRM.** Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API já consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. A comunicação (descadastro, boas-vindas, aquecimento e anonimização, E7 a E10), as tabelas de e-mail e as configurações (D3, D6, D7, A3) e o painel com o fluxo SSE (A4) também estão prontos. Faltam o Meta (D2, E3, E4) e levar o vendedor ao CRM (C1). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
 
 | | |
 |---|---|
@@ -109,6 +109,7 @@ marketing-api/
     │   │   ├── leads/                         lead, timeline e consentimentos (D1, D8)
     │   │   │   └── api/                       API de leads: lista, detalhe, resumo e busca (A2)
     │   │   ├── notificacoes/                  NOVO_LEAD e registro na timeline (N1)
+    │   │   ├── painel/                        resumo do painel com cache e fluxo SSE de eventos (A4, R6)
     │   │   ├── qualificacao/                  regras, faixas e motor de pontuação (D5, Q1)
     │   │   ├── rastreamento/                  lead 0: link de campanha, visita, sinais, vínculo e job 4.7 (R1)
     │   │   │   └── api/                       rotas públicas e de configuração do rastreamento
@@ -118,13 +119,15 @@ marketing-api/
     │       ├── application.yml                configuração
     │       ├── application-dev.yml            perfil dev (Flyway fora de ordem, endereços em localhost)
     │       ├── rastreamento/rastreamento.js   script que a landing page carrega (R1)
-    │       └── db/migration/                  migrations do Flyway (V1, V2, V6, V8, V9, V10, V11)
+    │       └── db/migration/                  migrations do Flyway (V1, V2, V4, V6 a V12)
     └── test/java/br/com/centinela/marketing/
         ├── FundacaoApiTest.java               testes do alicerce (Testcontainers)
         ├── compartilhado/                     dados, http, mensageria, segurança e a base de integração (F6)
         ├── entrada/                           consumo do chatbot, do envio, da oportunidade e job 4.6
         ├── leads/                             regras do lead, repositórios e a API (leads/api)
         ├── notificacoes/, rodizio/            pedidos à plataforma e rodízio
+        ├── painel/                            API do painel e fluxo SSE (A4, R6)
+        ├── conformidade/                      ChecklistDaPlataformaTest: um teste por item do checklist (F7)
         ├── qualificacao/                      regras da qualificação e motor de pontuação
         └── rastreamento/                      User-Agent, link, sinais e a API do rastreamento (o ponta a ponta está em entrada/)
 ```
@@ -164,6 +167,8 @@ Todo controller devolve `ResponseEntity<Resposta<...>>`. Nunca devolva o objeto 
 | `HttpMessageNotReadableException` (JSON inválido) | `400` | "Corpo da requisição inválido." |
 | `NoResourceFoundException` (rota inexistente) | `404` | "Recurso não encontrado." |
 | `HttpRequestMethodNotSupportedException` | `405` | "Método não suportado." |
+| `HttpMediaTypeNotSupportedException` (`Content-Type` que a rota não lê) | `415` | "Tipo de conteúdo não suportado." |
+| `HttpMediaTypeNotAcceptableException` (`Accept` que a API não produz) | `406` | "Formato de resposta não suportado." |
 | qualquer outra `Exception` | `500` | "Erro inesperado." (o detalhe vai só para o log) |
 
 Quando surgirem as regras de negócio, este é o lugar para tratar `404` de registro de outro tenant, `409` de duplicidade e `422` de regra violada.
@@ -240,6 +245,8 @@ Cada tarefa de dados do [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md) tem um núme
 | `V8__ajusta_leads_ao_contrato_do_landing.sql` | D8: ajusta a `V2` ao contrato do Landing. Em `leads`, sai `visitante_id` e `formulario_versao` e entram `sessao_id` (único por tenant), `canal` (`formulario`, `landing_page`, `embed`, `chatbot`) e `envio_lido_em`; `envio_id` passa a ser único por tenant; índices da leitura pendente e do contato do CRM. Em `lead_eventos`, `respostas_lidas` no lugar de `formulario_atualizado`. Em `lead_consentimentos`, `texto_termo` (`text`) no lugar de `versao_termo`, `sessao_id` novo, sai `formulario_versao` e as origens passam a ser `landing.formulario.recebido`, `landing.chatbot.lead_capturado` e `descadastro` |
 | `V9__indice_leads_aguardando_vendedor.sql` | Q2: índice parcial `(tenant_id, qualificado_em, id)` dos leads MQL sem vendedor, ativos e não anonimizados. "Aguardando vendedor" é derivado, sem coluna |
 | `V10__leitura_pendente_do_envio.sql` | E5/E11: `leitura_envio_falhas` e `leitura_envio_desistida_em` em `leads`, o índice da leitura pendente que sabe da desistência (no lugar do da `V8`) e os tipos `leads_unidos` e `respostas_indisponiveis` em `lead_eventos` |
+| `V11__cria_rastreamento_de_anuncios.sql` | R1: `rastreamento_configuracoes`, `links_campanha` e `visitas_anuncio` (o lead 0), `contexto_tecnico` e `comportamento` em `leads`, a fonte `comportamento` em `regras_pontuacao` e o tipo `visita_vinculada` em `lead_eventos` |
+| `V12__indice_eventos_do_painel.sql` | A4: índice `ix_lead_eventos_tenant_sequencia` em `lead_eventos (tenant_id, sequencia)`, para o fluxo SSE do painel consultar só os fatos do próprio tenant |
 
 Regras para as próximas tabelas (norteador, seção 3):
 
@@ -306,6 +313,22 @@ Pacote `entrada`, que segue a seção 5 do norteador. Os consumidores usam `Cons
 
 `RodizioDeVendedores.atribuir(lead)` escolhe o vendedor ativo que recebeu há mais tempo (só MQL com contato), grava, registra `vendedor_atribuido` e notifica; fora do horário comercial devolve "aguardando". `AtribuicaoPendente` é o job 4.4. `VendedorDoLeadController` é a reatribuição manual. `NotificacoesDeLead` monta `NOVO_LEAD` e o registro na timeline e publica por `PedidosAPlataforma`; sem vendedor, `DestinatarioSemVendedor` decide (hoje, não notifica). Em `crm/`, `ResponsavelDaOportunidade` é o ponto onde a C1 vai levar o vendedor ao CRM; a implementação atual só registra a pendência.
 
+### Painel (A4 e R6)
+
+Pacote `painel`, que segue o norteador (seções 6 e 9.1). O front é o `features/painel` do [marketing-web](../marketing-web/README.md).
+
+| Classe | O que é |
+|---|---|
+| `PainelController` | as duas rotas (`GET /painel` e `GET /painel/eventos`), com `@PreAuthorize("hasAuthority('marketing.dashboard.ver')")`; `400`, `403` e `429` saem sempre em JSON, mesmo com `Accept: text/event-stream`; o tenant vem só do token |
+| `FiltroPainel` | interpreta `periodo`, `origem` e `campanha` (mesmo formato da lista de leads); inválido vira `FiltroInvalidoException` com o erro por campo |
+| `ConsultasDoPainel` | as agregações em SQL só do tenant (sem join em outro schema): funil por etapa atual, qualificação, série por origem, conversão 1 para 3 pela timeline, campanhas, canais (regra do canal do lead: `meta_ads` ou `google_ads` pela origem e pelo `utm_source`/`utm_medium`), distribuição, leads recentes e o `leadZero` de `visitas_anuncio` |
+| `PainelServico`, `PainelConfig` | o resumo com cache Caffeine por tenant e filtros (`marketing.painel.cache`) |
+| `PainelResumo` | o DTO da resposta; percentuais em pontos com até 4 casas, dinheiro com 2; custo por lead e por MQL são estimativas do orçamento mensal (`null` sem orçamento ou sem leads) |
+| `FluxoDoPainel` | o SSE: cada conexão consulta `lead_eventos` (por `sequencia`) e `visitas_anuncio` do próprio tenant num agendador próprio (sem `@Scheduled`), manda `: ping` quando fica quieta, respeita o limite por tenant (`LimiteDeConexoesException`) e fecha no `exp` do token ou na duração máxima |
+| `PainelPropriedades` | `marketing.painel.*`: `cache.ttl` (padrão `30s`; `0` desliga) e `cache.tamanho-maximo` (`500`); `sse.intervalo-consulta` (`2s`), `sse.intervalo-ping` (`15s`), `sse.limite-por-tenant` (`20`), `sse.duracao-maxima` (`30m`), `sse.lote` (`200`) e `sse.threads` (`4`) |
+
+Limitação do fluxo: uma transação que confirma depois de outra com `sequencia` maior pode não chegar à conexão aberta; a releitura do resumo corrige. O gateway da plataforma sustentar a conexão longa continua em aberto (X8).
+
 ### API de leads (A2)
 
 Pacote `leads/api`: `LeadsController`, as consultas em `LeadConsultas` e os DTOs do detalhe, da lista, do resumo e da busca. Os parâmetros da lista estão no norteador, seção 6. O detalhe tem a seção `interacao` (contexto técnico e comportamento da visita do anúncio) e a lista, o `tipoDispositivo`.
@@ -353,6 +376,8 @@ A pontuação ganhou a fonte `comportamento` (`qualificacao/MetricaComportamento
 | GET | `/api/marketing/leads/resumo?ids=` | `marketing.lead.ver_resumo` | até 100 resumos |
 | PUT | `/api/marketing/leads/{id}/vendedor` | `marketing.qualificacao.editar` | reatribuição manual do vendedor |
 | GET | `/api/marketing/busca?q=` | `marketing.lead.ver` | busca global, até 5 itens |
+| GET | `/api/marketing/painel` | `marketing.dashboard.ver` | funil, qualificação, série, conversão, campanhas, canais, distribuição, leads recentes e `leadZero`; filtros `periodo` (`7d`, `30d`, `90d` ou `AAAA-MM-DD,AAAA-MM-DD`; padrão `30d`), `origem` (`meta_ads` ou `landing_page`) e `campanha`; filtro inválido dá `400` com o erro por campo |
+| GET | `/api/marketing/painel/eventos` | `marketing.dashboard.ver` | SSE (`text/event-stream`): `lead_criado`, `lead_etapa_alterada`, `lead_qualificado`, `lead_atribuido` e `lead_zero_atualizado`; `Authorization` por cabeçalho, `Last-Event-ID` na reconexão; acima de 20 conexões por tenant dá `429` com envelope |
 | GET / PUT | `/api/marketing/rastreamento` | `marketing.configuracao.ver` / `.editar` | rastreamento ligado, prazo de conversão e URL do script |
 | GET / POST | `/api/marketing/links-campanha` | `marketing.configuracao.ver` / `.editar` | links de campanha com a URL pública e os cliques |
 | PUT / DELETE | `/api/marketing/links-campanha/{id}` | `marketing.configuracao.editar` | altera ou exclui (soft delete) o link |
@@ -362,7 +387,7 @@ A pontuação ganhou a fonte `comportamento` (`qualificacao/MetricaComportamento
 | GET | `/public/marketing/rastreamento.js` | nenhuma | o script de rastreamento |
 | qualquer | outra rota em `/api/marketing/**` | — | sem token: `401` com envelope |
 
-Os outros endpoints previstos estão na seção 6 do norteador e nas tarefas A3 e A4 dos próximos passos.
+Os endpoints de configuração (A3) e os demais estão na seção 6 do norteador.
 
 ## Testes
 
@@ -406,6 +431,10 @@ class ConsumoDoEnvioTest extends IntegracaoDeTeste {
 
 `ModulosSimuladosTest` confere os simuladores sem Docker; `InfraDeTesteTest` confere a base (URLs no ambiente do Spring e RabbitMQ). `PublicadorDeEventosTest` já usa a base.
 
+### Checklist da plataforma (F7)
+
+`conformidade.ChecklistDaPlataformaTest` tem um teste por item do checklist de 19 itens, nomeado `itemNN_...`: health sem token (2), `401` (3), `403` em 25 rotas de leitura e escrita (4), `404` de outro tenant (5), `tenantId` do corpo, da query e do cabeçalho ignorado (6), sete colunas em toda tabela de negócio, exceto `eventos_processados` (7), nenhuma FK para outro schema (8), envelope em `200`, `201`, `400`, `401`, `403`, `404`, `405`, `406`, `409`, `415`, `422` e nas rotas públicas (9), listas com tamanho máximo 100 (10), migrations com `own_marketing` e app com `usr_marketing` (16) e cabeçalho de 32 KB, subindo o Tomcat de verdade com um token de cerca de 28 KB (19). Os itens 17 e 18 já eram cobertos por `PublicadorDeEventosTest` e `ConsumoDeEventosIntegracaoTest`; 1 e 11 a 15 são de ambiente ou documentação.
+
 ### Testes da jornada do lead
 
 Todos sobre a `IntegracaoDeTeste`, publicando os eventos reais no RabbitMQ do Testcontainers:
@@ -420,6 +449,7 @@ Todos sobre a `IntegracaoDeTeste`, publicando os eventos reais no RabbitMQ do Te
 | `OportunidadeDoCrmIntegracaoTest` | ligação com a oportunidade e lead criado antes do envio (E6) |
 | `RodizioDeVendedoresTest`, `HorarioDeAtendimentoTest`, `NotificacoesDeLeadTest` | rodízio com 3 leads e 2 vendedores, fora do horário, job 4.4 e as mensagens à plataforma (Q2, N1) |
 | `LeadsApiTest` | filtros, paginação, `403`, `404` de outro tenant, resumo sem dado pessoal e busca (A2) |
+| `PainelApiTest`, `PainelEventosTest` | o resumo (números do tenant sem misturar outro, filtros somados, `400` por campo, `401` e `403`, lead 0 e cache por tenant e filtros) e o SSE (fatos do tenant, `Last-Event-ID`, bloco do lead 0, limite de conexões com `429` e erros sempre em JSON) (A4, R6) |
 
 `BancoDeTeste` é a base dos testes de repositório (`@DataJpaTest` contra o mesmo PostgreSQL do Testcontainers, com Flyway). Os testes não rodam dentro de uma transação única, para cada chamada abrir sua sessão com o tenant de `TenantContexto`.
 
