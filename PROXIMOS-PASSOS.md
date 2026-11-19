@@ -1,6 +1,6 @@
 # Próximos passos · Módulo de Marketing
 
-Plano de trabalho a partir do alicerce criado em 25/09/2026, **revisado em 05/11/2026** depois do alinhamento com os contratos do Landing e do CRM: o Landing é o dono dos formulários, os eventos dele não trazem mais a etapa do funil e quem cria a oportunidade no CRM é o Landing (norteador, seção 12). Atualizado em 06/11/2026 com o fechamento da fase 1 (F4, F5, F6, Q1, W1, L1, L2, L5 e I2) e da fase 2, "lead qualificado e ligado ao CRM" (N1, Q2, E1, A2, L3, L4, E5, E6 e E11). Atualizado em 09/11/2026 com o ponto de IoT, o "lead 0" (R1 a R3), e a parte essencial da tela Leads (W5). Atualizado em 18/11/2026 com o PR #22 (D3, D6, D7, E7 a E10, A3, W4 e R5) e com a rodada 1 da fase 3: o painel (A4, W6 e R6), a integração com a casca real (W2), a tela Leads completa (W5) e os testes do checklist da plataforma (F7).
+Plano de trabalho a partir do alicerce criado em 25/09/2026, **revisado em 05/11/2026** depois do alinhamento com os contratos do Landing e do CRM: o Landing é o dono dos formulários, os eventos dele não trazem mais a etapa do funil e quem cria a oportunidade no CRM é o Landing (norteador, seção 12). Atualizado em 06/11/2026 com o fechamento da fase 1 (F4, F5, F6, Q1, W1, L1, L2, L5 e I2) e da fase 2, "lead qualificado e ligado ao CRM" (N1, Q2, E1, A2, L3, L4, E5, E6 e E11). Atualizado em 09/11/2026 com o ponto de IoT, o "lead 0" (R1 a R3), e a parte essencial da tela Leads (W5). Atualizado em 18/11/2026 com o PR #22 (D3, D6, D7, E7 a E10, A3, W4 e R5) e com a rodada 1 da fase 3: o painel (A4, W6 e R6), a integração com a casca real (W2), a tela Leads completa (W5) e os testes do checklist da plataforma (F7). Atualizado em 19/11/2026 com a rodada 2 da fase 3: os leads do Meta (D2, E3 e E4), a localização real por IP (R4) e o teste de ponta a ponta (I4).
 
 O repositório já tem:
 
@@ -24,6 +24,9 @@ O repositório já tem:
 - o painel (A4, W6 e R6): `GET /painel` com cache, o fluxo SSE `/painel/eventos`, a tela com o cartão do lead 0 e a atualização em tempo real (`V12`);
 - a integração com a casca real (W2): sessão, tema, abas por permissão, aviso à casca e modal dentro do iframe;
 - os testes do checklist da plataforma (F7), em `conformidade/ChecklistDaPlataformaTest`;
+- os leads do Meta Ads (D2, E3 e E4): buffer (`V3`), webhook público com handshake e HMAC, job 4.1 que busca na Graph API, cria o lead na etapa 0, pontua e atribui, e as respostas do formulário em `leads.respostas_meta` (`V13`);
+- a localização por IP real (R4): `LocalizacaoPorGeoIp`, com base GeoLite2 City local, ligada por `RASTREAMENTO_GEOIP_ARQUIVO`;
+- o teste de ponta a ponta (I4): `scripts/ponta-a-ponta.mjs` e `Docs/roteiro-ponta-a-ponta.md`, executado em 19/11 com 64 conferências e 0 falhas;
 - o ambiente local em Docker.
 
 Cada pasta tem um README com o que já existe: [marketing-api](marketing-api/README.md), [marketing-web](marketing-web/README.md), [landing-web](landing-web/README.md), [crm-stub](crm-stub/README.md) e [infra](infra/README.md).
@@ -46,17 +49,11 @@ Tarefas da mesma onda podem ser feitas **ao mesmo tempo**, por pessoas diferente
 
 | Onda | Tarefas | O que destrava |
 |---|---|---|
-| **0** · sem dependência pendente | D2, R4, I3, I4 (e C1 assim que X2 for) | o buffer do Meta, a localização real, a entrega na plataforma (com o checklist) e o teste de ponta a ponta |
-| **1** | E3 | o webhook do Meta |
-| **2** | E4 | os leads do Meta |
+| **0** · sem dependência pendente | I3 (e C1 assim que X2 for) | a entrega na plataforma (com o checklist) |
 
-**Caminhos críticos.** A cadeia mais longa tem 3 passos:
+Sobram só tarefas que dependem de outros grupos: a I3 (Grupo 2) e a C1 (Grupo 6).
 
-```
-D2 → E3 → E4                leads do Meta
-```
-
-**Mais urgentes:** **I4**, o teste de ponta a ponta, que agora tem a tela de leads e o painel para conferir, e **I3**, a entrega no `infra-integrador-2026`, que fecha o checklist de 19 itens com o Grupo 2 (F7 e W2 estão prontas; a X14 bloqueia só em parte).
+**Mais urgente:** **I3**, a entrega no `infra-integrador-2026`, que fecha o checklist de 19 itens com o Grupo 2 (F7 e W2 estão prontas; a X14 bloqueia só em parte). Junto vão o ajuste `MAIL_*` → `SMTP_*` e os pedidos que o Meta traz (gateway para `/public/marketing/**`, saída para `graph.facebook.com`, base GeoLite2 no container).
 
 ## Divisão sugerida em trilhas
 
@@ -64,11 +61,11 @@ Cada trilha pode ser de uma pessoa ou dupla.
 
 | Trilha | Tarefas | Começa por |
 |---|---|---|
-| **1 · Back: fundação e dados** | D2 | D2 |
-| **2 · Back: entrada de leads e Etapa 1** | E3, E4, C1, R4 | E3, depois da D2 (R4 pode ir antes) |
+| **1 · Back: fundação e dados** | — (D2 pronta) | — |
+| **2 · Back: entrada de leads e Etapa 1** | C1 | C1, quando a X2 for resolvida |
 | **3 · Back: Etapa 2 (qualificação e APIs)** | — (A2 a A4 prontas) | — |
 | **4 · Front** | — (W1 a W6 prontas) | — |
-| **5 · Placeholder, integração e entregas** | I3, I4 | I4, agora que a W5 e o painel estão prontos |
+| **5 · Placeholder, integração e entregas** | I3 | I3, com o checklist (I4 pronta) |
 | **Articulação com outros grupos** | X1–X16 | enviar logo X1 e X2, porque eles demoram |
 
 ## Tarefas
@@ -88,14 +85,14 @@ Cada trilha pode ser de uma pessoa ou dupla.
 
 ### Dados: migrations do Flyway (D)
 
-Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador. Fora das tarefas D, a fase 2 usou a `V9` (Q2: índice dos leads aguardando vendedor) e a `V10` (E5/E11: colunas e índice da leitura pendente do envio), e o IoT usou a `V11` (R1: rastreamento do anúncio) e o painel usou a `V12` (A4: índice `ix_lead_eventos_tenant_sequencia` do fluxo SSE); o próximo número livre é o `V13`. A `V3` segue reservada para a D2.
+Uma migration por tarefa, com o número fixo da tabela abaixo. Todas com as sete colunas obrigatórias e os tipos da seção 3 do norteador. Fora das tarefas D, a fase 2 usou a `V9` (Q2: índice dos leads aguardando vendedor) e a `V10` (E5/E11: colunas e índice da leitura pendente do envio), e o IoT usou a `V11` (R1: rastreamento do anúncio) e o painel usou a `V12` (A4: índice `ix_lead_eventos_tenant_sequencia` do fluxo SSE); a D2 usou a `V3` e a E4 usou a `V13` (`leads.respostas_meta`); o próximo número livre é o `V14`.
 
 O número da migration é da tarefa, não da ordem de merge: cada tarefa sai numa branch própria e os PRs podem entrar fora de ordem. Na plataforma e nos testes o banco sobe do zero e aplica tudo em ordem. No banco local, o perfil `dev` liga o `out-of-order` do Flyway para aplicar uma versão menor que chegou depois (ver o [README da API](marketing-api/README.md#banco-e-migrations)).
 
 | ID | Tarefa | Bloqueado por | Bloqueia | § |
 |---|---|---|---|---|
 | **D1** | **[concluída]** `V2`: `leads`, `lead_eventos` e `lead_consentimentos` | — | — | 3 |
-| **D2** | `V3`: `leads_entrada_buffer`, **só para o Meta**: `meta_lead_id` obrigatório e único por tenant, `payload_bruto` só com os ids do webhook (sem dado pessoal) | — | E3, E4 | 3 |
+| **D2** | **[concluída]** `V3`: `leads_entrada_buffer`, **só para o Meta**: `meta_lead_id` obrigatório e único por tenant, `payload_bruto` só com os ids do webhook (sem dado pessoal) | — | E3, E4 | 3 |
 | **D3** | **[concluída]** `V4`: `modelos_mensagem`, `lead_comunicacoes` e `ciclo_vida_configuracoes`, além de permitir zerar `token_descadastro` na anonimização | — | — | 3 |
 | **D4** | **[cancelada]** `V5`: `formularios` e `formulario_versoes`. O formulário é do Landing; o PR #12 foi fechado. O número `V5` fica sem uso | — | — | 9.5 |
 | **D5** | **[concluída]** `V6`: `regras_pontuacao` (com `formulario_id` e `campo_id` do Landing e a fonte `campo_meta`), `qualificacao_configuracoes` e `vendedores_rodizio` | — | — | 3, 9.3 |
@@ -111,8 +108,8 @@ A entrada fica no pacote `entrada/`: `NormalizacaoDeContato`, `ChavesDeIdentidad
 |---|---|---|---|---|
 | **E1** | **[concluída]** Consumir `landing.chatbot.lead_capturado` (etapa 1), na chegada: identidade por `sessao_id`, depois e-mail ou telefone normalizados; grava contato, UTM e consentimento; pontua só com as regras de `utm` (`CapturaDoChatbot`, `ConsumidorDeLeadsDoLanding`) | — | — | 5 |
 | **E2** | **[cancelada]** Drenagem do buffer para os eventos das etapas 0 e 1 do Landing. Os eventos do Landing são processados na chegada; o buffer ficou só para o Meta (E4) | — | — | 4.1 |
-| **E3** | Webhook público do Meta: handshake (`hub.challenge`), validação HMAC com o segredo do tenant, resolução do tenant pelo subdomínio e gravação no buffer | D2, D6, X4 | E4 | 6 |
-| **E4** | Job 4.1, leads do Meta: busca os dados na Graph API (`META_GRAPH_BASE_URL`), resolve a identidade (`ChavesDeIdentidade.doMeta`), grava em `leads` na etapa 0 e pontua com as regras `campo_meta` e `utm`. Decidir onde guardar as respostas do Meta: sem elas, uma nova pontuação (por exemplo, na E5) deixa de somar as regras `campo_meta` | E3, X5 | — | 4.1 |
+| **E3** | **[concluída]** Webhook público do Meta: handshake (`hub.challenge`), validação HMAC com o segredo do tenant, resolução do tenant pelo subdomínio (cache de 60 s) e gravação no buffer. Falta só a exceção ao envelope no contrato (X4) | X4 (só o registro) | — | 6 |
+| **E4** | **[concluída]** Job 4.1, leads do Meta: busca os dados na Graph API (`META_GRAPH_BASE_URL`), resolve a identidade, grava em `leads` na etapa 0, pontua e atribui pelo rodízio. As respostas do Meta ficam em `leads.respostas_meta` (`V13`). Falta o token da página e a saída do container (X5) para funcionar em produção | X5 (só a operação) | — | 4.1 |
 | **E5** | **[concluída]** Consumir `landing.formulario.recebido` (etapa 3), na chegada: lê `GET /api/landing/envios/{id}`, acha o lead por `envio_id`, `sessao_id`, `crm_contato_id` e e-mail/telefone, grava os ids do CRM, contato, respostas, UTM e consentimento, junta os duplicados, pontua e atribui vendedor (`EnvioDoFormulario`). Com o Landing fora do ar, deixa a leitura pendente | — | — | 5 |
 | **E6** | **[concluída]** Consumir `crm.oportunidade.criada` (só `origem = landing`): acha o lead por `envio_id = origemModuloId` ou `crm_contato_id`, cria o lead pendente se o evento chegou antes do envio, grava `crm_oportunidade_id` e `handoff_crm` e pede o registro na timeline (`OportunidadeDoCrm`). Levar o vendedor como responsável fica no ponto `crm/ResponsavelDaOportunidade`, para a C1 | — | — | 5, 9.6 |
 | **E7** | **[concluída]** Descadastro público (`DescadastroPublicoController`, `DescadastroDeLead`): `GET /public/marketing/descadastro/{token}` mostra a confirmação, e o `POST` efetiva o opt-out e grava a revogação (com IP e *User-Agent*) em `lead_consentimentos`. No navegador, as duas respondem uma página HTML (`PaginaDeDescadastro`), com o botão que faz o `POST` | — | — | 6 |
@@ -170,7 +167,7 @@ Decisão de 09/11/2026 (norteador, seção 12): o IoT do Marketing é o **lead 0
 | **R1** | **[concluída]** Back do rastreamento (`rastreamento/`, `V11`): link de campanha (`GET /public/marketing/c/{codigo}`, `302` com UTM e `mkt_visita`), sinais do script (`POST /public/marketing/visitas/{id}/sinais`), `rastreamento.js`, ligação da visita ao lead na leitura do envio (`VinculoDeVisitas`, antes da pontuação), fonte `comportamento` nas regras de pontuação, job 4.7 de descarte e as rotas de configuração, links e visitas. Localização por IP simulada (`LocalizacaoSimulada`) | — | — | 2, 3, 4.7, 5, 6 |
 | **R2** | **[concluída]** Front: aba Rastreamento em Configurações (resumo de 24 h, configuração e tag do script, links com "Simular clique" e visitas ao vivo com a contagem do descarte) e a aba Interação no detalhe do lead | — | — | 9.2, 9.4 |
 | **R3** | **[concluída]** Placeholder do Landing carrega o script do Marketing (`VITE_MARKETING_URL`), tem a seção de preços e os `data-rastreio`, e mostra o `mkt_visita` no rodapé de teste | — | — | 06* |
-| **R4** | Localização por IP real: outra implementação de `LocalizacaoPorIp` com base GeoIP local (GeoLite2), marcada `@Primary` | — | — | 6 |
+| **R4** | **[concluída]** Localização por IP real: `LocalizacaoPorGeoIp` com base GeoLite2 City local, `@Primary` só quando `RASTREAMENTO_GEOIP_ARQUIVO` aponta para um arquivo existente. Cada ambiente baixa a base (licença da MaxMind) | — | — | 6 |
 | **R5** | **[concluída]** Regras de comportamento na tela de qualificação (W4) e valores iniciais delas (D7) | — | — | 9.3 |
 | **R6** | **[concluída]** Painel: bloco `leadZero` (cliques, ativas, convertidas, descartadas, taxa e quebras por campanha e por dispositivo) no `GET /painel`, evento `lead_zero_atualizado` no SSE e o cartão na tela (back e front). A aba Rastreamento de Configurações continua relendo as visitas a cada 5 s | — | — | 9.1 |
 
@@ -181,7 +178,7 @@ Decisão de 09/11/2026 (norteador, seção 12): o IoT do Marketing é o **lead 0
 | **I1** | **[concluída]** Contratos no infra: `marketing.yaml` 0.2.0 (saúde, busca e resumo do lead) e `marketing.asyncapi.yaml` sem mensagens (PR #29 do infra). Daqui em diante, manter as cópias de `Docs/contratos/` iguais e publicar um evento só quando ele tiver consumidor | — | — | 10 |
 | **I2** | **[concluída]** CI (`.github/workflows/ci.yml`): testa a API e o front em todo PR e, no push na `main`, publica `ghcr.io/mateusbarnabe/marketing` e `marketing-front` com o workflow reutilizável `publicar-imagem.yml`. Depois do primeiro push, deixar os dois pacotes públicos no GitHub | — | — | 10 |
 | **I3** | Entrega no `infra-integrador-2026`: variáveis de imagem no `.env.example` (`IMAGEM_MARKETING=ghcr.io/mateusbarnabe/marketing:latest`, `IMAGEM_MARKETING_FRONT=ghcr.io/mateusbarnabe/marketing-front:latest`), seguidas da sessão do checklist (19 itens) com o Grupo 2. Contratos, permissões e menu já estão lá; os testes do checklist (F7) e a integração com a casca (W2) estão prontos | X14 (parcial) | — | 10 |
-| **I4** | Teste de ponta a ponta no ambiente local: anúncio → formulário no placeholder → empresa, contato e oportunidade no stub do CRM → eventos → lead → pontuação → vendedor → oportunidade ligada → lead visível na tela e no painel. Tudo já funciona, inclusive a tela de leads (W5) e o painel; falta rodar o roteiro inteiro e registrar o resultado | — | — | — |
+| **I4** | **[concluída]** Teste de ponta a ponta no ambiente local: `scripts/ponta-a-ponta.mjs` (login, link de campanha, clique, sinais, formulário no placeholder, CRM, lead na etapa 3, pontuação, rodízio, visita convertida, boas-vindas no Mailpit, detalhe e, com `--descarte`, o descarte). Executado em 19/11/2026: 64 conferências, 0 falhas. Roteiro em `Docs/roteiro-ponta-a-ponta.md` | — | — | — |
 
 ## Pendências da validação ao vivo (19/11)
 

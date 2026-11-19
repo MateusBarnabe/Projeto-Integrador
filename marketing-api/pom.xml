@@ -23,6 +23,7 @@
         <!-- Linha 2.x = Spring Boot 3 (a 3.x é para o Spring Boot 4) -->
         <springdoc.version>2.9.1</springdoc.version>
         <wiremock.version>3.13.1</wiremock.version>
+        <geoip2.version>5.2.0</geoip2.version>
     </properties>
 
     <dependencies>
@@ -75,6 +76,13 @@
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- Rastreamento (R4): leitor da base GeoIP local (GeoLite2 City), sem chamar serviço externo -->
+        <dependency>
+            <groupId>com.maxmind.geoip2</groupId>
+            <artifactId>geoip2</artifactId>
+            <version>${geoip2.version}</version>
         </dependency>
 
         <!-- Documentação: OpenAPI gerado dos controllers e Swagger UI (liga/desliga por SWAGGER_HABILITADO) -->

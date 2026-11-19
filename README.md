@@ -102,6 +102,7 @@ O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador
 | [documento-norteador.md](Docs/documento-norteador.md) | **Fonte da verdade do grupo:** etapas do projeto, funil, tabelas, jobs, endpoints, permissões, mensageria, Etapa 2, testes e pendências. O `.html` é a mesma coisa em página |
 | [contratos/](Docs/contratos/) | O que atravessa a fronteira do módulo: OpenAPI e AsyncAPI do Marketing (cópias do infra) e o que consumimos e pedimos ao Landing |
 | [demo-iot.md](Docs/demo-iot.md) | O ponto de IoT do Marketing, o "lead 0": como os dados andam, o que é real e o que é simulado, e o roteiro da apresentação |
+| [roteiro-ponta-a-ponta.md](Docs/roteiro-ponta-a-ponta.md) | Como subir a plataforma local e rodar `node scripts/ponta-a-ponta.mjs` (login, clique no anúncio, formulário, CRM, lead, pontuação, rodízio e e-mail), mais a conferência à mão na tela |
 | [permissoes/marketing.yaml](Docs/permissoes/marketing.yaml) · [modulos/marketing.json](Docs/modulos/marketing.json) | Permissões e registro no menu da casca, para o PR no `infra-integrador-2026` |
 | [DesignSystem/](Docs/DesignSystem/) | Design System Centinela: tokens, componentes e padrões de tela |
 | [Fluxo.md](Docs/Fluxo.md) · [Requisitos.md](Docs/Requisitos.md) · [Regras de Negocio.md](Docs/Regras%20de%20Negocio.md) · [LGPD.md](Docs/LGPD.md) · [Troubleshooting.md](Docs/Troubleshooting.md) | Levantamento de negócio: fluxo do lead, requisitos, pontuação e rodízio, LGPD e operação |

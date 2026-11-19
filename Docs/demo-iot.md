@@ -42,7 +42,7 @@ sequenceDiagram
 | Telas (Leads e Configurações › Rastreamento) | **Real**, no `marketing-web`, ligadas à API | ganhar o SSE do painel (R6) no lugar da releitura a cada 5 s |
 | Script de rastreamento (`rastreamento.js`) | **Real**, servido pela API | nada a trocar |
 | Landing page que carrega o script | **Placeholder** (`landing-web`), simula a tag que pedimos ao Grupo 7 | o Landing real põe a tag (pedido 6 do [landing-requisitos.md](contratos/landing-requisitos.md)); o Marketing não muda |
-| Localização por IP | **Simulada** (`LocalizacaoSimulada`, sempre Goiânia, marcada "simulada" na tela) | outra implementação de `LocalizacaoPorIp` com GeoLite2, marcada `@Primary` (R4) |
+| Localização por IP | **Simulada** (`LocalizacaoSimulada`, sempre Goiânia, marcada "simulada" na tela) | já existe (R4): `LocalizacaoPorGeoIp`, ligada por `RASTREAMENTO_GEOIP_ARQUIVO` com uma base GeoLite2 City baixada no ambiente |
 | Anúncio | **Simulado** pelo botão "Simular clique" | colar a URL pública do link no Meta ou no Google Ads |
 | Regras de comportamento | **matriz inicial** (D7 e R5), na primeira pontuação do tenant; editáveis em Configurações › Qualificação e distribuição | — |
 

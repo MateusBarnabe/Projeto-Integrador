@@ -661,6 +661,7 @@ public class Lead extends EntidadeBase {
         crmContatoId = crmContatoId != null ? crmContatoId : juntado.crmContatoId;
         crmOportunidadeId = crmOportunidadeId != null ? crmOportunidadeId : juntado.crmOportunidadeId;
         completarInteracao(juntado);
+        completarRespostasMeta(juntado);
         if (vendedorId == null && juntado.vendedorId != null) {
             vendedorId = juntado.vendedorId;
             vendedorAtribuidoEm = juntado.vendedorAtribuidoEm;
@@ -744,6 +745,48 @@ public class Lead extends EntidadeBase {
 
     // --- fim de R1 -------------------------------------------------------------------------------
 
+    // --- E4: respostas do formulário instantâneo do Meta (V13) --------------------------------------
+
+    /**
+     * Respostas do formulário instantâneo do Meta pelo nome da pergunta (valor em texto ou lista), sem os
+     * campos de contato, que têm coluna própria. Ficam com o lead para uma nova pontuação continuar
+     * somando as regras {@code campo_meta}.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "respostas_meta")
+    private Map<String, Object> respostasMeta;
+
+    /** Guarda as respostas lidas na Graph API; pergunta repetida fica com a resposta mais recente. */
+    public void registrarRespostasMeta(Map<String, Object> respostas) {
+        if (respostas == null || respostas.isEmpty()) {
+            return;
+        }
+        Map<String, Object> todas = new LinkedHashMap<>();
+        if (respostasMeta != null) {
+            todas.putAll(respostasMeta);
+        }
+        todas.putAll(respostas);
+        this.respostasMeta = todas;
+    }
+
+    /** Na junção, o lead que fica recebe as respostas do Meta do outro que ele ainda não tem. */
+    void completarRespostasMeta(Lead juntado) {
+        if (juntado.respostasMeta == null || juntado.respostasMeta.isEmpty()) {
+            return;
+        }
+        Map<String, Object> todas = new LinkedHashMap<>(juntado.respostasMeta);
+        if (respostasMeta != null) {
+            todas.putAll(respostasMeta);
+        }
+        this.respostasMeta = todas;
+    }
+
+    public Map<String, Object> getRespostasMeta() {
+        return respostasMeta;
+    }
+
+    // --- fim de E4 -------------------------------------------------------------------------------
+
     // --- E7, E8, E9 e E10: descadastro, boas-vindas, aquecimento e anonimização (LGPD) -----------
 
     /**
@@ -807,6 +850,7 @@ public class Lead extends EntidadeBase {
         this.dadosFormulario = null;
         this.contextoTecnico = null;
         this.comportamento = null;
+        this.respostasMeta = null;
         this.anonimizado = true;
     }
 }
