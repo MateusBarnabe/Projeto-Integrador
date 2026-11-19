@@ -72,6 +72,7 @@ O [script](../scripts/dev-plataforma.ps1):
 | O token venceu (dura 15 minutos; a tela começa a dar erro de sessão) | `.\scripts\dev-plataforma.ps1 -SoToken` e recarregue a página |
 | Sem janelas, com o log em `%TEMP%\marketing-dev\*.log` | `-Ocultos` |
 | Os containers da plataforma já estão de pé | `-SemInfra` |
+| Ver o módulo dentro da casca da plataforma (iframe, menu lateral com Painel, Leads e Configurações, tema), em http://localhost:8080/ | `-ComCasca` (sobe a casca e aponta o gateway para o front e a API do host; não combina com `-SemInfra`) |
 | Encerrar os apps (os containers continuam) | `.\scripts\dev-plataforma.ps1 -Parar` |
 | Não repetir o `-Infra` | defina a variável `INFRA_INTEGRADOR` com a pasta do infra |
 

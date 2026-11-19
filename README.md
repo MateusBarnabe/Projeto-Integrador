@@ -27,7 +27,7 @@ Cada pasta tem um README com a estrutura, os arquivos e as classes: [marketing-a
 | `marketing-api` | API `/api/marketing/**` e rotas públicas `/public/marketing/**` | 8087 | `marketing` |
 | `marketing-web` | Front que a casca abre em `/modulos/marketing/` | 3007 | `marketing-front` |
 | `landing-web` | Página do tenant (Vite na 3008 em desenvolvimento) e API `/api/landing/**` | 8088 | não vai para a plataforma |
-| `crm-stub` | Stub do CRM: `POST /api/crm/empresas`, `/contatos` e `/oportunidades` ([README](crm-stub/README.md)) | 8082 | não vai para a plataforma |
+| `crm-stub` | Stub do CRM: `POST /api/crm/empresas`, `/contatos` e `/oportunidades` e `GET .../empresas/{id}/resumo` e `.../contatos/{id}/resumo` ([README](crm-stub/README.md)) | 8082 | não vai para a plataforma |
 
 O `landing-web` **não é nosso módulo**: é um placeholder que imita o contrato publicado pelo Grupo 7 (`landing.yaml` e `landing.asyncapi.yaml` do infra; o que consumimos está em [landing-requisitos.md](Docs/contratos/landing-requisitos.md)). Ele serve para testar a jornada inteira localmente, do anúncio à oportunidade no CRM. Ele usa o nome de serviço e a porta do Landing real (`landing:8088`), então a troca pelo módulo do Grupo 7 é só de configuração, sem mudar o código do Marketing.
 
@@ -75,7 +75,7 @@ Cada um separado:
 | `npm run dev:landing` | `npm run dev` | http://localhost:3008 (servidor na 8088) |
 | `npm run dev:crm` | `npm run dev` | http://localhost:8082/api/crm/health |
 
-Em desenvolvimento, o Vite repassa `/api/marketing` para a API (8087) e `/api/landing` para o servidor do placeholder (8088).
+Em desenvolvimento, o Vite repassa `/api/marketing` para a API (8087), `/api/landing` para o servidor do placeholder (8088) e `/api/crm` para o stub do CRM (8082, ou o que estiver em `CRM_PROXY_ALVO`): o front busca os resumos de empresa e contato do lead direto no CRM, com o token do usuário.
 
 ### Testes
 
@@ -93,7 +93,7 @@ O `docker-compose.yml` imita só o pedaço da plataforma que o Marketing usa:
 - **RabbitMQ:** vhost `plataforma`, um usuário por módulo (`mq_marketing`, `mq_landing`, com senha igual ao nome) e as exchanges `marketing.eventos`, `landing.eventos` e `identity.entrada` ([infra/rabbitmq](infra/rabbitmq/definitions.json)). As filas são declaradas pelo módulo que consome.
 - **Mailpit:** recebe os e-mails de boas-vindas e de aquecimento.
 
-O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador-2026`. O identity nunca é simulado: as rotas autenticadas precisam de um token real de um usuário de teste, e o endereço do JWKS vai em `JWKS_URI`. A API usa os mesmos nomes de variável do compose da plataforma ([marketing-api/README.md](marketing-api/README.md#variáveis-de-ambiente)). Sem ele, só as rotas públicas e o `/health` respondem. Se os dois composes rodarem ao mesmo tempo, as portas 5432, 5672 e 15672 conflitam: suba só os apps deste repositório e aponte-os para a infraestrutura da plataforma. O [scripts/dev-plataforma.ps1](scripts/dev-plataforma.ps1) faz isso de uma vez: sobe a infraestrutura e o identity do `infra-integrador-2026`, pega o token, abre os quatro apps com as senhas certas e carrega as regras da demo (ver [Docs/demo-iot.md](Docs/demo-iot.md#como-subir-localmente)).
+O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador-2026`. O identity nunca é simulado: as rotas autenticadas precisam de um token real de um usuário de teste, e o endereço do JWKS vai em `JWKS_URI`. A API usa os mesmos nomes de variável do compose da plataforma ([marketing-api/README.md](marketing-api/README.md#variáveis-de-ambiente)). Sem ele, só as rotas públicas e o `/health` respondem. Se os dois composes rodarem ao mesmo tempo, as portas 5432, 5672 e 15672 conflitam: suba só os apps deste repositório e aponte-os para a infraestrutura da plataforma. O [scripts/dev-plataforma.ps1](scripts/dev-plataforma.ps1) faz isso de uma vez: sobe a infraestrutura e o identity do `infra-integrador-2026`, pega o token, abre os quatro apps com as senhas certas e carrega as regras da demo (ver [Docs/demo-iot.md](Docs/demo-iot.md#como-subir-localmente)). Com `-ComCasca`, sobe também a casca da plataforma e aponta o gateway para o front e a API que rodam no host: abra http://localhost:8080/, entre com `marketing@empresa-a.dev` e abra o Marketing no menu lateral, para ver o módulo no `<iframe>` com a sessão, o tema e os itens do submenu (Painel, Leads, Configurações) vindos da casca (não combina com `-SemInfra`).
 
 ## Documentação (`Docs/`)
 
