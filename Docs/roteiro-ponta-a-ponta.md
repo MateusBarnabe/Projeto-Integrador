@@ -2,6 +2,8 @@
 
 Como conferir, numa máquina só, a jornada inteira do lead: anúncio, landing page, formulário, CRM, etapa 3, pontuação, vendedor, e-mail de boas-vindas e a tela do Marketing. Vale para a banca, para quem for continuar o trabalho e como pré-condição da sessão do checklist com o Grupo 2.
 
+Primeira vez no projeto? Comece pelo [como-rodar.md](como-rodar.md), que cobre os pré-requisitos, a subida e os problemas comuns. Este arquivo é o roteiro da conferência.
+
 O roteiro tem duas partes: o **script** `scripts/ponta-a-ponta.mjs`, que percorre e confere tudo pelo HTTP em uns 2 minutos, e a **conferência à mão** da tela, que o script não faz.
 
 ## O que o script confere
@@ -36,14 +38,14 @@ sequenceDiagram
 | 3. Clique e sinais | `GET /public/marketing/c/{codigo}` com *User-Agent* de iPhone, `rastreamento.js`, `POST /public/marketing/visitas/{id}/sinais` | `302` com `mkt_visita` e as UTM; `404` com envelope para código inexistente; visita ativa, smartphone, com tempo, rolagem e cliques gravados |
 | 4. Formulário | `POST /public/landing/formularios/fk_empresaA01/envios` com consentimento e a URL de entrada do clique | envio aceito; recusado (`400`) sem consentimento |
 | 5. Lead | espera o lead em `GET /api/marketing/leads?q=<e-mail>` | etapa 3; campanha e aparelho na lista; oportunidade do CRM ligada; pontuação com a regra de comportamento; MQL; vendedor da escala; visita convertida e ligada ao lead; e-mail de boas-vindas no Mailpit |
-| 6. Detalhe | `GET /api/marketing/leads/{id}` | contato, origem (UTM e `mkt_visita`), respostas lidas, consentimento com o texto do termo, interação (aparelho e comportamento), ids do CRM, timeline em ordem, boas-vindas em `lead_comunicacoes`; `404` para lead inexistente; o painel, se a API o tiver |
+| 6. Detalhe | `GET /api/marketing/leads/{id}` | contato, origem (UTM e `mkt_visita`), respostas lidas, consentimento com o texto do termo, interação (aparelho e comportamento), ids do CRM, timeline em ordem, boas-vindas em `lead_comunicacoes`; `404` para lead inexistente; o painel (funil e lead 0) |
 | 7. Descarte (`--descarte`) | segundo clique, sem envio | visita descartada no prazo do tenant, sem contexto técnico nem comportamento |
 
 Cada execução usa um e-mail e uma campanha novos (`ponta-a-ponta+<id>@exemplo.dev`), então dá para rodar quantas vezes quiser sem limpar nada.
 
 ## Como subir
 
-Pré-requisitos: Docker Desktop ligado (`docker info`), Node 18 ou mais, JDK 21 e o `infra-integrador-2026` clonado, com `git pull` feito. Na raiz deste repositório, no PowerShell:
+Pré-requisitos: Docker Desktop ligado (`docker info`), Node 24 (o script `ponta-a-ponta.mjs` roda a partir do 18), JDK 21 ou mais novo e o `infra-integrador-2026` clonado, com `git pull` feito. Na raiz deste repositório, no PowerShell:
 
 ```powershell
 .\scripts\dev-plataforma.ps1 -Infra 'C:\caminho\para\infra-integrador-2026' -Ocultos
@@ -76,17 +78,15 @@ Efeitos no tenant de teste: um link de campanha por execução, o vendedor de te
 Com a execução do script no ar (o lead dele fica na lista), abra `http://localhost:3007/modulos/marketing/leads` e confira à mão:
 
 1. **Lista de Leads:** o lead `Teste Ponta a Ponta <id>` aparece na etapa 3, com a faixa (MQL), a pontuação, a campanha `ponta-a-ponta-<id>`, o aparelho (smartphone) e a marca "no CRM". Os filtros por campanha, vendedor e período o encontram.
-2. **Detalhe do lead** (clique na linha), aba por aba:
-   - **Dados** e **Origem:** nome e e-mail, `google` / `cpc`, a campanha e a URL de entrada com o `mkt_visita`;
+2. **Detalhe do lead** (clique na linha). O modal tem seis abas:
+   - **Dados:** quatro seções seguidas. *Contato* (nome, e-mail, telefone); *Funil e distribuição* (etapa, data de entrada, **vendedor** com o botão de atribuir ou reatribuir); *Consentimento* (o aceite e o histórico com o texto do termo; IP e *User-Agent* só aparecem aqui); *Comunicações e ciclo de vida* (boas-vindas e aquecimento); e *CRM* (oportunidade, empresa e contato; no modo sozinho, o front busca os resumos em `/api/crm` pelo proxy do Vite, e uma falha vira "indisponível no CRM");
+   - **Origem:** canal, página de entrada com o `mkt_visita`, primeiro e último toque e as UTM (`google` / `cpc`, a campanha);
+   - **Interação:** aparelho, sistema e navegador, localização (marcada "simulada"), idioma, fuso e tela, tempo na página, rolagem, botões clicados e páginas e seções vistas;
    - **Respostas:** os nove campos do formulário, lidos do Landing;
-   - **Pontuação:** as regras que somaram pontos, com as de comportamento (tempo na página, seção de preços, clique no simulador, rolagem) em destaque;
-   - **Interação:** aparelho, sistema, navegador, localização (marcada "simulada"), 45 s de tempo, 95% de rolagem e os cliques;
-   - **Consentimento:** o aceite, com o texto do termo (IP e *User-Agent* só aqui);
-   - **CRM:** empresa, contato e oportunidade; no modo sozinho, o front busca os resumos em `/api/crm` pelo proxy do Vite;
-   - **Vendedor:** o id do vendedor e o botão de reatribuir;
-   - **Linha do tempo:** `etapa_alterada`, `handoff_crm`, `respostas_lidas`, `consentimento_registrado`, `visita_vinculada`, `qualificacao_alterada` e `vendedor_atribuido`, e a comunicação de boas-vindas.
+   - **Pontuação:** a faixa e as regras que somaram pontos, com as de comportamento (tempo na página, seção de preços, clique no simulador, rolagem);
+   - **Timeline:** `etapa_alterada`, `handoff_crm`, `respostas_lidas`, `consentimento_registrado`, `visita_vinculada`, `qualificacao_alterada` e, para MQL, `vendedor_atribuido`; a comunicação de boas-vindas entra quando o e-mail sai.
 3. **Configurações › Rastreamento:** o link `Ponta a ponta <id>` com 1 clique; a visita aparece como convertida e, no resumo das 24 h, a taxa de conversão sobe.
-4. **Painel** (se a branch tiver a W6): o funil conta o lead na etapa 3 e o cartão do lead 0 mostra a visita convertida.
+4. **Painel:** o funil conta o lead na etapa 3, o lead aparece em "Leads recentes" e o cartão do lead 0 mostra a visita convertida. O selo "Ao vivo" indica que o fluxo em tempo real está conectado.
 5. **E-mail:** `http://localhost:8025` (Mailpit) tem a mensagem de boas-vindas para o e-mail do lead.
 
 O token do front dura 15 minutos: `.\scripts\dev-plataforma.ps1 -SoToken` e recarregue a página. Para ver o módulo dentro da casca, suba com `-ComCasca` e abra `http://localhost:8080/`.

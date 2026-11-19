@@ -48,6 +48,8 @@ sequenceDiagram
 
 ## Como subir localmente
 
+> Primeira vez no projeto? O [como-rodar.md](como-rodar.md) traz o mesmo caminho com os pré-requisitos, os usuários de teste e a tabela de problemas comuns. Esta seção é a versão focada na demonstração do lead 0.
+
 O ponta a ponta precisa do **identity da plataforma**, que nunca é simulado: a tela usa o token de um usuário de teste, e a leitura do envio no Landing usa o token de serviço do Marketing. Sem ele, o lead fica "aguardando o Landing" e a visita não se liga. Por isso o banco, o broker e o identity vêm do compose do `infra-integrador-2026`, e os quatro apps deste repositório rodam no host, apontando para eles. Isso também evita o banco local antigo (o volume com a `V3` da branch `feat/iot-ingestao-leads`): o banco da plataforma é outro.
 
 ### Com o script (recomendado)
@@ -107,6 +109,21 @@ Com o script e os apps de pé, o fluxo foi exercitado pelo HTTP, como o navegado
 | envio do formulário no placeholder | lead na etapa 3, respostas lidas, MQL morno com 50 pontos de comportamento (20 + 15 + 10 + 5), mais 15 da origem se a URL do clique trouxer `utm_source=google&utm_medium=cpc` |
 | timeline do lead | `etapa_alterada > handoff_crm > respostas_lidas > consentimento_registrado > visita_vinculada > qualificacao_alterada` |
 | visita sem envio | descartada 8 s depois de vencer o prazo, sem contexto nem comportamento; resumo de 24 h com 2 cliques, 1 convertida, 1 descartada, 50% |
+
+### Conferido em 19/11/2026, no navegador
+
+Desta vez com cliques reais no Chrome, pela casca (`-ComCasca`), e não pelo HTTP:
+
+| Passo | Resultado |
+|---|---|
+| link criado em Configurações › Rastreamento › Novo link | URL pública `http://localhost:8087/public/marketing/c/<codigo>` |
+| abrir a URL numa aba nova | `302` para a landing page com as UTM e o `mkt_visita`; o rodapé da página mostra o `mkt_visita` |
+| rolar a página e clicar em "Quero este", "Simular o investimento" e "Fale conosco" | sinais com `200` a cada 15 s |
+| enviar o formulário com o consentimento | "Recebemos seus dados"; lead na etapa 3 em poucos segundos, com o aparelho (Computador, Windows · Chrome), a localização marcada "simulada", 15 s de tempo e 100% de rolagem |
+| pontuação | 35 pontos (Interesse em preço +15, Origem do tráfego +15, Leu a página inteira +5), faixa Nutrição |
+| painel | cliques do lead 0 de 7 para 8, convertidas de 3 para 4 |
+
+Um detalhe que a demonstração mostrou: os cliques que acontecem nos 15 segundos antes do envio do formulário não entram no lead (a visita vira "convertida" no envio). Em apresentação, espere uns 15 segundos depois dos cliques antes de enviar. Está registrado como achado A1 em [pendencias-e-dependencias.md](pendencias-e-dependencias.md).
 
 ### Se algo der errado
 
