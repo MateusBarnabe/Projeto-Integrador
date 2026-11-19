@@ -259,7 +259,7 @@
 <li><a href="#sec-12"><span class="num">12</span>Registro de alterações</a></li>
 </ul></nav>
 <main>
-<div class="meta">Código <code>marketing</code> · Schema <code>marketing</code> · Projeto Integrador 2026 · Grupo 4 · Revisão de 06/11/2026</div>
+<div class="meta">Código <code>marketing</code> · Schema <code>marketing</code> · Projeto Integrador 2026 · Grupo 4 · Revisão de 18/11/2026</div>
 <div class="status-row">
 <span class="status-badge">Documento norteador — incrementado conforme o projeto avança</span>
 <span class="status-badge">Alinhado ao Contrato de Integração v0.7 e aos contratos publicados do Landing e do CRM</span>
@@ -448,6 +448,7 @@
 <tr><td>payload</td><td>jsonb</td><td>detalhes do evento, sem dado pessoal além do necessário</td></tr>
 <tr><td>colunas obrigatórias</td><td>§7.2</td><td></td></tr>
 </tbody></table>
+<p>Índice <code>ix_lead_eventos_tenant_sequencia</code> em <code>(tenant_id, sequencia)</code> (<code>V12</code>): o fluxo SSE do painel consulta <code>sequencia &gt; último id enviado</code> só do próprio tenant, e o índice único de <code>sequencia</code> não filtra por tenant (9.1).</p>
 <h3 class="table-heading"><code>leads_entrada_buffer</code> (antes <code>lead_intake_buffer</code>)</h3>
 <p>Área de espera dos leads do Meta Ads. O webhook responde na hora e grava só os identificadores; o job 4.1 busca os dados na Graph API depois. <strong>O Landing não passa mais por aqui:</strong> os eventos dele são processados na chegada (seção 5).</p>
 <table>
@@ -771,8 +772,8 @@
 <tr><td>GET</td><td><code>/api/marketing/leads/resumo?ids=</code> <span class="tag tag-etapa">Etapa 2</span></td><td><code>marketing.lead.ver_resumo</code></td><td>vários resumos de uma vez, até 100 ids (§9.4)</td></tr>
 <tr><td>PUT</td><td><code>/api/marketing/leads/{id}/vendedor</code> <span class="tag tag-etapa">Etapa 2</span></td><td><code>marketing.qualificacao.editar</code></td><td>reatribuição manual do vendedor</td></tr>
 <tr><td>GET</td><td><code>/api/marketing/busca?q=</code></td><td><code>marketing.lead.ver</code></td><td>busca global (§8.6)</td></tr>
-<tr><td>GET</td><td><code>/api/marketing/painel</code></td><td><code>marketing.dashboard.ver</code></td><td>antes <code>/dashboard</code></td></tr>
-<tr><td>GET</td><td><code>/api/marketing/painel/eventos</code> (SSE)</td><td><code>marketing.dashboard.ver</code></td><td>antes <code>/stream</code>; ver 9.1</td></tr>
+<tr><td>GET</td><td><code>/api/marketing/painel</code></td><td><code>marketing.dashboard.ver</code></td><td>antes <code>/dashboard</code>. Filtros <code>periodo</code>, <code>origem</code> e <code>campanha</code>; filtro inválido responde <code>400</code> com o erro por campo (9.1)</td></tr>
+<tr><td>GET</td><td><code>/api/marketing/painel/eventos</code> (SSE)</td><td><code>marketing.dashboard.ver</code></td><td>antes <code>/stream</code>; ver 9.1. Acima de 20 conexões abertas por tenant responde <code>429</code> com envelope; <code>400</code>, <code>403</code> e <code>429</code> saem sempre em JSON, mesmo com <code>Accept: text/event-stream</code></td></tr>
 <tr><td>GET / PUT</td><td><code>/api/marketing/canais-anuncio</code></td><td><code>marketing.configuracao.ver</code> / <code>.editar</code></td><td>antes <code>/settings</code></td></tr>
 <tr><td>GET / POST</td><td><code>/api/marketing/modelos-mensagem</code></td><td><code>marketing.template.ver</code> / <code>.criar</code></td><td>antes <code>/templates</code>; lista paginada</td></tr>
 <tr><td>PUT / DELETE</td><td><code>/api/marketing/modelos-mensagem/{id}</code></td><td><code>marketing.template.editar</code> / <code>.excluir</code></td><td>DELETE é soft delete</td></tr>
@@ -809,7 +810,7 @@
 <ul>
 <li>Envelope <code>{success, data, message, errors}</code> em toda resposta, inclusive de erro, com <code>errors[]</code> em <code>{campo, codigo, detalhe}</code> (§8.2)</li>
 <li>Listagem: <code>data = {itens, pagina, tamanho, total}</code>, com no máximo 100 por página (§8.3)</li>
-<li>Códigos da §8.4: <code>201</code> com <code>Location</code>; <code>404</code> para dado de outro tenant, nunca <code>403</code>; <code>409</code> para duplicidade; <code>422</code> para regra de negócio</li>
+<li>Códigos da §8.4: <code>201</code> com <code>Location</code>; <code>404</code> para dado de outro tenant, nunca <code>403</code>; <code>409</code> para duplicidade; <code>422</code> para regra de negócio. <code>Content-Type</code> que a rota não lê responde <code>415</code>, e <code>Accept</code> que a API não produz, <code>406</code>, ambos com envelope (<code>TratadorDeErros</code>)</li>
 <li>Cabeçalho HTTP de até 32 KB aceito (<code>server.max-http-request-header-size: 32KB</code>), por causa do token de ADMINISTRADOR (§4.4)</li>
 <li><code>X-Request-Id</code> em todo log e repassado em <code>correlacaoId</code> (§3)</li>
 <li>Chamada a outro módulo: timeout de 3 s, e a tela mostra o que conseguiu em vez de responder <code>500</code> (§9.6). Endereço vindo de variável de ambiente, nunca fixo no código (§9.1)</li>
@@ -1013,6 +1014,10 @@ permissoes:
 <li>Confere <code>event.origin</code> (a própria origem) <em>e</em> <code>event.source === window.parent</code> em toda mensagem</li>
 <li>Envia <code>modulo:altura</code> a cada mudança de conteúdo, <code>modulo:navegar</code> com rota relativa (<code>/leads/9f1c</code>) e <code>modulo:token-expirado</code> ao receber <code>401</code></li>
 <li>Token só em memória, nunca em <code>localStorage</code></li>
+<li>Trata <code>plataforma:sessao</code> (token, <code>tenantId</code>, usuário e tema), <code>plataforma:token</code> (renovação) e <code>plataforma:tema</code>, e envia <code>modulo:notificar</code> (<code>nivel</code> <code>sucesso</code>, <code>erro</code> ou <code>info</code>, e <code>texto</code>) para a casca mostrar o aviso de uma ação concluída (a reatribuição do vendedor, por exemplo)</li>
+<li><strong>Abas e submenu:</strong> embutido, a casca desenha os subitens (Painel, Leads e Configurações, o <code>itensSubmenu</code> de <code>modulos/marketing.json</code>) e, a cada clique, recarrega o <code>&lt;iframe&gt;</code> em <code>/modulos/marketing/&lt;rota&gt;</code>; por isso o módulo <strong>não desenha abas internas</strong> (só a faixa "Marketing" e a tela). Sozinho, as abas aparecem, uma por permissão</li>
+<li><strong>Permissão no front:</strong> a camada <code>plataforma/</code> lê o claim <code>perms</code> do token, sem validar a assinatura (quem decide é a API, que responde <code>403</code>), só para esconder o que o usuário não pode usar: a aba sem permissão (Painel: <code>marketing.dashboard.ver</code>; Leads: <code>marketing.lead.ver</code>; Configurações: <code>marketing.configuracao.ver</code>), com a mensagem "sem acesso" se não houver nenhuma, e o botão de reatribuir sem <code>marketing.qualificacao.editar</code></li>
+<li>Modal centralizado na parte visível do <code>&lt;iframe&gt;</code> (variáveis <code>--area-topo</code> e <code>--area-altura</code>), e a altura enviada em <code>modulo:altura</code> inclui o modal aberto. Sozinho, <code>?tema=escuro</code> liga o tema escuro</li>
 <li>O servidor do front envia <code>Content-Security-Policy: frame-ancestors 'self'</code> e nunca <code>X-Frame-Options: DENY</code> (§12.8)</li>
 <li>Tema: Design System Centinela sobre Tailwind v4, com <code>lucide-react</code> e a fonte Inter. Ele substitui o shadcn/ui. Usar os tokens do Design System (<code>bg-brand-950</code>, <code>bg-brand-800</code>, <code>text-brand-300</code>...) em vez de hex e aplicar <code>data-tema</code> recebido da casca. Os neutros (<code>bg-superficie</code>, <code>text-texto</code>, <code>border-borda</code>...) e a variante <code>dark:</code>, ligada a <code>data-tema="escuro"</code>, seguem os valores do <code>ui/plataforma.css</code>, para o módulo acompanhar o tema escuro da casca</li>
 </ul>
@@ -1044,16 +1049,30 @@ permissoes:
       "aguardandoVendedor": 2
     },
     "leadsRecentes": [
-      { "id": "...", "nome": "...", "etapa": 3, "faixa": "mql_morno", "origem": "landing_page", "canal": "embed", "criadoEm": "..." }
-    ]
+      { "id": "...", "nome": "...", "etapa": 3, "faixa": "mql_morno", "origem": "landing_page", "canal": "embed", "criadoEm": "...", "crmOportunidadeId": null }
+    ],
+    "leadZero": {
+      "cliques": 120, "ativas": 7, "convertidas": 18, "descartadas": 95, "taxaConversao": 15.0,
+      "porCampanha": [ { "utmCampaign": "black-friday-2026", "cliques": 80, "convertidas": 14, "descartadas": 60 } ],
+      "porDispositivo": [ { "tipoDispositivo": "mobile", "cliques": 90, "convertidas": 10 } ]
+    }
   },
   "message": null,
   "errors": []
 }</code></pre>
-<div class="callout"><p><strong>Percentual em pontos <span class="tag tag-reg">Regra da infra</span>:</strong> <code>22.2222</code> significa 22,22%, com até 4 casas (§8.7).</p></div>
-<div class="callout"><p><strong>Custo por lead é estimativa.</strong> <code>custoPorLead</code> e <code>custoPorMql</code> dividem o orçamento mensal informado em <code>canais_anuncio</code> pelos leads e MQL do canal no mês. Sem integração com o Ads Manager (decisão de escopo acima), o gasto real não chega ao módulo. ROI e ROAS precisam do valor do contrato (seção 11).</p></div>
+<div class="callout"><p><strong>Percentual em pontos <span class="tag tag-reg">Regra da infra</span>:</strong> <code>22.2222</code> significa 22,22%, com até 4 casas (§8.7). Dinheiro sai com 2 casas.</p></div>
+<div class="callout"><p><strong>Custo por lead é estimativa.</strong> <code>custoPorLead</code> e <code>custoPorMql</code> dividem o orçamento mensal informado em <code>canais_anuncio</code> pelos leads e MQL do canal no período do filtro; ficam <code>null</code> sem orçamento ou sem leads (ou sem MQL, no custo por MQL). Sem integração com o Ads Manager (decisão de escopo acima), o gasto real não chega ao módulo. ROI e ROAS precisam do valor do contrato (seção 11). A tela rotula o valor como "estimado".</p></div>
 <div class="callout"><p><strong>Visitas e conversão da página ficam no Landing.</strong> Saíram <code>visitantes</code> e <code>visitantesParaLeads</code>: o Marketing não recebe mais as visitas. Quem quer a conversão da página abre a tela Métricas do Landing (<code>landing.metrica.ver</code>). O painel do Marketing começa no lead. A etapa 2 aparece zerada até ter fonte (seção 2).</p></div>
 <p>Filtros: <code>periodo</code> (7/30/90 dias ou intervalo customizado), <code>origem</code> (<code>meta_ads</code>, <code>landing_page</code> ou todas) e <code>campanha</code> (opcional, via <code>utm_campaign</code>).</p>
+<div class="callout"><p><strong>Como o resumo é calculado (A4).</strong> <code>periodo</code> é <code>7d</code>, <code>30d</code>, <code>90d</code> (de 1 a 366 dias) ou <code>AAAA-MM-DD,AAAA-MM-DD</code> em UTC, como na lista de leads, e o padrão é <code>30d</code>; <code>origem</code> vazia vale todas. Valor inválido responde <code>400</code> com o erro por campo. Os filtros valem para os leads pela data de entrada.</p>
+<ul>
+<li><code>funil</code> conta os leads <strong>hoje</strong> em cada etapa; a etapa 2 fica zerada (seção 2). <code>qualificacao.semPontuacao</code> são os leads sem pontuação</li>
+<li><code>taxaConversao.etapa1ParaEtapa3</code> sai da timeline em <code>lead_eventos</code> (dos leads que passaram pela etapa 1, quantos chegaram à 3); <code>leadsParaMql</code> é MQL (quente mais morno) sobre todos os leads do filtro</li>
+<li><strong>Canal do lead:</strong> <code>meta_ads</code> se <code>origem = meta_ads</code> ou <code>utm_source</code> for <code>meta</code>, <code>facebook</code>, <code>fb</code>, <code>instagram</code> ou <code>ig</code>; <code>google_ads</code> se <code>utm_source = google</code> e <code>utm_medium</code> for <code>cpc</code>, <code>ppc</code>, <code>paid</code>, <code>paidsearch</code> ou <code>display</code>; senão, a própria origem. <code>canais</code> traz só os dois canais de anúncio, com o orçamento de <code>canais_anuncio</code></li>
+<li><code>distribuicao.porVendedor[].nome</code> é sempre <code>null</code> até a X7 (o identity ainda não lista os vendedores, seção 11); a tela mostra o id encurtado</li>
+<li><strong>Lead 0 (<code>leadZero</code>, R6):</strong> vem de <code>visitas_anuncio</code> por <code>clicado_em</code>, com o período e a campanha do filtro e sem o filtro de origem (o clique ainda não tem origem de lead). <code>cliques</code> são todas as visitas; <code>ativas</code>, <code>convertidas</code> e <code>descartadas</code>, as três situações; <code>taxaConversao</code> é convertidas sobre cliques, em pontos; <code>porCampanha</code> e <code>porDispositivo</code> trazem as quebras. Não é lead e não entra no <code>funil</code></li>
+<li><strong>Cache:</strong> Caffeine por tenant mais filtros, com TTL de 30 s e no máximo 500 entradas (<code>marketing.painel.cache.ttl</code> e <code>.tamanho-maximo</code>; TTL <code>0</code> desliga o cache). A tela relê o resumo de tempos em tempos (ver abaixo), então um número pode ficar até 30 s atrás do banco</li>
+</ul></div>
 <p><strong>Atualização em tempo real via SSE</strong> (<code>GET /api/marketing/painel/eventos</code>). O servidor envia eventos pontuais, não o resumo inteiro recalculado:</p>
 <pre><code>id: 10482
 event: lead_criado
@@ -1069,15 +1088,21 @@ data: {"leadId": "...", "faixa": "mql_quente", "pontuacao": 85}
 
 id: 10485
 event: lead_atribuido
-data: {"leadId": "...", "vendedorId": "..."}</code></pre>
-<p>O front busca o resumo completo uma vez e depois só reage aos eventos, incrementando contadores e atualizando a lista de recentes localmente.</p>
+data: {"leadId": "...", "vendedorId": "..."}
+
+event: lead_zero_atualizado
+data: {"cliques": 121, "ativas": 8, "convertidas": 18, "descartadas": 95, "taxaConversao": 14.876, "porCampanha": [...], "porDispositivo": [...]}</code></pre>
+<p>O front busca o resumo completo uma vez e depois só reage aos eventos, incrementando contadores e atualizando a lista de recentes localmente. O <code>lead_zero_atualizado</code> <strong>não tem <code>id</code></strong> (não vem de <code>lead_eventos</code>) e traz o bloco <code>leadZero</code> inteiro, para a tela trocá-lo; sai quando muda a contagem ou o maior <code>updated_at</code> de <code>visitas_anuncio</code> do tenant. Ele aceita <code>periodo</code> e <code>campanha</code> opcionais na query da conexão (sem eles, <code>30d</code> e todas as campanhas).</p>
 <div class="callout"><p><strong>Reconexão e autenticação do SSE.</strong></p>
 <ul>
-<li>O <code>id</code> de cada mensagem é <code>lead_eventos.sequencia</code>. Ao reconectar, o cliente envia <code>Last-Event-ID</code> e o back-end reenvia só o que foi perdido, filtrado pelo tenant do token.</li>
-<li><code>EventSource</code> não aceita o cabeçalho <code>Authorization</code>, e o token não pode ir na URL (§8.2). Por isso a conexão usa <code>fetch</code> + <code>ReadableStream</code>.</li>
-<li>O token dura 15 min: ao receber <code>plataforma:token</code>, o front reabre o stream com o token novo e o <code>Last-Event-ID</code>.</li>
-<li>Ainda precisamos confirmar com o Grupo 2 se o gateway, que devolve <code>504</code> quando o módulo não responde em 3 s, mantém uma conexão longa aberta (seção 11).</li>
+<li>O <code>id</code> de cada mensagem é <code>lead_eventos.sequencia</code>. Ao reconectar, o cliente envia <code>Last-Event-ID</code> e o back-end reenvia só o que foi perdido, filtrado pelo tenant do token. Sem <code>Last-Event-ID</code>, o fluxo começa do fato mais recente (o resumo cuida do que já houve)</li>
+<li><code>EventSource</code> não aceita o cabeçalho <code>Authorization</code>, e o token não pode ir na URL (§8.2). Por isso a conexão usa <code>fetch</code> + <code>ReadableStream</code>, com <code>Authorization</code> por cabeçalho, nunca por query</li>
+<li>O token dura 15 min: ao receber <code>plataforma:token</code>, o front reabre o stream com o token novo e o <code>Last-Event-ID</code>. O servidor fecha a conexão no <code>exp</code> do token ou em 30 min, o que vier primeiro (<code>marketing.painel.sse.duracao-maxima</code>)</li>
+<li><strong>Como o servidor entrega:</strong> cada conexão consulta <code>lead_eventos</code> do próprio tenant a cada 2 s (<code>marketing.painel.sse.intervalo-consulta</code>), num agendador próprio (sem <code>@Scheduled</code>), pelo índice <code>ix_lead_eventos_tenant_sequencia</code> (<code>V12</code>); sem mensagem por 15 s, sai o comentário <code>: ping</code>, para o gateway não fechar a conexão parada (<code>intervalo-ping</code>). O limite é de 20 conexões por tenant (<code>limite-por-tenant</code>); acima dele a resposta é <code>429</code> com envelope. Erros <code>400</code>, <code>403</code> e <code>429</code> saem sempre em JSON, mesmo com <code>Accept: text/event-stream</code></li>
+<li><strong>Limitação:</strong> uma transação que confirma depois de outra com <code>sequencia</code> maior pode não chegar ao fluxo aberto. A releitura do resumo corrige</li>
+<li>Ainda precisamos confirmar com o Grupo 2 se o gateway, que devolve <code>504</code> quando o módulo não responde em 3 s, mantém uma conexão longa aberta (seção 11, X8). Sem o fluxo, a tela segue funcionando por releitura</li>
 </ul></div>
+<p><strong>Como a tela se mantém atualizada (W6).</strong> <code>usePainel</code> busca o resumo uma vez e aplica os eventos do fluxo localmente. Com o fluxo no ar, relê o resumo a cada 60 s, só para conferir; sem ele, a cada 30 s, e mostra "Atualização em tempo real indisponível". <code>abrirFluxo</code> (<code>src/api/eventos.ts</code>) usa <code>fetch</code> + <code>ReadableStream</code>, reconecta com espera crescente e <code>Last-Event-ID</code>, e reabre quando o token muda.</p>
 <p><strong>Cache das agregações:</strong> com o volume esperado (uso interno, escala acadêmica), cache local em memória com TTL curto (ex.: Caffeine) basta, sempre com chave por tenant. Não é preciso Redis nesta fase.</p>
 <p><strong>Elementos de tela:</strong></p>
 <ul>
@@ -1088,7 +1113,9 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <li>Distribuição: leads por vendedor e quantos aguardam vendedor</li>
 <li>Série temporal de novos leads, filtrável por origem</li>
 <li>Conversão da captura no chatbot para o envio (etapa 1 → 3)</li>
-<li>Lista de leads recentes, atualizada via SSE, com a marca "no CRM" e o link da oportunidade para quem já foi ligado a ela (9.6)</li>
+<li>Lista de leads recentes, atualizada via SSE, com a marca "no CRM" e o link da oportunidade para quem já foi ligado a ela (9.6); cada linha leva ao detalhe do lead (<code>/leads/{id}</code>)</li>
+<li><strong>Lead 0 <span class="tag tag-novo">Novo · IoT</span>:</strong> cartão com cliques, em andamento, convertidas, descartadas e taxa de conversão, e as quebras por campanha e por dispositivo (R6)</li>
+<li>Os gráficos são SVG e CSS, sem biblioteca de gráficos</li>
 <li>Taxa de abertura e clique dos e-mails, quando houver rastreio (seção 11)</li>
 </ul>
 <h2 class="sub-heading" id="sec-9-2">9.2 Leads</h2>
@@ -1109,6 +1136,16 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <li>Vendedor atribuído, com a ação de reatribuir (<code>marketing.qualificacao.editar</code>)</li>
 <li>Timeline (<code>lead_eventos</code>) e e-mails de aquecimento enviados</li>
 <li>Depois da etapa 3: resumo da empresa e do contato no CRM (<code>crm.empresa.ver_resumo</code>, <code>crm.contato.ver_resumo</code>) e o link da oportunidade</li>
+</ul>
+<p><strong>Como a tela faz (W5).</strong></p>
+<ul>
+<li><strong>Filtros</strong> na URL: busca, etapa, faixa, origem, canal, campanha, vendedor e período. O filtro de vendedor lista <code>GET /api/marketing/rodizio/vendedores</code> (exige <code>marketing.qualificacao.ver</code>)</li>
+<li><strong>Reatribuição:</strong> <code>PUT /api/marketing/leads/{id}/vendedor</code>. O botão fica escondido sem <code>marketing.qualificacao.editar</code>; <code>422 VENDEDOR_FORA_DA_ESCALA</code> e <code>403</code> mostram a mensagem do envelope, e o sucesso avisa a casca por <code>modulo:notificar</code></li>
+<li><strong>Consentimentos:</strong> o histórico de <code>lead_consentimentos</code> (aceite ou revogação, data, texto do termo e formulário) aparece no detalhe; o IP e o <em>User-Agent</em> aparecem só ali</li>
+<li><strong>Vendedor:</strong> o nome fica indisponível até a X7 (seção 11); a tela mostra o id encurtado</li>
+<li><strong>Resumos do CRM:</strong> o front busca o resumo da empresa e o do contato direto no CRM, com o <strong>token do usuário</strong> (<code>requisitarModulo('crm', caminho)</code> em <code>src/api/cliente.ts</code>, base <code>/api/crm</code> ou <code>VITE_CRM_URL</code>; no desenvolvimento, o proxy do Vite leva <code>/api/crm</code> a <code>CRM_PROXY_ALVO</code>, padrão <code>http://localhost:8082</code>). O Marketing não repassa esses dados. Se a chamada falhar, só aquele campo mostra "indisponível no CRM", e o resto do detalhe aparece (§9.6)</li>
+<li>Em "Comunicações e ciclo de vida", o detalhe lista os e-mails enviados ao lead (D3, 4.2 e 4.5)</li>
+<li>Sem acesso à escala do rodízio, o filtro de vendedor fica desabilitado, com "Vendedor indisponível"</li>
 </ul>
 <p><strong>Busca global:</strong> <code>GET /api/marketing/busca?q=</code> faz o lead aparecer na barra de busca da casca (seção 6).</p>
 <h2 class="sub-heading" id="sec-9-3">9.3 Qualificação e distribuição</h2>
@@ -1159,7 +1196,7 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <li>Resumo das últimas 24 horas: cliques, lead 0 em andamento, convertidas, descartadas e taxa de conversão</li>
 <li>Configuração: ligar e desligar o registro das visitas, o prazo para converter e a tag do script para pedir ao Landing, pronta para copiar</li>
 <li>Links de campanha: criar, editar, desligar e excluir; a URL pública para colar no anúncio, os cliques de cada link e "Simular clique"</li>
-<li>Visitas ao vivo, relidas a cada 5 s até o SSE (9.1): situação com a contagem regressiva do descarte, aparelho, tempo, rolagem e cliques; o detalhe da visita mostra o contexto técnico e o comportamento e leva ao lead quando ela converteu</li>
+<li>Visitas ao vivo, relidas a cada 5 s (o cartão do lead 0 no painel já usa o SSE, 9.1): situação com a contagem regressiva do descarte, aparelho, tempo, rolagem e cliques; o detalhe da visita mostra o contexto técnico e o comportamento e leva ao lead quando ela converteu</li>
 </ul>
 <p><strong>Aba "Canais de anúncio"</strong>: <code>GET/PUT /api/marketing/canais-anuncio</code></p>
 <ul>
@@ -1262,6 +1299,7 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <tr><td>17, 18</td><td>eventos com envelope e <code>user_id = mq_marketing</code>, descritos no AsyncAPI; consumidor testado com a mesma mensagem entregue duas vezes</td></tr>
 </tbody></table>
 <p>O <code>exemplo-modulo</code> já cobre os itens 2 a 6, 9, 10, 15 e 18 com testes automatizados. Copiá-los e adaptar as rotas é o caminho mais curto. Nos testes automatizados, o Landing, o CRM, o identity e a Graph API são WireMock (<code>IntegracaoDeTeste</code> e <code>ModulosSimulados</code>, em <code>compartilhado/teste</code>). Para desenvolver contra o Landing e o CRM antes de eles existirem, o repositório tem placeholders próprios no lugar do Prism: o <code>landing-web</code> (página, formulário de exemplo, chatbot e os dois eventos) e o <code>crm-stub</code> (serviço <code>crm</code> na porta 8082, como o CRM real, com empresas, contatos e oportunidades em memória e o evento <code>crm.oportunidade.criada</code>). O identity nunca é stub: use a imagem real e os usuários de <code>docs/usuarios-de-teste.md</code>.</p>
+<p><strong>Evidência automatizada: <code>conformidade/ChecklistDaPlataformaTest</code></strong>, um teste por item, nomeado <code>itemNN_...</code>: item 2 (<code>/health</code> sem token); 3 (sem token ou com token inválido, <code>401</code>); 4 (sem permissão, <code>403</code>, em 25 rotas de leitura e escrita); 5 (outro tenant, <code>404</code>); 6 (<code>tenantId</code> no corpo, na query ou no cabeçalho ignorado); 7 (sete colunas em toda tabela de negócio, exceto <code>eventos_processados</code>); 8 (nenhuma FK para outro schema); 9 (envelope em <code>200</code>, <code>201</code>, <code>400</code>, <code>401</code>, <code>403</code>, <code>404</code>, <code>405</code>, <code>406</code>, <code>409</code>, <code>415</code>, <code>422</code> e nas rotas públicas); 10 (listas paginadas, tamanho máximo 100); 16 (migrations com <code>own_marketing</code>, app com <code>usr_marketing</code>); 19 (cabeçalho de 32 KB aceito: o teste sobe o Tomcat de verdade com um token de cerca de 28 KB). Os itens 17 e 18 já são cobertos por <code>PublicadorDeEventosTest</code> e <code>ConsumoDeEventosIntegracaoTest</code>; os itens 1 e 11 a 15 são de ambiente ou de documentação. O teste achou duas falhas e elas foram corrigidas em <code>TratadorDeErros</code>: <code>Content-Type</code> não suportado agora responde <code>415</code>, e <code>Accept</code> que a API não produz, <code>406</code>, ambos com envelope.</p>
 <p>O CI (<code>.github/workflows/ci.yml</code>) roda o <code>./mvnw verify</code> e o build do front em todo PR e, no push na <code>main</code>, publica as imagens pelo <code>publicar-imagem.yml</code> da plataforma.</p>
 <p>Além do checklist, a Etapa 2 precisa de testes próprios: a pontuação com a matriz inicial da 9.3 (um lead de cada faixa), só com as regras do formulário do envio; o rodízio com três leads MQL e dois vendedores ativos; a atribuição fora do horário comercial; e a ligação com a oportunidade com <code>crm.oportunidade.criada</code> chegando antes e depois de <code>landing.formulario.recebido</code>.</p>
 <p>A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesma conversa viram um lead só; o Landing fora do ar deixa o lead com a leitura pendente, e o job 4.6 completa; a confirmação de boas-vindas sai uma vez só e não sai para quem se descadastrou (4.5); o mesmo consentimento entregue duas vezes gera uma linha só em <code>lead_consentimentos</code>, e o descadastro grava a revogação com IP e <em>User-Agent</em>.</p>
@@ -1300,7 +1338,7 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <tr><td>Desistência da leitura do envio depois de 10 falhas (cerca de 10 minutos de Landing fora do ar): avaliar uma espera crescente entre as tentativas</td><td>Grupo 4</td><td>A avaliar</td></tr>
 <tr><td>Onde guardar as respostas do formulário instantâneo do Meta: sem elas, uma nova pontuação do lead (por exemplo, quando ele envia um formulário do Landing) deixa de somar as regras <code>campo_meta</code></td><td>Grupo 4</td><td>A definir na E4</td></tr>
 <tr><td>SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao <code>marketing</code> (o módulo lê <code>MAIL_HOST</code>, <code>MAIL_PORT</code>, <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code>, <code>MAIL_SMTP_AUTH</code>, <code>MAIL_SMTP_STARTTLS</code> e <code>MAIL_FROM</code>; sem elas, tenta <code>localhost:1025</code>, e o envio falha), e o provedor fora do desenvolvimento depende dos professores (P6)</td><td>Grupo 2, professores</td><td>A pedir</td></tr>
-<tr><td>SSE pelo gateway: a conexão longa sobrevive à regra de <code>504</code> em 3 s?</td><td>Grupo 2</td><td>A confirmar</td></tr>
+<tr><td>SSE pelo gateway (X8): a conexão longa do <code>/painel/eventos</code> sobrevive à regra de <code>504</code> em 3 s? O módulo já manda <code>: ping</code> a cada 15 s e fecha a conexão no <code>exp</code> do token; sem o fluxo, a tela relê o resumo a cada 30 s</td><td>Grupo 2</td><td>A confirmar</td></tr>
 <tr><td>Rate limit de 120 req/min por IP em <code>/public/**</code> pode barrar rajadas do webhook do Meta</td><td>Grupo 2</td><td>A confirmar</td></tr>
 <tr><td>Handshake do Meta exige devolver <code>hub.challenge</code> em texto puro, fora do envelope; o §8.2 só prevê exceção para download de arquivo</td><td>Grupo 2</td><td>Pedir exceção registrada</td></tr>
 <tr><td>Confirmação de boas-vindas sem consentimento de marketing para quem enviou o formulário (4.5): a leitura é que ela confirma o pedido da própria pessoa e não é comunicação de marketing</td><td>Grupo 4, professores</td><td>Proposta a confirmar</td></tr>
@@ -1331,6 +1369,19 @@ data: {"leadId": "...", "vendedorId": "..."}</code></pre>
 <section id="sec-12">
 <h1><span class="sec-num">12</span>Registro de alterações</h1>
 <hr class="rule">
+<h3 class="table-heading">18/11/2026 · fase 3 (rodada 1): painel, casca, leads e checklist</h3>
+<p>Entrega da rodada 1 da fase 3: A4 e R6 (back), W6 e R6 (front), W2, W5 completa e F7.</p>
+<ul>
+<li><strong>Tabela (seção 3, <code>V12</code>):</strong> índice <code>ix_lead_eventos_tenant_sequencia</code> em <code>lead_eventos (tenant_id, sequencia)</code>, para o fluxo SSE do painel</li>
+<li><strong>Painel, back (seção 6 e 9.1):</strong> <code>GET /api/marketing/painel</code>, com <code>funil</code>, <code>qualificacao</code>, <code>serieTemporal</code>, <code>taxaConversao</code>, <code>campanhas</code>, <code>canais</code>, <code>distribuicao</code>, <code>leadsRecentes</code> e o bloco novo <code>leadZero</code> (cliques, ativas, convertidas, descartadas, taxa e quebras por campanha e por dispositivo); filtros <code>periodo</code>, <code>origem</code> e <code>campanha</code> com <code>400</code> por campo; cache Caffeine por tenant e filtros (30 s, 500 entradas, <code>marketing.painel.cache</code>); regra do canal do lead (<code>meta_ads</code>, <code>google_ads</code> ou a origem); custo por lead e por MQL estimados do orçamento mensal</li>
+<li><strong>SSE (seção 9.1):</strong> <code>GET /api/marketing/painel/eventos</code> com <code>id = lead_eventos.sequencia</code>, <code>Last-Event-ID</code>, consulta a cada 2 s por conexão, <code>: ping</code> a cada 15 s, o evento novo <code>lead_zero_atualizado</code> (sem <code>id</code>), fim da conexão no <code>exp</code> do token ou em 30 min, limite de 20 conexões por tenant (<code>429</code> com envelope) e erros sempre em JSON. Limitação conhecida: transação que confirma depois de outra com <code>sequencia</code> maior pode não chegar ao fluxo aberto; a releitura do resumo corrige. Em aberto na seção 11: o gateway sustentar a conexão longa (X8)</li>
+<li><strong>Painel, front (9.1):</strong> <code>PainelPage</code> com filtros, funil, qualificação, série por origem, campanhas, canais, distribuição, leads recentes com link para o detalhe, conversão 1 → 3 e o cartão do lead 0; <code>usePainel</code> aplica os eventos localmente, relê o resumo a cada 60 s (30 s sem o fluxo) e <code>abrirFluxo</code> reconecta com espera crescente. A aba Rastreamento segue relendo as visitas a cada 5 s</li>
+<li><strong>Casca (seção 9, W2):</strong> a camada <code>plataforma/</code> trata <code>plataforma:sessao</code>, <code>plataforma:token</code> e <code>plataforma:tema</code>, envia <code>modulo:notificar</code> e expõe a permissão do token (<code>perms</code>, sem validar); abas escondidas sem permissão e "sem acesso" quando não há nenhuma; embutido não há abas internas (a casca recarrega o <code>&lt;iframe&gt;</code> a cada item do <code>itensSubmenu</code>, X9 resolvida do nosso lado); tema escuro pelos neutros; <code>Modal</code> centralizado na parte visível do <code>&lt;iframe&gt;</code>, com a altura incluindo o modal aberto. <code>scripts/dev-plataforma.ps1</code> ganhou <code>-ComCasca</code></li>
+<li><strong>Leads (9.2, W5):</strong> filtros de campanha, vendedor e período na URL; reatribuição do vendedor, histórico de consentimentos (IP e <em>User-Agent</em> só no detalhe) e resumos de empresa e contato buscados no CRM pelo front com o token do usuário (falha vira "indisponível no CRM" só naquele campo). O nome do vendedor segue indisponível até a X7</li>
+<li><strong>CRM stub:</strong> <code>GET /api/crm/empresas/{id}/resumo</code> e <code>GET /api/crm/contatos/{id}/resumo</code> (<code>200</code>, <code>401</code> e <code>404</code>; o tenant dos <code>GET</code> vem do claim <code>tenant_id</code> do token)</li>
+<li><strong>Checklist (seção 10, F7):</strong> <code>conformidade/ChecklistDaPlataformaTest</code>, um teste por item. Duas falhas de produção achadas por ele foram corrigidas em <code>TratadorDeErros</code>: <code>415</code> para <code>Content-Type</code> não suportado e <code>406</code> para <code>Accept</code> que a API não produz, ambos com envelope (seção 6)</li>
+<li>Nenhuma rota ou permissão de contrato mudou: <code>Docs/contratos</code>, <code>Docs/permissoes</code> e <code>Docs/modulos</code> seguem iguais</li>
+</ul>
 <h3 class="table-heading">18/11/2026 · comunicação, ciclo de vida e configurações</h3>
 <p>Entrega do PR #22 (D3, D6, D7, E7 a E10, A3, W4 e R5) e os ajustes feitos depois dele.</p>
 <ul>
