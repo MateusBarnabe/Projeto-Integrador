@@ -50,16 +50,25 @@ public record EntradaPontuacao(
      * Monta a entrada com o que o lead já tem: o formulário e as respostas copiadas do envio
      * ({@code dados_formulario}), a origem e a UTM.
      *
-     * @param respostasMeta respostas do formulário instantâneo do Meta; vazio fora do job 4.1
+     * @param respostasMeta respostas do formulário instantâneo do Meta, somadas às que o lead já guarda
+     *                      ({@code leads.respostas_meta}); vazio fora do job 4.1
      */
     public static EntradaPontuacao doLead(Lead lead, Map<String, ?> respostasMeta) {
         Objects.requireNonNull(lead, "lead");
+        Map<String, Object> doMeta = new HashMap<>();
+        if (lead.getRespostasMeta() != null) {
+            doMeta.putAll(lead.getRespostasMeta());
+        }
+        if (respostasMeta != null) {
+            doMeta.putAll(respostasMeta);
+        }
         return new EntradaPontuacao(
                 lead.getTenantId(),
                 lead.getFormularioId(),
                 respostasPorCampo(lead.getDadosFormulario()),
-                lead.getOrigem() == OrigemLead.META_ADS,
-                respostasMeta == null ? Map.of() : new HashMap<>(respostasMeta),
+                // Quem respondeu um formulário do Meta é lead do Meta mesmo que o contato já existisse (E4)
+                lead.getOrigem() == OrigemLead.META_ADS || !doMeta.isEmpty(),
+                doMeta,
                 new Utm(lead.getUtmSource(), lead.getUtmMedium(), lead.getUtmCampaign(), lead.getUtmTerm(),
                         lead.getUtmContent()),
                 interacao(lead));
