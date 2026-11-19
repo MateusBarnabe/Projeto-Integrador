@@ -37,8 +37,9 @@ import jakarta.annotation.PreDestroy;
  * <p>Cada conexão consulta {@code lead_eventos} e {@code visitas_anuncio} do próprio tenant a cada poucos
  * segundos, por um agendador próprio (nada de {@code @Scheduled}: não há o que desligar nos testes). O
  * {@code TenantFiltro} limpa o contexto no fim da requisição, então o tenant é guardado na abertura e
- * definido de novo em cada consulta. Uma mensagem {@code : ping} sai quando a conexão fica quieta, para o
- * gateway não fechá-la, e há um limite de conexões por tenant.
+ * definido de novo em cada consulta. Um comentário {@code : conectado} sai na abertura (o gateway só
+ * repassa a resposta depois do primeiro byte) e uma mensagem {@code : ping} sai quando a conexão fica
+ * quieta, para o gateway não fechá-la. Há um limite de conexões por tenant.
  *
  * <p>Um fato que confirma depois de outro de {@code sequencia} maior (transações concorrentes) pode não
  * chegar ao fluxo aberto; a releitura do resumo (a tela refaz a cada 30 s sem fluxo, e a cada reconexão)
@@ -85,6 +86,13 @@ public class FluxoDoPainel {
             conexao.emitter.onCompletion(conexao::encerrar);
             conexao.emitter.onError(erro -> conexao.encerrar());
             conexao.emitter.onTimeout(conexao.emitter::complete);
+            // Cabeçalhos e primeiro byte já na abertura: sem isso o fetch do navegador e o gateway ficam sem
+            // resposta até o primeiro ping e o gateway devolve 504 (medido em 19/11: desiste em ~3 s)
+            try {
+                conexao.emitter.send(SseEmitter.event().comment(" conectado"));
+            } catch (IOException excecao) {
+                throw new UncheckedIOException(excecao);
+            }
             conexao.tarefa = agendador.scheduleWithFixedDelay(conexao::rodar, 0,
                     ajuste.intervaloConsulta().toMillis(), TimeUnit.MILLISECONDS);
             if (conexao.encerrada.get()) {

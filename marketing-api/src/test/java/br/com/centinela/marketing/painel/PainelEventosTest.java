@@ -145,6 +145,16 @@ class PainelEventosTest extends IntegracaoDeTeste {
     }
 
     @Test
+    void jaNaAberturaMandaUmComentarioParaOGatewayNaoDarTimeout() throws Exception {
+        MvcResult aberto = abrir(TOKEN_PAINEL, null);
+
+        // Sem esperar o ping: o primeiro byte sai com a abertura
+        assertThat(aberto.getResponse().getContentAsString()).startsWith(": conectado");
+        assertThat(aberto.getResponse().getContentType()).startsWith("text/event-stream");
+        assertThat(mensagens(aberto)).isEmpty();
+    }
+
+    @Test
     void semLastEventIdComecaDoFatoMaisRecenteSemRepetirOPassado() throws Exception {
         UUID lead = leadDe(tenant);
         evento(tenant, lead, "etapa_alterada", null, 0, "{}");
