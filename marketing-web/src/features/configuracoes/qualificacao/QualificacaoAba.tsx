@@ -31,6 +31,10 @@ import {
   type RegraPontuacao,
   type VendedorRodizio,
 } from '../api';
+import { usarPermissao } from '@/plataforma';
+import { SomenteLeitura } from '../SomenteLeitura';
+
+const PERMISSAO_EDITAR = 'marketing.qualificacao.editar';
 
 const DIAS_SEMANA = [
   { valor: 1, rotulo: 'Seg' },
@@ -48,6 +52,7 @@ const DIAS_SEMANA = [
  * lead 0) e rodízio de vendedores.
  */
 export function QualificacaoAba() {
+  const podeEditar = usarPermissao(PERMISSAO_EDITAR);
   const [qualificacao, setQualificacao] = useState<ConfiguracaoQualificacao | null>(null);
   const [regras, setRegras] = useState<RegraPontuacao[] | null>(null);
   const [formularios, setFormularios] = useState<FormularioQualificacao[]>([]);
@@ -95,10 +100,12 @@ export function QualificacaoAba() {
               Cada critério conta uma vez por lead, valendo a regra de maior pontuação. Inclui as regras de comportamento do Lead 0 (em roxo).
             </p>
           </div>
-          <Button size="sm" onClick={() => setRegraEmEdicao(null)}>
-            <Plus aria-hidden className="h-3.5 w-3.5" />
-            Nova regra
-          </Button>
+          {podeEditar && (
+            <Button size="sm" onClick={() => setRegraEmEdicao(null)}>
+              <Plus aria-hidden className="h-3.5 w-3.5" />
+              Nova regra
+            </Button>
+          )}
         </header>
 
         {regras.length === 0 ? (
@@ -129,24 +136,26 @@ export function QualificacaoAba() {
                   </p>
                 </div>
                 <Badge variant={regra.fonte === 'comportamento' ? 'purple' : 'green'}>+{regra.pontos} pts</Badge>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Editar ${regra.criterio}`}
-                    onClick={() => setRegraEmEdicao(regra)}
-                  >
-                    <Pencil aria-hidden className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Excluir ${regra.criterio}`}
-                    onClick={() => setRegraAExcluir(regra)}
-                  >
-                    <Trash2 aria-hidden className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {podeEditar && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Editar ${regra.criterio}`}
+                      onClick={() => setRegraEmEdicao(regra)}
+                    >
+                      <Pencil aria-hidden className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Excluir ${regra.criterio}`}
+                      onClick={() => setRegraAExcluir(regra)}
+                    >
+                      <Trash2 aria-hidden className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -219,6 +228,7 @@ function CartaoFaixasERodizio({
   qualificacao: ConfiguracaoQualificacao;
   onSalvo: (q: ConfiguracaoQualificacao) => void;
 }) {
+  const somenteLeitura = !usarPermissao(PERMISSAO_EDITAR);
   const [quente, setQuente] = useState(String(qualificacao.limiteMqlQuente));
   const [morno, setMorno] = useState(String(qualificacao.limiteMqlMorno));
   const [rodizioAtivo, setRodizioAtivo] = useState(qualificacao.rodizioAtivo);
@@ -275,6 +285,7 @@ function CartaoFaixasERodizio({
           </p>
         )}
 
+        <fieldset disabled={somenteLeitura} className="min-w-0 space-y-5">
         <FormSection number={1} title="Limites de pontuação (MQL)">
           <FormField label="MQL quente a partir de (pontos)" required>
             <Input type="number" min={1} value={quente} onChange={(e) => setQuente(e.target.value)} />
@@ -333,12 +344,17 @@ function CartaoFaixasERodizio({
             <Input type="number" min={1} value={transbordo} onChange={(e) => setTransbordo(e.target.value)} />
           </FormField>
         </FormSection>
+        </fieldset>
 
         <div className="flex justify-end border-t border-borda pt-3">
-          <Button type="submit" size="sm" disabled={salvando}>
-            {salvo && <Check aria-hidden className="h-3.5 w-3.5" />}
-            {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar faixas e horário'}
-          </Button>
+          {somenteLeitura ? (
+            <SomenteLeitura />
+          ) : (
+            <Button type="submit" size="sm" disabled={salvando}>
+              {salvo && <Check aria-hidden className="h-3.5 w-3.5" />}
+              {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar faixas e horário'}
+            </Button>
+          )}
         </div>
       </form>
     </section>
@@ -352,6 +368,7 @@ function CartaoEscalaVendedores({
   vendedores: VendedorRodizio[];
   onSalvo: (vendedores: VendedorRodizio[]) => void;
 }) {
+  const somenteLeitura = !usarPermissao(PERMISSAO_EDITAR);
   const [lista, setLista] = useState<{ vendedorId: string; ativo: boolean; ultimaAtribuicaoEm: string | null }[]>(
     vendedores.map((v) => ({ vendedorId: v.vendedorId, ativo: v.ativo, ultimaAtribuicaoEm: v.ultimaAtribuicaoEm })),
   );
@@ -404,7 +421,7 @@ function CartaoEscalaVendedores({
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 p-5">
+      <fieldset disabled={somenteLeitura} className="min-w-0 flex-1 space-y-4 p-5">
         {erro && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/15 dark:text-red-300">
             {erro}
@@ -472,13 +489,17 @@ function CartaoEscalaVendedores({
             ))}
           </ul>
         )}
-      </div>
+      </fieldset>
 
       <div className="flex justify-end border-t border-borda px-5 py-3.5">
-        <Button type="button" size="sm" onClick={salvar} disabled={salvando}>
-          {salvo && <Check aria-hidden className="h-3.5 w-3.5" />}
-          {salvando ? 'Salvando…' : salvo ? 'Escala salva' : 'Salvar escala'}
-        </Button>
+        {somenteLeitura ? (
+          <SomenteLeitura />
+        ) : (
+          <Button type="button" size="sm" onClick={salvar} disabled={salvando}>
+            {salvo && <Check aria-hidden className="h-3.5 w-3.5" />}
+            {salvando ? 'Salvando…' : salvo ? 'Escala salva' : 'Salvar escala'}
+          </Button>
+        )}
       </div>
     </section>
   );

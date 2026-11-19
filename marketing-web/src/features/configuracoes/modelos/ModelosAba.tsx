@@ -22,6 +22,7 @@ import {
   type ModeloMensagem,
   type PedidoModeloMensagem,
 } from '../api';
+import { usarPermissao } from '@/plataforma';
 
 /**
  * Aba "Modelos de mensagem" (W4, norteador §9.4): modelo de boas-vindas no topo (um por tenant,
@@ -29,6 +30,9 @@ import {
  * pré-visualização das variáveis `{{nome}}`, `{{origem}}` e do rodapé de descadastro.
  */
 export function ModelosAba() {
+  const podeCriar = usarPermissao('marketing.template.criar');
+  const podeEditar = usarPermissao('marketing.template.editar');
+  const podeExcluir = usarPermissao('marketing.template.excluir');
   const [modelos, setModelos] = useState<ModeloMensagem[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [emEdicao, setEmEdicao] = useState<{ modelo: ModeloMensagem | null; tipo: 'boas_vindas' | 'aquecimento' } | null>(null);
@@ -69,7 +73,7 @@ export function ModelosAba() {
               Enviado uma única vez nos primeiros minutos para quem envia o formulário (etapa 3).
             </p>
           </div>
-          {boasVindas && (
+          {boasVindas && podeEditar && (
             <Button
               variant="outline"
               size="sm"
@@ -102,13 +106,15 @@ export function ModelosAba() {
               Sequência de e-mails para leads nas etapas frias (0 · Meta Ads e 1 · captura do chatbot) com consentimento.
             </p>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setEmEdicao({ modelo: null, tipo: 'aquecimento' })}
-          >
-            <Plus aria-hidden className="h-3.5 w-3.5" />
-            Novo modelo de aquecimento
-          </Button>
+          {podeCriar && (
+            <Button
+              size="sm"
+              onClick={() => setEmEdicao({ modelo: null, tipo: 'aquecimento' })}
+            >
+              <Plus aria-hidden className="h-3.5 w-3.5" />
+              Novo modelo de aquecimento
+            </Button>
+          )}
         </header>
 
         {aquecimento.length === 0 ? (
@@ -138,22 +144,26 @@ export function ModelosAba() {
                   <p className="mt-1 truncate text-xs text-texto-3">Assunto: {modelo.assunto}</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Editar ${modelo.nome}`}
-                    onClick={() => setEmEdicao({ modelo, tipo: 'aquecimento' })}
-                  >
-                    <Pencil aria-hidden className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Excluir ${modelo.nome}`}
-                    onClick={() => setAExcluir(modelo)}
-                  >
-                    <Trash2 aria-hidden className="h-3.5 w-3.5" />
-                  </Button>
+                  {podeEditar && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Editar ${modelo.nome}`}
+                      onClick={() => setEmEdicao({ modelo, tipo: 'aquecimento' })}
+                    >
+                      <Pencil aria-hidden className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {podeExcluir && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Excluir ${modelo.nome}`}
+                      onClick={() => setAExcluir(modelo)}
+                    >
+                      <Trash2 aria-hidden className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}

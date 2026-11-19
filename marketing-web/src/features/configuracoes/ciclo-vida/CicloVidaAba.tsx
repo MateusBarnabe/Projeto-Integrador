@@ -2,7 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { AlertCircle, Check, Clock, ShieldAlert } from 'lucide-react';
 import { ErroApi } from '@/api/cliente';
 import { Button, EmptyState, FormField, FormSection, Input, Spinner } from '@/components/ui';
+import { usarPermissao } from '@/plataforma';
 import { obterCicloVida, salvarCicloVida, type ConfiguracaoCicloVida } from '../api';
+import { SomenteLeitura } from '../SomenteLeitura';
 
 /**
  * Aba "Ciclo de vida do lead" (W4, norteador §9.4): máximo de tentativas de aquecimento antes de
@@ -10,6 +12,7 @@ import { obterCicloVida, salvarCicloVida, type ConfiguracaoCicloVida } from '../
  * da anonimização automática LGPD (job 4.3).
  */
 export function CicloVidaAba() {
+  const somenteLeitura = !usarPermissao('marketing.automacao.editar');
   const [configuracao, setConfiguracao] = useState<ConfiguracaoCicloVida | null>(null);
   const [maxTentativas, setMaxTentativas] = useState('3');
   const [mesesEsgotamento, setMesesEsgotamento] = useState('6');
@@ -97,6 +100,7 @@ export function CicloVidaAba() {
                 min={1}
                 max={50}
                 value={maxTentativas}
+                disabled={somenteLeitura}
                 onChange={(e) => setMaxTentativas(e.target.value)}
               />
             </FormField>
@@ -113,6 +117,7 @@ export function CicloVidaAba() {
                 min={1}
                 max={120}
                 value={mesesEsgotamento}
+                disabled={somenteLeitura}
                 onChange={(e) => setMesesEsgotamento(e.target.value)}
               />
             </FormField>
@@ -126,16 +131,21 @@ export function CicloVidaAba() {
                 min={1}
                 max={120}
                 value={mesesOptout}
+                disabled={somenteLeitura}
                 onChange={(e) => setMesesOptout(e.target.value)}
               />
             </FormField>
           </FormSection>
 
           <div className="flex justify-end border-t border-borda pt-4">
-            <Button type="submit" size="sm" disabled={salvando}>
-              {salvo && <Check aria-hidden className="h-3.5 w-3.5" />}
-              {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar configurações'}
-            </Button>
+            {somenteLeitura ? (
+              <SomenteLeitura />
+            ) : (
+              <Button type="submit" size="sm" disabled={salvando}>
+                {salvo && <Check aria-hidden className="h-3.5 w-3.5" />}
+                {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar configurações'}
+              </Button>
+            )}
           </div>
         </form>
       </section>

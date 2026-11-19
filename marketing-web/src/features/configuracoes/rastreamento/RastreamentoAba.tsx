@@ -29,6 +29,8 @@ import {
   type ResumoVisitas,
   type VisitaAnuncio,
 } from './api';
+import { usarPermissao } from '@/plataforma';
+import { SomenteLeitura } from '../SomenteLeitura';
 import { LinkModal } from './LinkModal';
 
 /** As visitas mudam a cada sinal do script: a tela relê a cada 5 s (o SSE fica para a A4). */
@@ -40,6 +42,7 @@ const ATUALIZACAO_MS = 5000;
  * aparelho, o que fez na página e se converteu ou foi descartada no prazo.
  */
 export function RastreamentoAba() {
+  const podeEditar = usarPermissao('marketing.configuracao.editar');
   const [configuracao, setConfiguracao] = useState<ConfiguracaoRastreamento | null>(null);
   const [links, setLinks] = useState<LinkCampanha[] | null>(null);
   const [visitas, setVisitas] = useState<VisitaAnuncio[] | null>(null);
@@ -89,16 +92,18 @@ export function RastreamentoAba() {
       <ResumoDasVisitas resumo={resumo} />
 
       <div className="grid gap-5 xl:grid-cols-[1fr_2fr]">
-        <CartaoConfiguracao configuracao={configuracao} onSalvo={setConfiguracao} />
+        <CartaoConfiguracao configuracao={configuracao} onSalvo={setConfiguracao} podeEditar={podeEditar} />
 
         <Cartao
           titulo="Links de campanha"
           icone={Link2}
           acao={
-            <Button size="sm" onClick={() => setLinkEmEdicao(null)}>
-              <Plus aria-hidden className="h-3 w-3 shrink-0" />
-              Novo link
-            </Button>
+            podeEditar ? (
+              <Button size="sm" onClick={() => setLinkEmEdicao(null)}>
+                <Plus aria-hidden className="h-3 w-3 shrink-0" />
+                Novo link
+              </Button>
+            ) : undefined
           }
         >
           {links.length === 0 ? (
@@ -141,12 +146,16 @@ export function RastreamentoAba() {
                       <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
                       Simular clique
                     </a>
-                    <Button variant="ghost" size="sm" aria-label={`Editar ${link.nome}`} onClick={() => setLinkEmEdicao(link)}>
-                      <Pencil aria-hidden className="h-3 w-3 shrink-0" />
-                    </Button>
-                    <Button variant="ghost" size="sm" aria-label={`Excluir ${link.nome}`} onClick={() => setLinkAExcluir(link)}>
-                      <Trash2 aria-hidden className="h-3 w-3 shrink-0" />
-                    </Button>
+                    {podeEditar && (
+                      <>
+                        <Button variant="ghost" size="sm" aria-label={`Editar ${link.nome}`} onClick={() => setLinkEmEdicao(link)}>
+                          <Pencil aria-hidden className="h-3 w-3 shrink-0" />
+                        </Button>
+                        <Button variant="ghost" size="sm" aria-label={`Excluir ${link.nome}`} onClick={() => setLinkAExcluir(link)}>
+                          <Trash2 aria-hidden className="h-3 w-3 shrink-0" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </li>
               ))}
@@ -321,9 +330,11 @@ function Cartao({
 function CartaoConfiguracao({
   configuracao,
   onSalvo,
+  podeEditar,
 }: {
   configuracao: ConfiguracaoRastreamento;
   onSalvo: (configuracao: ConfiguracaoRastreamento) => void;
+  podeEditar: boolean;
 }) {
   const [ativo, setAtivo] = useState(configuracao.ativo);
   const [prazo, setPrazo] = useState(String(configuracao.prazoConversaoMinutos));
@@ -356,8 +367,9 @@ function CartaoConfiguracao({
             type="checkbox"
             role="switch"
             checked={ativo}
+            disabled={!podeEditar}
             onChange={(evento) => setAtivo(evento.target.checked)}
-            className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-borda-forte transition-colors before:block before:h-4 before:w-4 before:translate-x-0.5 before:rounded-full before:bg-white before:transition-transform checked:bg-brand-700 checked:before:translate-x-4.5"
+            className="h-5 w-9 cursor-pointer appearance-none disabled:cursor-not-allowed disabled:opacity-50 rounded-full bg-borda-forte transition-colors before:block before:h-4 before:w-4 before:translate-x-0.5 before:rounded-full before:bg-white before:transition-transform checked:bg-brand-700 checked:before:translate-x-4.5"
           />
         </label>
         <FormField
@@ -365,12 +377,23 @@ function CartaoConfiguracao({
           error={erro}
           hint="Sem enviar o formulário nem dar sinal nesse tempo, os dados da visita são descartados."
         >
-          <Input type="number" min={1} max={10080} value={prazo} onChange={(evento) => setPrazo(evento.target.value)} />
+          <Input
+            type="number"
+            min={1}
+            max={10080}
+            value={prazo}
+            disabled={!podeEditar}
+            onChange={(evento) => setPrazo(evento.target.value)}
+          />
         </FormField>
-        <Button size="sm" onClick={salvar} disabled={!mudou || salvando}>
-          {salvo ? <Check aria-hidden className="h-3 w-3 shrink-0" /> : null}
-          {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar'}
-        </Button>
+        {podeEditar ? (
+          <Button size="sm" onClick={salvar} disabled={!mudou || salvando}>
+            {salvo ? <Check aria-hidden className="h-3 w-3 shrink-0" /> : null}
+            {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar'}
+          </Button>
+        ) : (
+          <SomenteLeitura />
+        )}
         <div className="border-t border-borda pt-4">
           <p className="mb-1.5 text-xs text-texto-3">Tag para a landing page (pedido ao Landing):</p>
           <div className="flex items-start gap-1.5">

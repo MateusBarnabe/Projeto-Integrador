@@ -2,7 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { AlertCircle, Check, Copy, KeyRound, Megaphone, ShieldCheck } from 'lucide-react';
 import { ErroApi } from '@/api/cliente';
 import { Badge, Button, EmptyState, FormField, FormSection, Input, Spinner, statusBadge } from '@/components/ui';
+import { usarPermissao } from '@/plataforma';
 import { listarCanaisAnuncio, salvarCanalAnuncio, type CanalAnuncio } from '../api';
+import { SomenteLeitura } from '../SomenteLeitura';
 
 const TITULOS: Record<string, { nome: string; descricao: string }> = {
   google_ads: {
@@ -54,6 +56,7 @@ export function CanaisAba() {
 function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal: CanalAnuncio) => void }) {
   const info = TITULOS[canal.canal] ?? { nome: canal.canal, descricao: '' };
   const isMeta = canal.canal === 'meta_ads';
+  const somenteLeitura = !usarPermissao('marketing.configuracao.editar');
 
   const [ativo, setAtivo] = useState(canal.ativo);
   const [orcamento, setOrcamento] = useState(canal.orcamentoMensal !== null ? String(canal.orcamentoMensal) : '');
@@ -119,8 +122,9 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
             type="checkbox"
             role="switch"
             checked={ativo}
+            disabled={somenteLeitura}
             onChange={(e) => setAtivo(e.target.checked)}
-            className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-borda-forte transition-colors before:block before:h-4 before:w-4 before:translate-x-0.5 before:rounded-full before:bg-white before:transition-transform checked:bg-brand-700 checked:before:translate-x-4.5"
+            className="h-5 w-9 cursor-pointer appearance-none disabled:cursor-not-allowed disabled:opacity-50 rounded-full bg-borda-forte transition-colors before:block before:h-4 before:w-4 before:translate-x-0.5 before:rounded-full before:bg-white before:transition-transform checked:bg-brand-700 checked:before:translate-x-4.5"
           />
         </label>
       </header>
@@ -140,6 +144,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
               min="0"
               placeholder="1500.00"
               value={orcamento}
+              disabled={somenteLeitura}
               onChange={(e) => setOrcamento(e.target.value)}
             />
           </FormField>
@@ -147,6 +152,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
             <Input
               placeholder="Geração de leads qualificados"
               value={objetivo}
+              disabled={somenteLeitura}
               onChange={(e) => setObjetivo(e.target.value)}
             />
           </FormField>
@@ -154,6 +160,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
             <Input
               placeholder="Gestores e diretores de empresas de médio porte"
               value={publicoAlvo}
+              disabled={somenteLeitura}
               onChange={(e) => setPublicoAlvo(e.target.value)}
             />
           </FormField>
@@ -173,6 +180,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
               <Input
                 placeholder="1029384756"
                 value={metaPageId}
+                disabled={somenteLeitura}
                 onChange={(e) => setMetaPageId(e.target.value)}
               />
             </FormField>
@@ -185,6 +193,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
                 autoComplete="new-password"
                 placeholder={canal.metaVerifyTokenConfigurado ? '••••••••••••' : 'Digite o verify token'}
                 value={metaVerifyToken}
+                disabled={somenteLeitura}
                 onChange={(e) => setMetaVerifyToken(e.target.value)}
               />
             </FormField>
@@ -197,6 +206,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
                 autoComplete="new-password"
                 placeholder={canal.metaAppSecretConfigurado ? '••••••••••••' : 'Digite o App Secret'}
                 value={metaAppSecret}
+                disabled={somenteLeitura}
                 onChange={(e) => setMetaAppSecret(e.target.value)}
               />
             </FormField>
@@ -209,6 +219,7 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
                 autoComplete="new-password"
                 placeholder={canal.metaPageAccessTokenConfigurado ? '••••••••••••' : 'EAA...'}
                 value={metaPageAccessToken}
+                disabled={somenteLeitura}
                 onChange={(e) => setMetaPageAccessToken(e.target.value)}
               />
             </FormField>
@@ -241,10 +252,14 @@ function CartaoCanal({ canal, onSalvo }: { canal: CanalAnuncio; onSalvo: (canal:
         )}
 
         <div className="flex justify-end border-t border-borda pt-4">
-          <Button type="submit" size="sm" disabled={salvando}>
-            {salvo && <Check aria-hidden className="h-3.5 w-3.5 shrink-0" />}
-            {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar canal'}
-          </Button>
+          {somenteLeitura ? (
+            <SomenteLeitura />
+          ) : (
+            <Button type="submit" size="sm" disabled={salvando}>
+              {salvo && <Check aria-hidden className="h-3.5 w-3.5 shrink-0" />}
+              {salvando ? 'Salvando…' : salvo ? 'Salvo' : 'Salvar canal'}
+            </Button>
+          )}
         </div>
       </form>
     </section>
