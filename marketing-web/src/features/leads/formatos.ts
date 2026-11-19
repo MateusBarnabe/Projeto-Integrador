@@ -77,6 +77,11 @@ export function vendedorEncurtado(vendedorId: string) {
 
 export const DICA_NOME_DO_VENDEDOR = 'nome indisponível (X7)';
 
+/** Só os leads MQL (quente e morno) entram no rodízio; os demais nunca ficam "aguardando vendedor". */
+export const FAIXAS_NO_RODIZIO: ReadonlySet<string> = new Set(['mql_quente', 'mql_morno']);
+
+export const DICA_SEM_VENDEDOR = 'Só os leads MQL (quente e morno) entram no rodízio. Dá para atribuir um vendedor à mão.';
+
 export const NOME_PERIODO: Record<string, string> = {
   '7d': 'Últimos 7 dias',
   '30d': 'Últimos 30 dias',

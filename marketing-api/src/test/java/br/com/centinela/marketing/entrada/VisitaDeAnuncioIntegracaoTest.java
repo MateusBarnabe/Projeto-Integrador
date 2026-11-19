@@ -174,8 +174,12 @@ class VisitaDeAnuncioIntegracaoTest extends EnvioDoLandingTeste {
         UUID visitaId = visitaDa(clicar(IPHONE));
         mvc.perform(post("/public/marketing/visitas/" + visitaId + "/sinais")
                 .contentType(MediaType.TEXT_PLAIN).content("não é json")).andExpect(status().isBadRequest());
-        mvc.perform(get("/public/marketing/rastreamento.js")).andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith("text/javascript"));
+        // O envio do formulário converte a visita e os sinais seguintes são ignorados (V6): o script precisa
+        // mandar o que a pessoa fez antes dele, no clique e no submit, sem esperar o ciclo de 15 s
+        String script = mvc.perform(get("/public/marketing/rastreamento.js")).andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/javascript"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(script).contains("addEventListener('submit'").contains("agendarEnvioDoClique()");
 
         TenantContexto.executar(tenant, () -> transacao.executeWithoutResult(s -> {
             LinkCampanha desligado = links.findById(link.getId()).orElseThrow();

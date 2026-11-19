@@ -32,6 +32,8 @@ import { ReatribuirVendedorModal } from './ReatribuirVendedorModal';
 import { DadosDoCrm, HistoricoDeConsentimentos } from './SecoesDoDetalhe';
 import {
   DICA_NOME_DO_VENDEDOR,
+  DICA_SEM_VENDEDOR,
+  FAIXAS_NO_RODIZIO,
   NOME_CANAL,
   NOME_ETAPA,
   NOME_EVENTO,
@@ -217,8 +219,12 @@ function ConteudoDaAba({
               <span className="flex flex-wrap items-center gap-2">
                 {detalhe.vendedor.vendedorId ? (
                   <span title={DICA_NOME_DO_VENDEDOR}>{vendedorEncurtado(detalhe.vendedor.vendedorId)}</span>
-                ) : (
+                ) : FAIXAS_NO_RODIZIO.has(detalhe.qualificacao.faixaQualificacao ?? '') ? (
                   statusBadge('aguardando_vendedor', 'aguardando vendedor')
+                ) : (
+                  <span title={DICA_SEM_VENDEDOR} className="text-sm text-texto-3">
+                    sem vendedor
+                  </span>
                 )}
                 {onReatribuir && (
                   <Button variant="outline" size="sm" onClick={onReatribuir}>

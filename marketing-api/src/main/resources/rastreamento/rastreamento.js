@@ -10,6 +10,11 @@
  *
  * Não lê campos de formulário, não usa cookie e não guarda nada além da sessão da aba
  * (sessionStorage). Os sinais saem por navigator.sendBeacon em text/plain, que não exige CORS.
+ *
+ * Quando saem: a cada 15 s, ~1 s depois de um clique (cliques em sequência vão juntos), no instante em que
+ * qualquer formulário da página é enviado e quando a aba fica oculta ou fecha. O envio do formulário
+ * converte a visita no Marketing, e os sinais que chegam depois dela são ignorados: por isso o que a
+ * pessoa fez até ali precisa sair antes (ou junto) do envio.
  * Marque elementos com data-rastreio="nome" (cliques) e seções com data-rastreio-secao="nome".
  */
 (function () {
@@ -18,6 +23,7 @@
   var PARAMETRO = 'mkt_visita';
   var CHAVE = 'marketing-rastreamento';
   var INTERVALO_MS = 15000;
+  var ATRASO_CLIQUE_MS = 1000;
   var MAXIMO_ITENS = 30;
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -98,7 +104,24 @@
       || alvo.tagName.toLowerCase() + ':' + (alvo.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40);
     acrescentar(estado.cliques, nome);
     guardar(estado);
+    agendarEnvioDoClique();
   }, true);
+
+  // Um clique logo antes de enviar o formulário não pode esperar os 15 s: o envio converte a visita. O
+  // atraso curto junta cliques em sequência num único envio (no máximo um por ATRASO_CLIQUE_MS).
+  var envioDoClique = null;
+
+  function agendarEnvioDoClique() {
+    if (envioDoClique !== null) {
+      return;
+    }
+    envioDoClique = window.setTimeout(function () {
+      envioDoClique = null;
+      if (document.visibilityState === 'visible') {
+        enviar();
+      }
+    }, ATRASO_CLIQUE_MS);
+  }
 
   // --- páginas e seções vistas (caminho e âncora, sem a consulta) -------------------------------------
   function registrarPagina() {
@@ -141,6 +164,10 @@
 
   // --- envio ----------------------------------------------------------------------------------------
   function enviar() {
+    if (envioDoClique !== null) {
+      window.clearTimeout(envioDoClique);
+      envioDoClique = null;
+    }
     acumularTempo();
     medirRolagem();
     guardar(estado);
@@ -177,6 +204,10 @@
     }
   });
   window.addEventListener('pagehide', enviar);
+  // Fase de captura, antes do código da página: os sinais saem antes do envio do formulário converter a visita
+  document.addEventListener('submit', function () {
+    enviar();
+  }, true);
   window.setInterval(function () {
     if (document.visibilityState === 'visible') {
       enviar();

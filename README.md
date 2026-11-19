@@ -33,11 +33,16 @@ O `landing-web` **não é nosso módulo**: é um placeholder que imita o contrat
 
 ## Pré-requisitos
 
-- Docker Desktop
+- Docker Desktop, **ligado** (`docker info`)
 - Node 24 e npm
 - JDK 21 ou mais novo (o Maven vem pelo wrapper `mvnw`, não precisa instalar)
+- Para ver as telas funcionando, o repositório da plataforma ([`infra-integrador-2026`](https://github.com/karolAlbuquerque/infra-integrador-2026)), clonado ao lado deste, e o Windows PowerShell: o `scripts/dev-plataforma.ps1` é o caminho que sobe o login, a casca e os quatro apps
 
 ## Como rodar
+
+> **Primeira vez? Siga o [Docs/como-rodar.md](Docs/como-rodar.md).** É o passo a passo completo, com os usuários de teste, a conferência da jornada à mão, os testes e a tabela de problemas comuns. O resumo abaixo é para quem já conhece o projeto.
+>
+> Atalho: `.\scripts\dev-plataforma.ps1 -Infra '<pasta do infra-integrador-2026>' -ComCasca -Ocultos`, depois http://localhost:8080/ com `marketing@empresa-a.dev` / `Plataforma2026`.
 
 ### Tudo no Docker
 
@@ -63,8 +68,10 @@ A infraestrutura continua no Docker; os apps rodam na máquina, com recarga auto
 ```bash
 npm run instalar     # uma vez: dependências da raiz e dos dois fronts
 npm run infra        # Postgres, RabbitMQ e Mailpit
-npm run dev          # API, marketing-web e landing-web juntos
+npm run dev          # API, marketing-web, landing-web e crm-stub juntos
 ```
+
+Assim os apps sobem, mas **sem o identity**: não há login, e só as rotas públicas e o `/health` respondem. Para as telas, use o `dev-plataforma.ps1` (ver acima).
 
 Cada um separado:
 
@@ -101,6 +108,8 @@ O **identity**, o **gateway** e a **casca** vêm do compose do `infra-integrador
 |---|---|
 | [documento-norteador.md](Docs/documento-norteador.md) | **Fonte da verdade do grupo:** etapas do projeto, funil, tabelas, jobs, endpoints, permissões, mensageria, Etapa 2, testes e pendências. O `.html` é a mesma coisa em página |
 | [contratos/](Docs/contratos/) | O que atravessa a fronteira do módulo: OpenAPI e AsyncAPI do Marketing (cópias do infra) e o que consumimos e pedimos ao Landing |
+| [como-rodar.md](Docs/como-rodar.md) | **Comece por aqui:** do clone até ver o lead andar pela tela. Pré-requisitos, subida da plataforma local, usuários de teste, jornada à mão, testes, webhook do Meta sem o Meta e problemas comuns |
+| [pendencias-e-dependencias.md](Docs/pendencias-e-dependencias.md) | O que falta e o que depende de outros grupos (2, 6 e 7 e professores), com o que funciona enquanto isso, os achados da validação ao vivo e as mensagens prontas para cobrar |
 | [demo-iot.md](Docs/demo-iot.md) | O ponto de IoT do Marketing, o "lead 0": como os dados andam, o que é real e o que é simulado, e o roteiro da apresentação |
 | [roteiro-ponta-a-ponta.md](Docs/roteiro-ponta-a-ponta.md) | Como subir a plataforma local e rodar `node scripts/ponta-a-ponta.mjs` (login, clique no anúncio, formulário, CRM, lead, pontuação, rodízio e e-mail), mais a conferência à mão na tela |
 | [permissoes/marketing.yaml](Docs/permissoes/marketing.yaml) · [modulos/marketing.json](Docs/modulos/marketing.json) | Permissões e registro no menu da casca, para o PR no `infra-integrador-2026` |
