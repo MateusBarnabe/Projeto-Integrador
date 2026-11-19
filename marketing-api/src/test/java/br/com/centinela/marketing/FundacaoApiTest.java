@@ -46,6 +46,11 @@ class FundacaoApiTest {
         registro.add("spring.datasource.password", () -> "usr_marketing");
         registro.add("spring.flyway.user", () -> "own_marketing");
         registro.add("spring.flyway.password", () -> "own_marketing");
+        // Só a fundação (health, OpenAPI, 401): sem listener de fila, o teste não depende de haver, ou não, um
+        // RabbitMQ em localhost:5672. Com o da plataforma no ar (outras credenciais), o login recusado
+        // derrubava o contexto inteiro
+        registro.add("marketing.consumo.landing-leads.auto-startup", () -> "false");
+        registro.add("marketing.consumo.crm-oportunidades.auto-startup", () -> "false");
     }
 
     @Autowired
