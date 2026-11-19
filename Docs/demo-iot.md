@@ -123,7 +123,7 @@ Desta vez com cliques reais no Chrome, pela casca (`-ComCasca`), e não pelo HTT
 | pontuação | 35 pontos (Interesse em preço +15, Origem do tráfego +15, Leu a página inteira +5), faixa Nutrição |
 | painel | cliques do lead 0 de 7 para 8, convertidas de 3 para 4 |
 
-Um detalhe que a demonstração mostrou: os cliques que acontecem nos 15 segundos antes do envio do formulário não entram no lead (a visita vira "convertida" no envio). Em apresentação, espere uns 15 segundos depois dos cliques antes de enviar. Está registrado como achado A1 em [pendencias-e-dependencias.md](pendencias-e-dependencias.md).
+Esta conferência achou um defeito: cliques feitos nos 15 segundos antes do envio do formulário não entravam no lead (a visita vira "convertida" no envio). Foi corrigido no mesmo dia: o script agora manda os sinais depois de cada clique e no envio do formulário (achado A1 em [pendencias-e-dependencias.md](pendencias-e-dependencias.md)).
 
 ### Se algo der errado
 
