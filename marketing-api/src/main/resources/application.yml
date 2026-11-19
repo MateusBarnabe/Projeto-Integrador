@@ -105,6 +105,9 @@ marketing:
   # alcança (o gateway, na plataforma): monta o link do anúncio e a tag do script da landing page.
   rastreamento:
     url-publica: ${MARKETING_URL_PUBLICA:http://localhost:8087}
+    # Caminho de uma base GeoIP2/GeoLite2 City (.mmdb) local; se o arquivo existir, ele localiza o IP do
+    # clique no lugar do simulador abaixo. Vazio (padrão) mantém o simulador. A base não vai para o git.
+    geoip-arquivo: ${RASTREAMENTO_GEOIP_ARQUIVO:}
     # Simulador da localização por IP; trocar por uma base GeoIP é outra implementação de LocalizacaoPorIp
     localizacao-simulada:
       habilitada: ${RASTREAMENTO_LOCALIZACAO_SIMULADA:true}
