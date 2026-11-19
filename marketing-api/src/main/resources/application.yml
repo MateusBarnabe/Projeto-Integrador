@@ -97,6 +97,8 @@ marketing:
     identity-base-url: ${IDENTITY_BASE_URL:http://identity:8081}
     landing-base-url: ${LANDING_BASE_URL:http://landing:8088}
     crm-base-url: ${CRM_BASE_URL:http://crm:8082}
+    # Graph API do Meta (E4): não é módulo da plataforma, então sem token de serviço nem X-Tenant-Id
+    meta-graph-base-url: ${META_GRAPH_BASE_URL:https://graph.facebook.com}
     servico:
       client-id: ${SVC_CLIENT_ID:marketing}
       client-secret: ${SVC_CLIENT_SECRET:}
@@ -108,6 +110,21 @@ marketing:
     # Simulador da localização por IP; trocar por uma base GeoIP é outra implementação de LocalizacaoPorIp
     localizacao-simulada:
       habilitada: ${RASTREAMENTO_LOCALIZACAO_SIMULADA:true}
+
+  # Meta Ads (E3 e E4): webhook público e job 4.1 dos leads. Os segredos do tenant (App Secret, verify token
+  # e token da página) ficam cifrados em canais_anuncio, configurados na tela de Configurações
+  meta:
+    graph-versao: ${META_GRAPH_VERSAO:v23.0}
+    webhook:
+      # Quanto tempo o subdomínio resolvido no identity fica em cache (0 desliga)
+      cache-tenant: 60s
+      # Teto do corpo, lido antes de conferir a assinatura
+      tamanho-maximo-corpo: 262144
+    leads:
+      habilitada: true
+      intervalo: PT5M
+      lote: 500
+      maximo-de-tentativas: 5
 
   # Painel (A4 e R6): cache das agregações por tenant e filtros, e fluxo SSE de eventos dos leads
   painel:
