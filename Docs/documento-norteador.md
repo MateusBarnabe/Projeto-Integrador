@@ -941,7 +941,7 @@ O front busca o resumo completo uma vez e depois só reage aos eventos, incremen
 > - O `id` de cada mensagem é `lead_eventos.sequencia`. Ao reconectar, o cliente envia `Last-Event-ID` e o back-end reenvia só o que foi perdido, filtrado pelo tenant do token. Sem `Last-Event-ID`, o fluxo começa do fato mais recente (o resumo cuida do que já houve)
 > - `EventSource` não aceita o cabeçalho `Authorization`, e o token não pode ir na URL (§8.2). Por isso a conexão usa `fetch` + `ReadableStream`, com `Authorization` por cabeçalho, nunca por query
 > - O token dura 15 min: ao receber `plataforma:token`, o front reabre o stream com o token novo e o `Last-Event-ID`. O servidor fecha a conexão no `exp` do token ou em 30 min, o que vier primeiro (`marketing.painel.sse.duracao-maxima`)
-> - **Como o servidor entrega:** cada conexão consulta `lead_eventos` do próprio tenant a cada 2 s (`marketing.painel.sse.intervalo-consulta`), num agendador próprio (sem `@Scheduled`), pelo índice `ix_lead_eventos_tenant_sequencia` (`V12`); sem mensagem por 15 s, sai o comentário `: ping`, para o gateway não fechar a conexão parada (`intervalo-ping`). O limite é de 20 conexões por tenant (`limite-por-tenant`); acima dele a resposta é `429` com envelope. Erros `400`, `403` e `429` saem sempre em JSON, mesmo com `Accept: text/event-stream`
+> - **Como o servidor entrega:** cada conexão consulta `lead_eventos` do próprio tenant a cada 2 s (`marketing.painel.sse.intervalo-consulta`), num agendador próprio (sem `@Scheduled`), pelo índice `ix_lead_eventos_tenant_sequencia` (`V12`); a abertura já manda o comentário `: conectado` (o gateway dá `504` se o primeiro byte passa de ~3 s) e, sem mensagem por 15 s, sai o comentário `: ping`, para o gateway não fechar a conexão parada (`intervalo-ping`). O limite é de 20 conexões por tenant (`limite-por-tenant`); acima dele a resposta é `429` com envelope. Erros `400`, `403` e `429` saem sempre em JSON, mesmo com `Accept: text/event-stream`
 > - **Limitação:** uma transação que confirma depois de outra com `sequencia` maior pode não chegar ao fluxo aberto. A releitura do resumo corrige
 > - Ainda precisamos confirmar com o Grupo 2 se o gateway, que devolve `504` quando o módulo não responde em 3 s, mantém uma conexão longa aberta (seção 11, X8). Sem o fluxo, a tela segue funcionando por releitura
 
@@ -1197,7 +1197,7 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 | Desistência da leitura do envio depois de 10 falhas (cerca de 10 minutos de Landing fora do ar): avaliar uma espera crescente entre as tentativas | Grupo 4 | A avaliar |
 | Onde guardar as respostas do formulário instantâneo do Meta: sem elas, uma nova pontuação do lead (por exemplo, quando ele envia um formulário do Landing) deixa de somar as regras `campo_meta` | Grupo 4 | A definir na E4 |
 | SMTP para os e-mails de boas-vindas e de aquecimento: o compose não entrega variáveis de SMTP ao `marketing` (o módulo lê `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` e `MAIL_FROM`; sem elas, tenta `localhost:1025`, e o envio falha), e o provedor fora do desenvolvimento depende dos professores (P6) | Grupo 2, professores | A pedir |
-| SSE pelo gateway (X8): a conexão longa do `/painel/eventos` sobrevive à regra de `504` em 3 s? O módulo já manda `: ping` a cada 15 s e fecha a conexão no `exp` do token; sem o fluxo, a tela relê o resumo a cada 30 s | Grupo 2 | A confirmar |
+| SSE pelo gateway (X8): testado em 19/11 com o gateway real, o `504` vem quando o primeiro byte demora mais de ~3 s; por isso o módulo manda `: conectado` na abertura, além do `: ping` a cada 15 s, e a conexão do painel passou de 40 s dentro da casca. Falta o Grupo 2 confirmar que a regra de 3 s vale só para o primeiro byte e se há teto de duração; o módulo fecha a conexão no `exp` do token e, sem o fluxo, a tela relê o resumo a cada 30 s | Grupo 2 | A confirmar |
 | Rate limit de 120 req/min por IP em `/public/**` pode barrar rajadas do webhook do Meta | Grupo 2 | A confirmar |
 | Handshake do Meta exige devolver `hub.challenge` em texto puro, fora do envelope; o §8.2 só prevê exceção para download de arquivo | Grupo 2 | Pedir exceção registrada |
 | Confirmação de boas-vindas sem consentimento de marketing para quem enviou o formulário (4.5): a leitura é que ela confirma o pedido da própria pessoa e não é comunicação de marketing | Grupo 4, professores | Proposta a confirmar |
@@ -1226,6 +1226,17 @@ A Etapa 1 também ganha testes próprios: a captura do chatbot e o envio da mesm
 ---
 
 ## 12. Registro de alterações
+
+### 19/11/2026 · validação ao vivo da rodada 1
+
+Validação no navegador (Chrome, protocolo do DevTools) contra a plataforma real, com a casca: painel, leads, configurações e o módulo dentro do `<iframe>`.
+
+- **SSE (seção 9.1):** `GET /api/marketing/painel/eventos` agora manda o comentário `: conectado` assim que abre. Antes, os cabeçalhos e o primeiro byte só saíam no primeiro `: ping`, ~16 s depois: o `fetch` do navegador ficava sem resposta (a tela em "Conectando…") e o gateway devolvia `504` em ~3 s, então dentro da casca o tempo real nunca conectava. Medido depois da correção: "Ao vivo" em 6 s na casca e um lead novo no painel 1,1 s depois do envio. Teste novo em `PainelEventosTest`
+- **Demo (R1 e D7):** `infra/demo/regras-comportamento.sql` virou `prazo-descarte.sql` e não cria mais regras de pontuação. As regras de comportamento já vêm da matriz inicial (`RegrasIniciais`), que só entra se o tenant nunca teve regra; inserir regras antes dela bloqueava a matriz inteira e os leads ficavam com 0 ponto (sem os 15 da origem `google/cpc`). Em `Docs/demo-iot.md` o lead com `utm_source=google&utm_medium=cpc` soma 15 a mais
+- **Script local:** `scripts/dev-plataforma.ps1` descobre a porta do Postgres publicada pelo compose do infra (5432 hoje) em vez de fixar a 5433, e o `-ComCasca` passa a apontar também `/api/crm` do gateway para o stub no host (antes, dentro da casca, os resumos do CRM no detalhe do lead davam `503`)
+- **Validado ao vivo na casca (19/11):** reatribuição do vendedor (`PUT /leads/{id}/vendedor`, `200`, evento na timeline e aviso à casca), resumos do CRM, botão de reatribuir escondido para quem não tem `marketing.qualificacao.editar`, tema claro e escuro e o modal dentro do `<iframe>`. O que ficou por testar está em `PROXIMOS-PASSOS.md` (V1 a V5)
+- **Front:** `favicon.svg` em `marketing-web/public/`, que tirava o `404` do console
+- Nenhuma rota, tabela ou permissão de contrato mudou
 
 ### 18/11/2026 · fase 3 (rodada 1): painel, casca, leads e checklist
 
