@@ -44,7 +44,7 @@ sequenceDiagram
 | Landing page que carrega o script | **Placeholder** (`landing-web`), simula a tag que pedimos ao Grupo 7 | o Landing real põe a tag (pedido 6 do [landing-requisitos.md](contratos/landing-requisitos.md)); o Marketing não muda |
 | Localização por IP | **Simulada** (`LocalizacaoSimulada`, sempre Goiânia, marcada "simulada" na tela) | outra implementação de `LocalizacaoPorIp` com GeoLite2, marcada `@Primary` (R4) |
 | Anúncio | **Simulado** pelo botão "Simular clique" | colar a URL pública do link no Meta ou no Google Ads |
-| Regras de comportamento | por **SQL** ([infra/demo/regras-comportamento.sql](../infra/demo/regras-comportamento.sql)) | tela de qualificação (W4) e valores iniciais (D7), tarefa R5 |
+| Regras de comportamento | **matriz inicial** (D7 e R5), na primeira pontuação do tenant; editáveis em Configurações › Qualificação e distribuição | — |
 
 ## Como subir localmente
 
@@ -65,7 +65,7 @@ O [script](../scripts/dev-plataforma.ps1):
 3. sobe `postgres`, `rabbitmq`, `rabbitmq-init`, `mailpit`, `identity` e `gateway` da plataforma;
 4. faz login como `marketing@empresa-a.dev` (senha `Plataforma2026`) e grava o token em `marketing-web/.env.local`;
 5. abre API (8087), front (3007), placeholder do Landing (3008/8088) e stub do CRM (8082), cada um numa janela, com as senhas do `.env` do infra;
-6. espera a API (as migrations criam as tabelas) e aplica [infra/demo/regras-comportamento.sql](../infra/demo/regras-comportamento.sql): quatro regras de comportamento e o prazo de 2 minutos para a Empresa A.
+6. espera a API (as migrations criam as tabelas) e aplica [infra/demo/prazo-descarte.sql](../infra/demo/prazo-descarte.sql): o prazo de 2 minutos para o descarte das visitas da Empresa A (as regras de pontuação, inclusive as de comportamento, vêm da matriz inicial na primeira pontuação).
 
 | Quando | Comando |
 |---|---|
@@ -88,7 +88,7 @@ Os mesmos passos, à mão:
    - Landing: `RABBITMQ_URL=amqp://mq_landing:<MQ_LANDING_SENHA>@localhost:5672/plataforma` e `npm run dev:landing`;
    - CRM: `RABBITMQ_URL=amqp://mq_crm:<MQ_CRM_SENHA>@localhost:5672/plataforma` e `npm run dev:crm`;
    - front: `POST http://localhost:8081/api/identity/auth/login` com `{"email":"marketing@empresa-a.dev","senha":"Plataforma2026"}`, `VITE_TOKEN_DEV=<data.accessToken>` em `marketing-web/.env.local` e `npm run dev:web`.
-3. Depois que a API subir, no infra: `docker compose cp <este repo>/infra/demo/regras-comportamento.sql postgres:/tmp/r.sql` e `docker compose exec -T postgres psql -U postgres -d plataforma -f /tmp/r.sql`. No PowerShell, não passe o SQL por pipe: o PowerShell 5.1 troca os acentos por `?`.
+3. Depois que a API subir, no infra: `docker compose cp <este repo>/infra/demo/prazo-descarte.sql postgres:/tmp/r.sql` e `docker compose exec -T postgres psql -U postgres -d plataforma -f /tmp/r.sql`. No PowerShell, não passe o SQL por pipe: o PowerShell 5.1 troca os acentos por `?`.
 
 ### Último passo
 
@@ -104,7 +104,7 @@ Com o script e os apps de pé, o fluxo foi exercitado pelo HTTP, como o navegado
 | clique com *User-Agent* de iPhone | `302` para `http://localhost:3008/?utm_source=google&utm_medium=cpc&utm_campaign=black-friday-2026&mkt_visita=<id>` |
 | landing e `rastreamento.js` | `200` e `200` |
 | sinais em `text/plain` com `Origin: http://localhost:3008` | `200`; a visita aparece ativa, smartphone, iOS, Goiânia (simulada), 74 s |
-| envio do formulário no placeholder | lead na etapa 3, respostas lidas, MQL morno com 50 pontos (20 + 15 + 10 + 5 das regras de comportamento) |
+| envio do formulário no placeholder | lead na etapa 3, respostas lidas, MQL morno com 50 pontos de comportamento (20 + 15 + 10 + 5), mais 15 da origem se a URL do clique trouxer `utm_source=google&utm_medium=cpc` |
 | timeline do lead | `etapa_alterada > handoff_crm > respostas_lidas > consentimento_registrado > visita_vinculada > qualificacao_alterada` |
 | visita sem envio | descartada 8 s depois de vencer o prazo, sem contexto nem comportamento; resumo de 24 h com 2 cliques, 1 convertida, 1 descartada, 50% |
 

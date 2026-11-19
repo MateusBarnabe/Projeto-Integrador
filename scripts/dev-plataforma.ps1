@@ -13,7 +13,7 @@
     3. sobe postgres, rabbitmq, rabbitmq-init, mailpit, identity e gateway da plataforma;
     4. faz login como marketing@empresa-a.dev e grava o token em marketing-web/.env.local;
     5. abre API, front, placeholder do Landing e stub do CRM, cada um com as senhas do .env do infra;
-    6. espera a API e aplica infra/demo/regras-comportamento.sql (regras do lead 0 e prazo de 2 min).
+    6. espera a API e aplica infra/demo/prazo-descarte.sql (prazo de descarte de 2 min).
 
   Roteiro da demonstracao: Docs/demo-iot.md.
 
@@ -31,7 +31,7 @@
 
 .PARAMETER ComCasca
   Sobe tambem a casca da plataforma (porta 3000, imagem IMAGEM_CASCA do .env do infra) e aponta o
-  gateway para o front e a API que rodam no host. Abra http://localhost:8080/ , entre com
+  gateway para o front, a API e o stub do CRM que rodam no host. Abra http://localhost:8080/ , entre com
   marketing@empresa-a.dev e abra o Marketing no menu lateral: o modulo roda no iframe da casca, com a
   sessao, o tema e os itens do submenu (Painel, Leads, Configuracoes) vindos dela. O token do
   .env.local so vale no modo sozinho (http://localhost:3007/modulos/marketing/).
@@ -139,9 +139,10 @@ if (-not $SemInfra) {
     $arquivosCompose = @('-f', (Join-Path $Infra 'docker-compose.yml'))
     $servicos = @('postgres', 'rabbitmq', 'rabbitmq-init', 'mailpit', 'identity', 'gateway')
     if ($ComCasca) {
-        # O gateway do infra roteia /modulos/marketing/ e /api/marketing para containers (marketing-front e
-        # marketing). Aqui os dois rodam no host: o arquivo abaixo troca so essas duas rotas. Fica numa pasta
-        # temporaria e nao altera o repositorio do infra.
+        # O gateway do infra roteia /modulos/marketing/, /api/marketing e /api/crm para containers
+        # (marketing-front, marketing e crm). Aqui os tres rodam no host (o CRM e o stub): o arquivo abaixo
+        # troca so essas tres rotas. O front chama /api/crm para os resumos do detalhe do lead. Fica numa
+        # pasta temporaria e nao altera o repositorio do infra.
         New-Item -ItemType Directory -Force $pastaLogs | Out-Null
         $sobreposicao = Join-Path $pastaLogs 'compose-casca.yml'
         @(
@@ -150,6 +151,7 @@ if (-not $SemInfra) {
             '    environment:',
             '      ROTA_MARKETING_FRONT: http://host.docker.internal:3007',
             '      ROTA_MARKETING_API: http://host.docker.internal:8087',
+            '      ROTA_CRM_API: http://host.docker.internal:8082',
             '    extra_hosts:',
             '      - "host.docker.internal:host-gateway"'
         ) | Set-Content -Path $sobreposicao -Encoding ascii
@@ -198,9 +200,16 @@ function Abrir($titulo, $script, [hashtable]$variaveis, [string]$argumentos = ''
     foreach ($nome in $variaveis.Keys) { Remove-Item "env:$nome" -ErrorAction SilentlyContinue }
 }
 
+# A porta do Postgres no host e do compose do infra e ja mudou (5433, depois 5432): pergunta ao docker
+# em vez de fixar. Se nao responder, fica a 5432 (a do compose atual).
+$portaPostgres = '5432'
+$publicada = & docker compose -f (Join-Path $Infra 'docker-compose.yml') --project-directory $Infra port postgres 5432 2>$null
+if ($publicada -match ':(\d+)\s*$') { $portaPostgres = $Matches[1] }
+Write-Host "Postgres da plataforma em localhost:$portaPostgres"
+
 Passo 'Abrindo os apps'
 Abrir 'Marketing API (8087)' 'dev:api' @{
-    DB_URL            = 'jdbc:postgresql://localhost:5433/plataforma'
+    DB_URL            = "jdbc:postgresql://localhost:$portaPostgres/plataforma"
     DB_APP_PASSWORD   = $envInfra['DB_APP_MARKETING_SENHA']
     DB_OWNER_PASSWORD = $envInfra['DB_OWN_MARKETING_SENHA']
     RABBITMQ_PASSWORD = $envInfra['MQ_MARKETING_SENHA']
@@ -225,11 +234,11 @@ do {
 } until ($saude -or (Get-Date) -gt $limite)
 if (-not $saude) { throw 'A API nao subiu em 5 minutos. Veja a janela (ou o log) da Marketing API.' }
 
-Passo 'Aplicando infra/demo/regras-comportamento.sql (regras do lead 0 e prazo de 2 minutos)'
+Passo 'Aplicando infra/demo/prazo-descarte.sql (prazo de descarte de 2 minutos)'
 # O arquivo vai para o container com cp: o pipe do PowerShell 5.1 para o docker troca os acentos por "?"
 $compose = @('compose', '-f', (Join-Path $Infra 'docker-compose.yml'), '--project-directory', $Infra)
-& docker @compose cp (Join-Path $raiz 'infra\demo\regras-comportamento.sql') postgres:/tmp/regras-comportamento.sql
-& docker @compose exec -T postgres psql -q -U postgres -d plataforma -v ON_ERROR_STOP=1 -f /tmp/regras-comportamento.sql
+& docker @compose cp (Join-Path $raiz 'infra\demo\prazo-descarte.sql') postgres:/tmp/prazo-descarte.sql
+& docker @compose exec -T postgres psql -q -U postgres -d plataforma -v ON_ERROR_STOP=1 -f /tmp/prazo-descarte.sql
 if ($LASTEXITCODE -ne 0) { throw 'O SQL da demo falhou.' }
 
 Write-Host @"
