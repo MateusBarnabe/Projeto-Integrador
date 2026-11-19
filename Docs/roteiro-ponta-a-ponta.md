@@ -67,7 +67,7 @@ node scripts/ponta-a-ponta.mjs
 
 Endereços diferentes dos padrões do `dev-plataforma.ps1`: variáveis `MARKETING_URL`, `IDENTITY_URL`, `LANDING_URL` e `MAILPIT_URL`. Para outro usuário, `USUARIO_EMAIL`, `USUARIO_SENHA` e `VENDEDOR_EMAIL`.
 
-Saída esperada: uma linha verde (`✓`) por conferência e, no fim, `✓ PONTA A PONTA OK: 64 conferencias passaram, 0 falharam` (com `--descarte`; sem ele são 61). Qualquer `✗` vermelho traz o motivo; o código de saída é `0` só se tudo passou. Se o script parar no passo 1, a plataforma não subiu; no passo 5, olhe os logs de `dev-api.log`, `dev-landing.log` e `dev-crm.log`.
+Saída esperada: uma linha verde (`✓`) por conferência e, no fim, `✓ PONTA A PONTA OK: 64 conferencias passaram, 0 falharam` (com `--descarte`; sem ele são 60). Qualquer `✗` vermelho traz o motivo; o código de saída é `0` só se tudo passou. Se o script parar no passo 1, a plataforma não subiu; no passo 5, olhe os logs de `dev-api.log`, `dev-landing.log` e `dev-crm.log`.
 
 Efeitos no tenant de teste: um link de campanha por execução, o vendedor de teste na escala do rodízio e, se estiver fora do horário comercial (padrão: segunda a sexta, das 8h às 18h, horário de Brasília), a escala aberta 24 horas. Para voltar, use Configurações › Qualificação e distribuição.
 
