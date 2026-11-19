@@ -2,7 +2,7 @@
 
 API do módulo de Marketing (Grupo 4). Recebe os leads, guarda o funil, qualifica, distribui entre vendedores e atende o front do módulo e os outros módulos da plataforma.
 
-> **Estado atual (19/11/2026): back pronto, com o Meta; falta levar o vendedor ao CRM.** Desde a rodada 2, o webhook do Meta (E3), o job 4.1 (E4), o buffer (`V3`) e a localização por IP real (R4) estão prontos. O texto abaixo é da revisão de 18/11. Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API já consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. A comunicação (descadastro, boas-vindas, aquecimento e anonimização, E7 a E10), as tabelas de e-mail e as configurações (D3, D6, D7, A3) e o painel com o fluxo SSE (A4) também estão prontos. Faltam o Meta (D2, E3, E4) e levar o vendedor ao CRM (C1). Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md).
+> **Estado atual (19/11/2026): back pronto; falta só levar o vendedor ao CRM (C1) e a entrega no infra (I3).** Além da fundação (F1 a F8: JWT, entidade base, publicador e consumo de eventos, cliente HTTP com token de serviço, infra de testes e variáveis da plataforma), a API consome a captura do chatbot (E1), o envio do formulário com a leitura do envio no Landing (E5) e a oportunidade do CRM (E6); pontua (Q1), distribui pelo rodízio (Q2), pede notificação e timeline à plataforma (N1) e roda os jobs 4.4 e 4.6. A API de leads (A2) tem lista, detalhe, resumo e busca. A comunicação (descadastro, boas-vindas, aquecimento e anonimização, E7 a E10), as configurações (D3, D6, D7, A3) e o painel com o fluxo SSE (A4) estão prontos. O rastreamento do anúncio (lead 0, R1 a R3) e a localização por IP real (R4) também. Desde a rodada 2, os leads do Meta Ads (D2, E3, E4: buffer na `V3`, webhook e job 4.1) estão prontos, mas o job só foi exercitado contra WireMock, não contra a Graph API real. Plano em [PROXIMOS-PASSOS.md](../PROXIMOS-PASSOS.md); o que depende de outros grupos, em [Docs/pendencias-e-dependencias.md](../Docs/pendencias-e-dependencias.md).
 
 | | |
 |---|---|
@@ -17,6 +17,8 @@ API do módulo de Marketing (Grupo 4). Recebe os leads, guarda o funil, qualific
 As regras que a API precisa seguir (envelope, multi-tenant, sete colunas, eventos) vêm do Contrato de Integração do Grupo 2 e estão resumidas no [documento norteador](../Docs/documento-norteador.md), seções 1, 3, 6 e 8.
 
 ## Como rodar
+
+> Para ver as telas funcionando (login, casca, painel), siga o [Docs/como-rodar.md](../Docs/como-rodar.md): sem o identity da plataforma só as rotas públicas e o `/health` respondem. O que segue é para rodar só a API.
 
 A infraestrutura (Postgres, RabbitMQ, Mailpit) precisa estar de pé. Da raiz do repositório:
 
@@ -46,7 +48,7 @@ Não é preciso instalar o Maven: o wrapper baixa a versão certa. Precisa do JD
 ./mvnw verify               # ou, na raiz: npm run test:api
 ```
 
-Os testes sobem um PostgreSQL e um RabbitMQ de verdade com o Testcontainers, rodando os mesmos scripts da plataforma ([infra/postgres/init](../infra/postgres/init/01-marketing.sh) e [infra/rabbitmq](../infra/rabbitmq/definitions.json)), e simulam Landing, CRM, identity e Graph API do Meta com o WireMock (ver [Testes](#testes-1)). Os que usam container precisam do Docker ligado; sem ele, são pulados.
+Os testes sobem um PostgreSQL e um RabbitMQ de verdade com o Testcontainers, rodando os mesmos scripts da plataforma ([infra/postgres/init](../infra/postgres/init/01-marketing.sh) e [infra/rabbitmq](../infra/rabbitmq/definitions.json)), e simulam Landing, CRM, identity e Graph API do Meta com o WireMock (ver [Testes](#testes-1)). Os que usam container precisam do Docker ligado; sem ele, são pulados **em silêncio**: se o resultado vier com dezenas de testes pulados, confira o `docker info`. Em 19/11/2026 o resultado esperado é **305 testes, 0 falhas, 0 pulados**.
 
 ### Imagem Docker
 
@@ -352,6 +354,26 @@ Pacote `rastreamento`, que segue o norteador (seção 2, "Lead 0", e seções 3,
 | `api/RastreamentoPublicoController`, `api/RastreamentoController` | rotas públicas (clique, sinais, `rastreamento.js`) e as de configuração, links e visitas |
 
 A pontuação ganhou a fonte `comportamento` (`qualificacao/MetricaComportamento`): tempo na página e rolagem com `{"minimo": n}`, página visitada e elemento clicado por trecho, tipo de dispositivo por igualdade.
+
+### Leads do Meta Ads (D2, E3, E4)
+
+Pacote `meta`, que segue o norteador (seções 3, 4.1, 5 e 6). O webhook só grava os identificadores no buffer e responde na hora; o job busca os dados na Graph API depois.
+
+| Classe | O que é |
+|---|---|
+| `LeadEntradaBuffer`, `LeadEntradaBufferRepository` | entidade e repositório da `V3` (`leads_entrada_buffer`): `meta_lead_id` único por tenant e `payload_bruto` só com `leadgen_id`, `page_id`, `form_id` e `ad_id`, sem dado pessoal |
+| `BufferDoMeta` | grava com `INSERT ... ON CONFLICT DO NOTHING` (a reentrega não duplica) e reserva as linhas pendentes com `FOR UPDATE SKIP LOCKED` |
+| `WebhookDoMetaController` | `GET` (handshake com `hub.challenge` em texto puro) e `POST` em `/public/marketing/{subdominio}/meta/leads` |
+| `TenantsDoWebhook` | acha o tenant pelo subdomínio em `GET /api/identity/tenants/resolver`, com token de serviço e cache de 60 s (inclusive o `404`) |
+| `CredenciaisDoTenant`, `CredenciaisDoMeta` | leem e decifram os segredos do canal `meta_ads` (`canais_anuncio`); sem eles, o webhook responde `404` |
+| `AssinaturaDoMeta` | confere o `X-Hub-Signature-256` (HMAC SHA-256 do corpo bruto) em tempo constante |
+| `RecebimentoDoWebhook` | lê o corpo, ignora o que não é `leadgen` e grava uma linha por `leadgen_id` |
+| `ClienteDaGraphApi`, `FalhaNaGraphApi` | `GET {META_GRAPH_BASE_URL}/{versão}/{leadgen_id}` com o token da página em `Authorization: Bearer`, timeout de 3 s |
+| `LeadsDoMeta`, `AgendaDosLeadsDoMeta`, `LeadDoMeta` | job 4.1 (a cada 5 minutos, lotes de 500 por tenant, uma transação por linha): converte `field_data`, grava o lead e soma tentativas (a 5ª vira `falha_permanente`) |
+| `MetaConfig`, `MetaPropriedades` | propriedades `marketing.meta.*` (`graph-versao`, webhook e job) |
+| `entrada/EntradaDoMeta` | identifica e grava o lead do Meta com `ChavesDeIdentidade.doMeta`: reentrega por `meta_lead_id` atualiza; e-mail ou telefone já conhecidos só completam o lead; senão cria na etapa 0 com `origem = meta_ads`. Guarda as respostas em `leads.respostas_meta` (`V13`) |
+
+O lead do Meta fica sem consentimento de marketing (X11) e, depois de gravado, é pontuado e atribuído pelo rodízio. Como exercitar o webhook à mão, sem conta no Meta: [Docs/como-rodar.md](../Docs/como-rodar.md#7-testar-o-webhook-do-meta-sem-o-meta).
 
 ### Comunicação, ciclo de vida e configurações (D3, D6, D7, E7 a E10, A3)
 

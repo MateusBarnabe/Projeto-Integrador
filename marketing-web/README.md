@@ -21,7 +21,7 @@ npm install
 npm run dev          # http://localhost:3007/modulos/marketing/
 ```
 
-Da raiz do repositório também funciona: `npm run dev:web`, ou `npm run dev` para subir a API, este front e o placeholder juntos.
+Da raiz do repositório também funciona: `npm run dev:web`, ou `npm run dev` para subir a API, este front, o placeholder do Landing e o stub do CRM juntos (sem o identity: para ter login, use o `.\scripts\dev-plataforma.ps1`, ver [Docs/como-rodar.md](../Docs/como-rodar.md)).
 
 Em desenvolvimento, o Vite repassa `/api/marketing` para a API em `http://localhost:8087` e `/api/crm` para o stub do CRM em `http://localhost:8082` (os resumos de empresa e contato do detalhe do lead). Então a API precisa estar rodando para o selo "API do módulo" ficar verde.
 
