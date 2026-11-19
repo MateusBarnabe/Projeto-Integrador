@@ -52,7 +52,8 @@ public abstract class IntegracaoDeTeste {
             "marketing.rastreamento.descarte.habilitado",
             "marketing.comunicacao.boas-vindas.habilitada",
             "marketing.comunicacao.aquecimento.habilitada",
-            "marketing.ciclo-vida.anonimizacao.habilitada" };
+            "marketing.ciclo-vida.anonimizacao.habilitada",
+            "marketing.meta.leads.habilitada" };
 
     @DynamicPropertySource
     static void infraestrutura(DynamicPropertyRegistry registro) {
